@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>QM 2025 OMR — Chấm Thi Trắc Nghiệm Bằng Camera | THPT Mang Thít</title>
-    <meta name="description" content="Hệ thống chấm thi trắc nghiệm tự động bằng Camera theo chuẩn Bộ GD&ĐT năm 2025 (chuẩn phiếu QM 2025). Tác giả: Hồ Tấn Khải - Trường THPT Mang Thít, Tỉnh Vĩnh Long." />
-    <meta property="og:title" content="QM 2025 OMR — Chấm Thi Trắc Nghiệm Bằng Camera" />
+    <title>Edu Chấm Đề 2025 — Hệ Thống Chấm Thi Trắc Nghiệm Camera Chuẩn Quốc Tế</title>
+    <meta name="description" content="Edu Chấm Đề 2025 — Hệ thống chấm thi trắc nghiệm tự động bằng Camera theo chuẩn Bộ GD&ĐT năm 2025 (phiếu QM 2025). Tác giả: Hồ Tấn Khải - Trường THPT Mang Thít, Tỉnh Vĩnh Long." />
+    <meta property="og:title" content="Edu Chấm Đề 2025 — Chấm Thi Trắc Nghiệm Camera" />
     <meta property="og:description" content="Chấm thi trắc nghiệm tự động bằng Camera chuẩn phiếu QM 2025 Bộ GD&ĐT. Tác giả: Hồ Tấn Khải - THPT Mang Thít, Vĩnh Long." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
@@ -15,7 +15,30 @@
   </head>
   <body class="bg-slate-950 text-slate-100 antialiased selection:bg-emerald-500/30 selection:text-emerald-200">
     <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <script type="module" src="./src/main.tsx"></script>
+    <script>
+      // Tự động khắc phục khi đồng bộ thẳng nhánh main lên GitHub Pages mà không qua bước build Vite
+      window.addEventListener('load', function () {
+        setTimeout(function () {
+          var root = document.getElementById('root');
+          if (!window.__EDU_CHAM_DE_MOUNTED__ && root && root.children.length === 0) {
+            fetch('./public/qm2025-standalone.html')
+              .then(function (r) {
+                if (r.ok) return r.text();
+                return fetch('./qm2025-standalone.html').then(function (r2) { return r2.text(); });
+              })
+              .then(function (html) {
+                if (html && html.indexOf('<!DOCTYPE html>') !== -1) {
+                  document.open();
+                  document.write(html);
+                  document.close();
+                }
+              })
+              .catch(function () {});
+          }
+        }, 900);
+      });
+    </script>
   </body>
 </html>
 

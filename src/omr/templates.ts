@@ -31,29 +31,22 @@ export interface TemplateConfig {
   p3Count: number; // 6 or 0
   p3TotalPoints: number;
   defaultRadius: number;
+  // 3D Theme & Color System per subject group
+  btn3dClass: string;
+  card3dClass: string;
+  accentText: string;
+  accentBorder: string;
+  accentGlow: string;
+  hexPrimary: string;
 }
 
 export const TEMPLATES: Record<TemplateId, TemplateConfig> = {
-  khtn: {
-    id: 'khtn',
-    name: 'Mẫu 2: Lý - Hóa - Sinh - Địa',
-    shortName: 'KHTN & Địa (18-4-6)',
-    subjects: 'Vật Lý, Hóa Học, Sinh Học, Địa Lí',
-    imageUrl: '/assets/aistudio/QM_2025_-_Ly__Hoa__Sinh__Dia_6a77a214.jpg',
-    p1Count: 18,
-    p1TotalPoints: 4.5,
-    p2Count: 4,
-    p2TotalPoints: 4.0,
-    p3Count: 6,
-    p3TotalPoints: 1.5,
-    defaultRadius: 7.5,
-  },
   toan: {
     id: 'toan',
     name: 'Mẫu 1: Toán Học',
-    shortName: 'Toán (12-4-6)',
-    subjects: 'Toán Học',
-    imageUrl: '/assets/aistudio/QM_202_To_n_2e669509.jpg',
+    shortName: 'Toán Học (12-4-6)',
+    subjects: 'Đại Số, Giải Tích, Hình Học Không Gian & Thống Kê',
+    imageUrl: './assets/aistudio/QM_202_To_n_2e669509.jpg',
     p1Count: 12,
     p1TotalPoints: 3.0,
     p2Count: 4,
@@ -61,13 +54,39 @@ export const TEMPLATES: Record<TemplateId, TemplateConfig> = {
     p3Count: 6,
     p3TotalPoints: 3.0,
     defaultRadius: 7.5,
+    btn3dClass: 'btn-3d btn-3d-blue',
+    card3dClass: 'card-3d-toan',
+    accentText: 'text-blue-400',
+    accentBorder: 'border-blue-500/60',
+    accentGlow: 'from-blue-600/25 via-indigo-900/20 to-slate-950',
+    hexPrimary: '#3b82f6',
+  },
+  khtn: {
+    id: 'khtn',
+    name: 'Mẫu 2: Lý · Hóa · Sinh · Địa',
+    shortName: 'KHTN & Địa (18-4-6)',
+    subjects: 'Vật Lý, Hóa Học, Sinh Học, Địa Lí',
+    imageUrl: './assets/aistudio/QM_2025_-_Ly__Hoa__Sinh__Dia_6a77a214.jpg',
+    p1Count: 18,
+    p1TotalPoints: 4.5,
+    p2Count: 4,
+    p2TotalPoints: 4.0,
+    p3Count: 6,
+    p3TotalPoints: 1.5,
+    defaultRadius: 7.5,
+    btn3dClass: 'btn-3d btn-3d-emerald',
+    card3dClass: 'card-3d-khtn',
+    accentText: 'text-emerald-400',
+    accentBorder: 'border-emerald-500/60',
+    accentGlow: 'from-emerald-600/25 via-teal-900/20 to-slate-950',
+    hexPrimary: '#10b981',
   },
   khxh: {
     id: 'khxh',
-    name: 'Mẫu 3: Sử - Tin - CN - GDKT&PL',
+    name: 'Mẫu 3: Sử · Tin · CN · GDKT&PL',
     shortName: 'KHXH & Tin/CN (24-4-0)',
-    subjects: 'Lịch Sử, Tin Học, Công Nghệ, GDKT&PL',
-    imageUrl: '/assets/aistudio/QM_2025_-_Su__Tin__CN__GDPL_cdd333ca.jpg',
+    subjects: 'Lịch Sử, Tin Học, Công Nghệ, GDKT & Pháp Luật',
+    imageUrl: './assets/aistudio/QM_2025_-_Su__Tin__CN__GDPL_cdd333ca.jpg',
     p1Count: 24,
     p1TotalPoints: 6.0,
     p2Count: 4,
@@ -75,13 +94,19 @@ export const TEMPLATES: Record<TemplateId, TemplateConfig> = {
     p3Count: 0,
     p3TotalPoints: 0,
     defaultRadius: 8.6,
+    btn3dClass: 'btn-3d btn-3d-amber',
+    card3dClass: 'card-3d-khxh',
+    accentText: 'text-amber-400',
+    accentBorder: 'border-amber-500/60',
+    accentGlow: 'from-amber-600/25 via-orange-900/20 to-slate-950',
+    hexPrimary: '#f59e0b',
   },
   ngoaingu: {
     id: 'ngoaingu',
     name: 'Mẫu 4: Ngoại Ngữ',
     shortName: 'Ngoại Ngữ (40 câu)',
-    subjects: 'Tiếng Anh, Tiếng Pháp, Tiếng Trung, Tiếng Nhật...',
-    imageUrl: '/assets/aistudio/QM_2025_-_NGOAI_NGU_5d10a158.jpg',
+    subjects: 'Tiếng Anh, Tiếng Pháp, Tiếng Trung, Tiếng Nhật, Tiếng Hàn',
+    imageUrl: './assets/aistudio/QM_2025_-_NGOAI_NGU_5d10a158.jpg',
     p1Count: 40,
     p1TotalPoints: 10.0,
     p2Count: 0,
@@ -89,11 +114,17 @@ export const TEMPLATES: Record<TemplateId, TemplateConfig> = {
     p3Count: 0,
     p3TotalPoints: 0,
     defaultRadius: 9.2,
+    btn3dClass: 'btn-3d btn-3d-rose',
+    card3dClass: 'card-3d-ngoaingu',
+    accentText: 'text-rose-400',
+    accentBorder: 'border-rose-500/60',
+    accentGlow: 'from-rose-600/25 via-pink-900/20 to-slate-950',
+    hexPrimary: '#f43f5e',
   },
 };
 
 export const SAMPLE_QR_IMAGE_URL =
-  '/assets/aistudio/M_n_SINH_H_C_-_L_p_12_-_K__ki_m_tra_KI_M_TRA_CU_I_K__I_-_01-11-26_-_QR_Chung__M__101-104__-_1_-_App_QM_2025_e413d348.png';
+  './assets/aistudio/M_n_SINH_H_C_-_L_p_12_-_K__ki_m_tra_KI_M_TRA_CU_I_K__I_-_01-11-26_-_QR_Chung__M__101-104__-_1_-_App_QM_2025_e413d348.png';
 
 /**
  * Chuỗi JSON thực tế đã giải mã từ mã QR Môn Sinh Học 12 - Kiểm tra cuối kì I (Mã 101-104)
@@ -124,11 +155,6 @@ export function parseQM2025QrPayload(rawText: string, templateId: TemplateId = '
     if (!Array.isArray(row) || row.length < 2) continue;
     const examCode = String(row[0]).trim();
 
-    // Chuẩn mảng 41 phần tử của hệ thống trộn đề QM2025:
-    // [0]: Mã đề
-    // [1..18]: 18 câu Phần I (A/B/C/D)
-    // [19..34]: 16 ý Phần II (4 câu x 4 ý a,b,c,d: D/S)
-    // [35..40]: 6 câu Phần III (số)
     if (row.length === 41 && (templateId === 'khtn' || templateId === 'toan')) {
       const p1Full = row.slice(1, 19).map((v: unknown) => String(v).toUpperCase().trim());
       const p1 = p1Full.slice(0, tpl.p1Count);
@@ -148,20 +174,21 @@ export function parseQM2025QrPayload(rawText: string, templateId: TemplateId = '
       const p3 = row.slice(35, 41).map((v: unknown) => v as number | string);
       result.push({ examCode, p1, p2, p3 });
     } else {
-      // Linh hoạt theo cấu hình từng mẫu phiếu
       const p1Count = tpl.p1Count;
       const p2ItemsCount = tpl.p2Count * 4;
       const p3Count = tpl.p3Count;
+      const choices = ['A', 'B', 'C', 'D'];
 
       const p1: string[] = [];
       for (let i = 0; i < p1Count; i++) {
         const val = row[1 + i];
-        p1.push(val !== undefined ? String(val).toUpperCase().trim() : 'A');
+        const s = val !== undefined ? String(val).toUpperCase().trim() : '';
+        p1.push(choices.includes(s) ? s : choices[i % 4]);
       }
 
       const p2: AnswerKeyData['p2'] = [];
       for (let q = 0; q < tpl.p2Count; q++) {
-        const base = 1 + p1Count + q * 4;
+        const base = 1 + Math.min(row.length - 1, 18) + q * 4;
         const normDS = (v: unknown): 'D' | 'S' => {
           const s = String(v ?? 'D').toUpperCase().trim();
           return s === 'Đ' || s === 'D' || s === 'TRUE' || s === '1' ? 'D' : 'S';
@@ -204,17 +231,15 @@ export interface SheetBubbleMap {
   sbd: BubblePoint[][]; // [6 cols][10 rows (0..9)]
   p1: BubblePoint[][]; // [N questions][4 choices (A,B,C,D)]
   p2: {
-    // [4 questions] -> each has a,b,c,d -> each has [D, S]
     a: [BubblePoint, BubblePoint];
     b: [BubblePoint, BubblePoint];
     c: [BubblePoint, BubblePoint];
     d: [BubblePoint, BubblePoint];
   }[];
   p3: {
-    // [6 questions] -> 4 columns
-    minus: BubblePoint; // col 0 row '-'
-    comma1: BubblePoint; // col 1 row ','
-    comma2: BubblePoint; // col 2 row ','
+    minus: BubblePoint;
+    comma1: BubblePoint;
+    comma2: BubblePoint;
     digits: BubblePoint[][]; // [4 cols][10 rows (0..9)]
   }[];
 }
@@ -237,7 +262,6 @@ export function getTemplateBubbleMap(
 
   if (templateId === 'toan' || templateId === 'khtn') {
     const r = 7.4;
-    // Mã đề: 3 cột x 10 hàng (0..9)
     const maDeCols = [46.3, 65.3, 84.5];
     const sbdCols = [138.4, 157.6, 176.6, 195.8, 214.8, 233.9];
     const leftRows = [282.4, 301.6, 320.8, 340.0, 359.5, 378.7, 397.9, 417.1, 436.4, 455.8];
@@ -245,19 +269,16 @@ export function getTemplateBubbleMap(
     const maDe = maDeCols.map((cx) => leftRows.map((cy) => pt(cx, cy, r)));
     const sbd = sbdCols.map((cx) => leftRows.map((cy) => pt(cx, cy, r)));
 
-    // Phần I:
     const p1Cols = [298.5, 317.6, 336.6, 355.8];
     const p1Rows =
       templateId === 'toan'
         ? [263.2, 282.4, 301.6, 320.7, 339.9, 359.5, 378.7, 397.9, 417.0, 436.6, 455.8, 475.0]
         : [
-            // KHTN: 18 câu (Câu 1..9 ở khung trên, Câu 10..18 ở khung dưới)
             128.4, 147.5, 166.7, 186.3, 205.4, 224.6, 243.8, 262.9, 282.5,
             320.8, 340.0, 359.6, 378.7, 397.9, 417.1, 436.2, 455.8, 475.0,
           ];
     const p1 = p1Rows.map((cy) => p1Cols.map((cx) => pt(cx, cy, r)));
 
-    // Phần II: 4 câu ở góc trên bên phải
     const p2ColPairs = [
       [612.3, 631.3],
       [712.0, 730.9],
@@ -272,7 +293,6 @@ export function getTemplateBubbleMap(
       d: [pt(xD, p2Rows[3], r), pt(xS, p2Rows[3], r)] as [BubblePoint, BubblePoint],
     }));
 
-    // Phần III: 6 câu trả lời ngắn ở góc dưới bên phải
     const p3GroupCols = [
       [413.0, 432.0, 451.2, 470.1],
       [512.6, 531.6, 550.8, 569.8],
@@ -304,7 +324,6 @@ export function getTemplateBubbleMap(
     const maDe = maDeCols.map((cx) => leftRows.map((cy) => pt(cx, cy, r)));
     const sbd = sbdCols.map((cx) => leftRows.map((cy) => pt(cx, cy, r)));
 
-    // Phần I: 24 câu chia 2 cột (1..12 và 13..24)
     const p1ColGroup1 = [399.9, 422.4, 444.9, 467.3];
     const p1ColGroup2 = [527.0, 549.5, 572.0, 594.5];
     const p1Rows12 = [222.8, 245.1, 267.8, 290.5, 313.2, 335.9, 358.7, 381.4, 404.1, 426.4, 449.1, 471.8];
@@ -317,7 +336,6 @@ export function getTemplateBubbleMap(
       p1.push(p1ColGroup2.map((cx) => pt(cx, p1Rows12[i], r)));
     }
 
-    // Phần II: Câu 1..4 ở hàng trên
     const p2ColPairs = [
       [679.2, 701.8],
       [758.7, 781.3],
@@ -345,10 +363,10 @@ export function getTemplateBubbleMap(
   const sbd = sbdCols.map((cx) => rows10.map((cy) => pt(cx, cy, r)));
 
   const p1ColBlocks = [
-    [447.3, 472.9, 498.1, 523.3], // Câu 1..10
-    [590.6, 615.8, 641.0, 666.3], // Câu 11..20
-    [733.6, 759.2, 784.4, 809.6], // Câu 21..30
-    [877.0, 902.2, 927.4, 952.6], // Câu 31..40
+    [447.3, 472.9, 498.1, 523.3],
+    [590.6, 615.8, 641.0, 666.3],
+    [733.6, 759.2, 784.4, 809.6],
+    [877.0, 902.2, 927.4, 952.6],
   ];
 
   const p1: BubblePoint[][] = [];
@@ -359,4 +377,50 @@ export function getTemplateBubbleMap(
   }
 
   return { maDe, sbd, p1, p2: [], p3: [] };
+}
+
+/**
+ * Vẽ tờ phiếu Vector chuẩn 1024x550 nếu chạy ở môi trường offline hoặc thiếu file ảnh tĩnh
+ */
+export function renderVectorFallbackSheet1024x550(templateId: TemplateId): HTMLCanvasElement {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 550;
+  const ctx = canvas.getContext('2d')!;
+
+  // Nền giấy trắng
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 1024, 550);
+
+  // 4 ô vuông đen định vị góc
+  ctx.fillStyle = '#000000';
+  for (const c of [
+    TARGET_CORNERS_1024x550.tl,
+    TARGET_CORNERS_1024x550.tr,
+    TARGET_CORNERS_1024x550.bl,
+    TARGET_CORNERS_1024x550.br,
+  ]) {
+    ctx.fillRect(c.x - 11, c.y - 11, 22, 22);
+  }
+
+  // Vẽ toàn bộ vòng tròn rỗng theo đúng tọa độ
+  const map = getTemplateBubbleMap(templateId);
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 1.4;
+
+  const drawEmptyCircles = (list: BubblePoint[]) => {
+    for (const b of list) {
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+  };
+
+  drawEmptyCircles(map.maDe.flat());
+  drawEmptyCircles(map.sbd.flat());
+  drawEmptyCircles(map.p1.flat());
+  map.p2.forEach((q) => drawEmptyCircles([...q.a, ...q.b, ...q.c, ...q.d]));
+  map.p3.forEach((q) => drawEmptyCircles([q.minus, q.comma1, q.comma2, ...q.digits.flat()]));
+
+  return canvas;
 }

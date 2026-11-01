@@ -2,32 +2,33 @@ import React, { useEffect, useRef, useState } from 'react';
 import jsQR from 'jsqr';
 import * as XLSX from 'xlsx';
 import {
+  AlertTriangle,
+  BookOpen,
+  Calculator,
   Camera,
   CheckCircle2,
+  Compass,
   Download,
   Edit3,
+  FileCode,
   FileSpreadsheet,
   Flashlight,
-  Image as ImageIcon,
+  Globe,
   Layers,
   Play,
   QrCode,
-  RefreshCw,
   Sliders,
   Sparkles,
   Trash2,
   Upload,
-  Volume2,
-  AlertTriangle,
   X,
-  Eye,
-  FileCode,
 } from 'lucide-react';
 import {
   AnswerKeyData,
   DEFAULT_QR_JSON_RAW,
   getTemplateBubbleMap,
   parseQM2025QrPayload,
+  renderVectorFallbackSheet1024x550,
   SAMPLE_QR_IMAGE_URL,
   TARGET_CORNERS_1024x550,
   TemplateId,
@@ -46,21 +47,23 @@ import {
 type ActiveTab = 'keys' | 'camera' | 'scores';
 
 const STORAGE_KEYS = {
-  TEMPLATE: 'qm2025_active_template_v1',
-  ANSWER_KEYS: 'qm2025_answer_keys_v1',
-  GRADED_RECORDS: 'qm2025_graded_records_v1',
-  OMR_SETTINGS: 'qm2025_omr_settings_v1',
+  TEMPLATE: 'educhamde2025_active_template_v2',
+  ANSWER_KEYS: 'educhamde2025_answer_keys_v2',
+  GRADED_RECORDS: 'educhamde2025_graded_records_v2',
+  OMR_SETTINGS: 'educhamde2025_omr_settings_v2',
 };
 
 function playSuccessBeep() {
   try {
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new AudioCtx();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(1046.5, ctx.currentTime); // C6
-    osc.frequency.exponentialRampToValueAtTime(1318.5, ctx.currentTime + 0.09); // E6
+    osc.frequency.setValueAtTime(1046.5, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(1318.5, ctx.currentTime + 0.09);
     gain.gain.setValueAtTime(0.18, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.14);
     osc.connect(gain);
@@ -71,8 +74,15 @@ function playSuccessBeep() {
       navigator.vibrate([70, 40, 70]);
     }
   } catch {
-    // Ignore audio context locks
+    // Ignore audio context restrictions
   }
+}
+
+function SubjectIcon({ id, className }: { id: TemplateId; className?: string }) {
+  if (id === 'toan') return <Calculator className={className} />;
+  if (id === 'khtn') return <Compass className={className} />;
+  if (id === 'khxh') return <BookOpen className={className} />;
+  return <Globe className={className} />;
 }
 
 export default function App() {
@@ -103,7 +113,10 @@ export default function App() {
 
   const [selectedExamCode, setSelectedExamCode] = useState<string>('101');
   const [qrRawInput, setQrRawInput] = useState<string>(DEFAULT_QR_JSON_RAW);
-  const [statusBanner, setStatusBanner] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+  const [statusBanner, setStatusBanner] = useState<{
+    type: 'success' | 'error' | 'info';
+    text: string;
+  } | null>(null);
 
   // Cấu hình tinh chỉnh tọa độ OMR
   const [omrSettings, setOmrSettings] = useState<OMRSettings>(() => {
@@ -178,7 +191,6 @@ export default function App() {
     localStorage.setItem(STORAGE_KEYS.OMR_SETTINGS, JSON.stringify(omrSettings));
   }, [omrSettings]);
 
-  // Đảm bảo selectedExamCode luôn hợp lệ
   useEffect(() => {
     const codes = Object.keys(answerKeys);
     if (codes.length > 0 && !answerKeys[selectedExamCode]) {
@@ -186,30 +198,17 @@ export default function App() {
     }
   }, [answerKeys, selectedExamCode]);
 
-  // Vẽ bản đồ Ma trận tọa độ OMR lên ảnh mẫu phiếu thực tế ở Tab 1
+  // Vẽ bản đồ Ma trận tọa độ OMR lên ảnh mẫu phiếu thực tế ở Tab 1 (có Vector Fallback chống lỗi ảnh)
   useEffect(() => {
     if (!showMatrixPreview || activeTab !== 'keys') return;
     const canvas = matrixCanvasRef.current;
     if (!canvas) return;
 
-    const tpl = TEMPLATES[templateId];
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const tmp = document.createElement('canvas');
-      tmp.width = img.width;
-      tmp.height = img.height;
-      const tCtx = tmp.getContext('2d')!;
-      tCtx.drawImage(img, 0, 0);
-      const rawData = tCtx.getImageData(0, 0, img.width, img.height);
-      const corners = detectFourCornerMarkers(rawData);
-      const warped = warpPerspectiveTo1024x550(rawData, corners);
-
+    const drawOverlayRings = (baseWarped: HTMLCanvasElement) => {
       const ctx = canvas.getContext('2d')!;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(warped, 0, 0);
+      ctx.drawImage(baseWarped, 0, 0);
 
-      // Vẽ 4 góc định vị
       const cPts = [
         TARGET_CORNERS_1024x550.tl,
         TARGET_CORNERS_1024x550.tr,
@@ -222,7 +221,6 @@ export default function App() {
         ctx.strokeRect(c.x - 14, c.y - 14, 28, 28);
       }
 
-      // Vẽ toàn bộ tâm các ô tròn OMR
       const map = getTemplateBubbleMap(
         templateId,
         omrSettings.offsetX,
@@ -232,7 +230,7 @@ export default function App() {
 
       const drawGroup = (bubbles: { x: number; y: number; r: number }[], color: string) => {
         ctx.strokeStyle = color;
-        ctx.lineWidth = 1.4;
+        ctx.lineWidth = 1.5;
         for (const b of bubbles) {
           ctx.beginPath();
           ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
@@ -249,6 +247,25 @@ export default function App() {
       map.p3.forEach((q) => {
         drawGroup([q.minus, q.comma1, q.comma2, ...q.digits.flat()], '#ec4899');
       });
+    };
+
+    const tpl = TEMPLATES[templateId];
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const tmp = document.createElement('canvas');
+      tmp.width = img.width;
+      tmp.height = img.height;
+      const tCtx = tmp.getContext('2d')!;
+      tCtx.drawImage(img, 0, 0);
+      const rawData = tCtx.getImageData(0, 0, img.width, img.height);
+      const corners = detectFourCornerMarkers(rawData);
+      const warped = warpPerspectiveTo1024x550(rawData, corners);
+      drawOverlayRings(warped);
+    };
+    img.onerror = () => {
+      const fallback = renderVectorFallbackSheet1024x550(templateId);
+      drawOverlayRings(fallback);
     };
     img.src = tpl.imageUrl;
   }, [templateId, omrSettings, showMatrixPreview, activeTab]);
@@ -276,7 +293,10 @@ export default function App() {
     try {
       const list = parseQM2025QrPayload(rawStr, targetTpl);
       if (list.length === 0) {
-        setStatusBanner({ type: 'error', text: 'Không tìm thấy mã đề nào trong chuỗi dữ liệu QR.' });
+        setStatusBanner({
+          type: 'error',
+          text: 'Không tìm thấy mã đề nào trong chuỗi dữ liệu QR.',
+        });
         return false;
       }
       const map: Record<string, AnswerKeyData> = {};
@@ -289,7 +309,7 @@ export default function App() {
       playSuccessBeep();
       setStatusBanner({
         type: 'success',
-        text: `Đã nạp thành công ${list.length} mã đề (${list.map((x) => x.examCode).join(', ')}) vào bộ nhớ!`,
+        text: `Đã nạp thành công ${list.length} mã đề (${list.map((x) => x.examCode).join(', ')}) cho ${TEMPLATES[targetTpl].name}!`,
       });
       return true;
     } catch (err) {
@@ -362,9 +382,12 @@ export default function App() {
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
         const rows = XLSX.utils.sheet_to_json<unknown[]>(firstSheet, { header: 1 });
-        // Lọc các dòng bắt đầu bằng Mã Đề (ví dụ 101, 102, 103, 104)
         const dataRows = rows.filter(
-          (r) => Array.isArray(r) && r.length >= 10 && !Number.isNaN(Number(r[0])) && String(r[0]).trim() !== ''
+          (r) =>
+            Array.isArray(r) &&
+            r.length >= 10 &&
+            !Number.isNaN(Number(r[0])) &&
+            String(r[0]).trim() !== ''
         );
         if (dataRows.length === 0) {
           setStatusBanner({
@@ -390,7 +413,11 @@ export default function App() {
     setQrModalOpen(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+        video: {
+          facingMode: { ideal: 'environment' },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
       });
       qrStreamRef.current = stream;
       if (qrVideoRef.current) {
@@ -458,7 +485,7 @@ export default function App() {
     } catch {
       setStatusBanner({
         type: 'info',
-        text: 'Trình duyệt chưa cấp quyền Camera. Thầy/cô có thể dùng "Chấm Thử Bằng Phiếu Giả Lập" hoặc "Tải Ảnh Phiếu" bên dưới!',
+        text: 'Trình duyệt chưa cấp quyền Camera. Thầy/cô có thể dùng "Tô & Chấm Thử" hoặc "Chấm Từ Ảnh Phiếu" bên dưới!',
       });
     }
   };
@@ -506,7 +533,12 @@ export default function App() {
     const processFrame = () => {
       const video = gradingVideoRef.current;
       const overlay = gradingOverlayRef.current;
-      if (video && overlay && video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth > 0) {
+      if (
+        video &&
+        overlay &&
+        video.readyState === video.HAVE_ENOUGH_DATA &&
+        video.videoWidth > 0
+      ) {
         const procW = 640;
         const procH = Math.round((640 * video.videoHeight) / video.videoWidth);
         const tmp = document.createElement('canvas');
@@ -527,7 +559,6 @@ export default function App() {
           const isLocked = stableCornerFramesRef.current >= 4;
           setCornersLocked(isLocked);
 
-          // Vẽ khung tứ giác xanh lá nối 4 góc định vị
           oCtx.strokeStyle = isLocked ? '#10b981' : '#f59e0b';
           oCtx.lineWidth = 3;
           oCtx.beginPath();
@@ -543,7 +574,6 @@ export default function App() {
             oCtx.fillRect(pt.x - 7, pt.y - 7, 14, 14);
           }
 
-          // Nếu bật Chấm tự động liên tục và đã giữ ổn định 4 góc >= 6 frames
           if (
             isLocked &&
             continuousScan &&
@@ -557,32 +587,30 @@ export default function App() {
           stableCornerFramesRef.current = 0;
           setCornersLocked(false);
 
-          // Vẽ 4 góc ngắm hướng dẫn màu vàng
           const padX = procW * 0.06;
           const padY = procH * 0.09;
           const len = 28;
           oCtx.strokeStyle = '#f59e0b';
           oCtx.lineWidth = 3;
 
-          // TL
           oCtx.beginPath();
           oCtx.moveTo(padX, padY + len);
           oCtx.lineTo(padX, padY);
           oCtx.lineTo(padX + len, padY);
           oCtx.stroke();
-          // TR
+
           oCtx.beginPath();
           oCtx.moveTo(procW - padX - len, padY);
           oCtx.lineTo(procW - padX, padY);
           oCtx.lineTo(procW - padX, padY + len);
           oCtx.stroke();
-          // BL
+
           oCtx.beginPath();
           oCtx.moveTo(padX, procH - padY - len);
           oCtx.lineTo(padX, procH - padY);
           oCtx.lineTo(padX + len, procH - padY);
           oCtx.stroke();
-          // BR
+
           oCtx.beginPath();
           oCtx.moveTo(procW - padX - len, procH - padY);
           oCtx.lineTo(procW - padX, procH - padY);
@@ -641,7 +669,9 @@ export default function App() {
     setIsSimulating(true);
     try {
       const targetKey =
-        answerKeys[simExamCode] || Object.values(answerKeys)[0] || parseQM2025QrPayload(DEFAULT_QR_JSON_RAW, templateId)[0];
+        answerKeys[simExamCode] ||
+        Object.values(answerKeys)[0] ||
+        parseQM2025QrPayload(DEFAULT_QR_JSON_RAW, templateId)[0];
       const simulatedWarpedCanvas = await generateSimulatedSheetCanvas(
         templateId,
         simSbd,
@@ -649,9 +679,13 @@ export default function App() {
         targetKey,
         simAccuracy
       );
-      const record = gradeWarpedSheet(simulatedWarpedCanvas, templateId, answerKeys, omrSettings);
+      const record = gradeWarpedSheet(
+        simulatedWarpedCanvas,
+        templateId,
+        answerKeys,
+        omrSettings
+      );
       saveAndDisplayGradedRecord(record);
-      // Tăng tự động SBD lên 1 để giáo viên bấm liên tiếp nhiều học sinh
       const nextNum = (Number(simSbd) || 20158) + 1;
       setSimSbd(String(nextNum).padStart(6, '0'));
     } catch (err) {
@@ -668,8 +702,9 @@ export default function App() {
     playSuccessBeep();
     setActiveRecordHud(record);
     setGradedRecords((prev) => {
-      // Nếu trùng SBD và SBD hợp lệ (không chứa '?'), cập nhật bài của SBD đó hoặc thêm mới lên đầu
-      const existingIdx = prev.findIndex((r) => !record.sbd.includes('?') && r.sbd === record.sbd);
+      const existingIdx = prev.findIndex(
+        (r) => !record.sbd.includes('?') && r.sbd === record.sbd
+      );
       if (existingIdx !== -1) {
         const clone = [...prev];
         clone[existingIdx] = record;
@@ -691,7 +726,10 @@ export default function App() {
   // Xuất file Excel chuẩn VnEdu / SMAS (.xlsx)
   const handleExportExcel = () => {
     if (gradedRecords.length === 0) {
-      setStatusBanner({ type: 'info', text: 'Chưa có bài chấm nào trong Sổ điểm để xuất Excel.' });
+      setStatusBanner({
+        type: 'info',
+        text: 'Chưa có bài chấm nào trong Sổ điểm để xuất Excel.',
+      });
       return;
     }
     const rows = gradedRecords.map((r, index) => ({
@@ -719,33 +757,33 @@ export default function App() {
       { wch: 15 },
     ];
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'BangDiem_QM2025');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'EduChamDe2025');
     XLSX.writeFile(
       workbook,
-      `BangDiem_QM2025_${templateId.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.xlsx`
+      `EduChamDe2025_${templateId.toUpperCase()}_${new Date().toISOString().slice(0, 10)}.xlsx`
     );
   };
 
-  // Tải về bản Single-File HTML độc lập để mở trực tiếp trên điện thoại hoặc đẩy lên GitHub Pages
+  // Tải về bản Single-File HTML độc lập (index.html) chuẩn GitHub Pages
   const handleDownloadStandaloneHtml = async () => {
     try {
-      const res = await fetch('/qm2025-standalone.html');
+      const res = await fetch('./qm2025-standalone.html');
       const htmlText = await res.text();
       const blob = new Blob([htmlText], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'QM2025_OMR_ChamThi_HoTanKhai.html';
+      a.download = 'index.html';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       setStatusBanner({
         type: 'success',
-        text: 'Đã tải xuống file đơn QM2025_OMR_ChamThi_HoTanKhai.html (dùng trực tiếp trên điện thoại hoặc GitHub Pages)!',
+        text: 'Đã tải xuống tệp index.html độc lập (có thể mở ngay trên điện thoại hoặc đẩy trực tiếp lên GitHub Pages)!',
       });
     } catch {
-      window.location.href = '/qm2025-standalone.html';
+      window.location.href = './qm2025-standalone.html';
     }
   };
 
@@ -755,7 +793,14 @@ export default function App() {
   // Thống kê phổ điểm ở Tab 3
   const stats = React.useMemo(() => {
     if (gradedRecords.length === 0) {
-      return { avg: 0, max: 0, min: 0, passCount: 0, passRate: 0, buckets: new Array(10).fill(0) };
+      return {
+        avg: 0,
+        max: 0,
+        min: 0,
+        passCount: 0,
+        passRate: 0,
+        buckets: new Array(10).fill(0),
+      };
     }
     const scores = gradedRecords.map((r) => r.totalScore);
     const sum = scores.reduce((a, b) => a + b, 0);
@@ -778,16 +823,59 @@ export default function App() {
       {/* TOP BAR CONTRACT: 3 ZONES */}
       <header className="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-4 sm:px-6 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-8">
-          {/* Zone 1: Brand Title */}
+          {/* Zone 1: Single Brand Wordmark with 3D SVG Emblem */}
           <a
             href="#top"
             onClick={(e) => {
               e.preventDefault();
               setActiveTab('keys');
             }}
-            className="text-base sm:text-lg font-bold tracking-tight text-white whitespace-nowrap shrink-0"
+            className="flex items-center gap-2.5 text-base sm:text-lg font-extrabold tracking-tight text-white whitespace-nowrap shrink-0"
           >
-            QM 2025 OMR
+            <svg
+              className="w-8 h-8 shrink-0"
+              viewBox="0 0 40 40"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect
+                x="2"
+                y="5"
+                width="36"
+                height="33"
+                rx="10"
+                fill="#065F46"
+              />
+              <rect
+                x="2"
+                y="2"
+                width="36"
+                height="33"
+                rx="10"
+                fill="url(#eduGrad)"
+                stroke="#34D399"
+                strokeWidth="1.2"
+              />
+              <rect x="8" y="8" width="5" height="5" rx="1" fill="#FFFFFF" />
+              <rect x="27" y="8" width="5" height="5" rx="1" fill="#FFFFFF" />
+              <rect x="8" y="24" width="5" height="5" rx="1" fill="#FFFFFF" />
+              <rect x="27" y="24" width="5" height="5" rx="1" fill="#FFFFFF" />
+              <path
+                d="M15.5 18.5L18.8 21.8L25.5 15"
+                stroke="#FFFFFF"
+                strokeWidth="2.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+              <defs>
+                <linearGradient id="eduGrad" x1="2" y1="2" x2="38" y2="35" gradientUnits="userSpaceOnUse">
+                  <stop stopColor="#10B981" />
+                  <stop offset="0.55" stopColor="#059669" />
+                  <stop offset="1" stopColor="#0284C7" />
+                </linearGradient>
+              </defs>
+            </svg>
+            <span>Edu Chấm Đề 2025</span>
           </a>
 
           {/* Zone 2: Navigation Links (Desktop) */}
@@ -795,7 +883,9 @@ export default function App() {
             <button
               onClick={() => setActiveTab('keys')}
               className={`hover:text-white transition-colors whitespace-nowrap shrink-0 pb-0.5 cursor-pointer ${
-                activeTab === 'keys' ? 'text-emerald-400 border-b-2 border-emerald-400 font-semibold' : ''
+                activeTab === 'keys'
+                  ? 'text-emerald-400 border-b-2 border-emerald-400 font-semibold'
+                  : ''
               }`}
             >
               1. Quản Lý Ca Thi & Đáp Án
@@ -803,7 +893,9 @@ export default function App() {
             <button
               onClick={() => setActiveTab('camera')}
               className={`hover:text-white transition-colors whitespace-nowrap shrink-0 pb-0.5 cursor-pointer ${
-                activeTab === 'camera' ? 'text-emerald-400 border-b-2 border-emerald-400 font-semibold' : ''
+                activeTab === 'camera'
+                  ? 'text-emerald-400 border-b-2 border-emerald-400 font-semibold'
+                  : ''
               }`}
             >
               2. Camera Chấm Thi
@@ -811,41 +903,45 @@ export default function App() {
             <button
               onClick={() => setActiveTab('scores')}
               className={`hover:text-white transition-colors whitespace-nowrap shrink-0 pb-0.5 cursor-pointer ${
-                activeTab === 'scores' ? 'text-emerald-400 border-b-2 border-emerald-400 font-semibold' : ''
+                activeTab === 'scores'
+                  ? 'text-emerald-400 border-b-2 border-emerald-400 font-semibold'
+                  : ''
               }`}
             >
               3. Sổ Điểm & Xuất Excel ({gradedRecords.length})
             </button>
           </nav>
 
-          {/* Zone 3: 1 Primary Action */}
+          {/* Zone 3: 1 Primary Action (3D Button) */}
           <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={handleDownloadStandaloneHtml}
-              className="px-3.5 py-2 text-xs font-semibold text-slate-950 bg-emerald-400 hover:bg-emerald-300 rounded-lg transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer"
+              className="btn-3d btn-3d-emerald px-4 py-2 text-xs font-bold text-white rounded-xl whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer"
             >
               <FileCode className="w-3.5 h-3.5" />
-              <span>Tải 1-File HTML</span>
+              <span>Tải Bản GitHub Pages</span>
             </button>
           </div>
         </div>
       </header>
 
       {/* AUTHOR & SCHOOL ATTRIBUTION SUB-BAR */}
-      <div className="bg-slate-900/60 border-b border-slate-800/60 px-4 sm:px-6 py-2">
+      <div className="bg-slate-900/75 border-b border-slate-800/80 px-4 sm:px-6 py-2">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs text-slate-400">
           <div className="flex items-center flex-wrap gap-1.5">
             <span>Tác giả:</span>
             <strong className="text-slate-100 font-semibold">Hồ Tấn Khải</strong>
             <span aria-hidden="true">·</span>
-            <span className="text-emerald-400 font-medium">Trường THPT Mang Thít, Tỉnh Vĩnh Long</span>
+            <span className="text-emerald-400 font-medium">
+              Trường THPT Mang Thít, Tỉnh Vĩnh Long
+            </span>
             <span aria-hidden="true">·</span>
             <span>Chuẩn Phiếu QM 2025 Bộ GD&ĐT</span>
           </div>
-          <div className="flex items-center gap-2 text-slate-400 font-mono text-[11px]">
-            <span>Mẫu đang chọn: {currentTpl.shortName}</span>
+          <div className="flex items-center gap-2 text-slate-300 font-mono text-[11px]">
+            <span className={currentTpl.accentText}>{currentTpl.name}</span>
             <span aria-hidden="true">·</span>
-            <span>{Object.keys(answerKeys).length} mã đề</span>
+            <span>{Object.keys(answerKeys).length} mã đề đã nạp</span>
           </div>
         </div>
       </div>
@@ -856,10 +952,10 @@ export default function App() {
           <div
             className={`rounded-xl px-4 py-2.5 text-xs font-medium flex items-center justify-between gap-3 border ${
               statusBanner.type === 'success'
-                ? 'bg-emerald-950/70 border-emerald-700/60 text-emerald-200'
+                ? 'bg-emerald-950/80 border-emerald-600/60 text-emerald-200'
                 : statusBanner.type === 'error'
-                ? 'bg-rose-950/70 border-rose-700/60 text-rose-200'
-                : 'bg-sky-950/70 border-sky-700/60 text-sky-200'
+                ? 'bg-rose-950/80 border-rose-600/60 text-rose-200'
+                : 'bg-sky-950/80 border-sky-600/60 text-sky-200'
             }`}
           >
             <span>{statusBanner.text}</span>
@@ -876,24 +972,24 @@ export default function App() {
       {/* MAIN CONTENT AREA */}
       <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 py-5 flex-1">
         {/* =====================================================================
-            TAB 1: QUẢN LÝ CA THI & NẠP ĐÁP ÁN
+            TAB 1: QUẢN LÝ CA THI & NẠP ĐÁP ÁN (3D SUBJECT CARDS)
            ===================================================================== */}
         {activeTab === 'keys' && (
           <div className="space-y-6">
-            {/* Bước 1: Chọn Loại Mẫu Phiếu Chuẩn QM 2025 */}
+            {/* Bước 1: Chọn Loại Mẫu Phiếu Chuẩn QM 2025 với Phối Màu 3D Riêng Biệt */}
             <section className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
                 <div>
                   <h2 className="text-base sm:text-lg font-bold text-white">
-                    01. Chọn Mẫu Phiếu Trả Lời Trắc Nghiệm Chuẩn QM 2025
+                    01. Chọn Khung Môn Học & Mẫu Phiếu Chuẩn QM 2025
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Tất cả 4 mẫu phiếu đều có 4 ô vuông đen định vị ở 4 góc, khung SBD (6 cột) và Mã đề (3 cột).
+                    Mỗi tổ hợp môn học được thiết kế khung nổi 3D và hệ màu nhận diện riêng biệt, tự động đồng bộ thang điểm Bộ GD&ĐT 2025.
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-5">
                 {(Object.keys(TEMPLATES) as TemplateId[]).map((id) => {
                   const t = TEMPLATES[id];
                   const isSelected = templateId === id;
@@ -901,31 +997,58 @@ export default function App() {
                     <button
                       key={id}
                       onClick={() => handleSelectTemplate(id)}
-                      className={`text-left p-3.5 rounded-xl border transition-all cursor-pointer flex flex-col justify-between ${
+                      className={`btn-3d text-left p-4 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
+                        t.card3dClass
+                      } ${
                         isSelected
-                          ? 'bg-emerald-950/40 border-emerald-500/70 text-white shadow-sm'
-                          : 'bg-slate-950/60 border-slate-800 text-slate-300 hover:border-slate-700'
+                          ? `${t.accentBorder} ring-2 ring-white/25 scale-[1.01]`
+                          : 'border-slate-700/70 opacity-85 hover:opacity-100'
                       }`}
                     >
                       <div>
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-bold text-emerald-400">{t.name}</span>
-                          {isSelected && <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />}
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`w-9 h-9 rounded-xl flex items-center justify-center text-white ${t.btn3dClass}`}
+                            >
+                              <SubjectIcon id={id} className="w-4 h-4" />
+                            </span>
+                            <div>
+                              <span className={`text-xs font-extrabold block ${t.accentText}`}>
+                                {t.name}
+                              </span>
+                              <span className="text-[11px] text-slate-300 font-mono">
+                                {t.shortName}
+                              </span>
+                            </div>
+                          </div>
+                          {isSelected && (
+                            <CheckCircle2 className={`w-5 h-5 shrink-0 ${t.accentText}`} />
+                          )}
                         </div>
-                        <p className="text-[11px] text-slate-400 mt-1">{t.subjects}</p>
+                        <p className="text-xs text-slate-300 mt-3 leading-relaxed">
+                          {t.subjects}
+                        </p>
                       </div>
-                      <div className="mt-3 pt-2 border-t border-slate-800/80 text-[11px] font-mono text-slate-300 flex items-center gap-1.5">
-                        <span>P.I: {t.p1Count}c ({t.p1TotalPoints}đ)</span>
+
+                      <div className="mt-4 pt-2.5 border-t border-white/10 text-[11px] font-mono text-slate-200 flex items-center justify-between">
+                        <span>
+                          P.I: {t.p1Count}c ({t.p1TotalPoints}đ)
+                        </span>
                         {t.p2Count > 0 && (
                           <>
                             <span>·</span>
-                            <span>P.II: {t.p2Count}c ({t.p2TotalPoints}đ)</span>
+                            <span>
+                              P.II: {t.p2Count}c ({t.p2TotalPoints}đ)
+                            </span>
                           </>
                         )}
                         {t.p3Count > 0 && (
                           <>
                             <span>·</span>
-                            <span>P.III: {t.p3Count}c ({t.p3TotalPoints}đ)</span>
+                            <span>
+                              P.III: {t.p3Count}c ({t.p3TotalPoints}đ)
+                            </span>
                           </>
                         )}
                       </div>
@@ -943,14 +1066,18 @@ export default function App() {
                     02. Nạp Đáp Án Tự Động Bằng Mã QR Hoặc File Excel
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Hỗ trợ giải mã trực tiếp mảng JSON 2 chiều <code className="text-emerald-300">[[Mã_Đề, P1_C1..18, P2_1a..4d, P3_C1..6], ...]</code> từ mã QR chung QM2025.
+                    Hỗ trợ giải mã trực tiếp mảng JSON 2 chiều{' '}
+                    <code className="text-emerald-300">
+                      [[Mã_Đề, P1_C1..18, P2_1a..4d, P3_C1..6], ...]
+                    </code>{' '}
+                    từ mã QR chung QM2025.
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-3">
                   <button
                     onClick={openQrModal}
-                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+                    className={`${currentTpl.btn3dClass} px-4 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-2 cursor-pointer whitespace-nowrap`}
                   >
                     <QrCode className="w-4 h-4" />
                     <span>Quét mã QR Đáp Án từ Trộn Đề</span>
@@ -958,14 +1085,14 @@ export default function App() {
 
                   <button
                     onClick={handleScanAttachedSampleQrImage}
-                    className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer"
+                    className="btn-3d btn-3d-amber px-3.5 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-2 cursor-pointer whitespace-nowrap"
                   >
                     <Sparkles className="w-4 h-4" />
                     <span>Nạp Ảnh QR Sinh Học 12 (Mã 101-104)</span>
                   </button>
 
-                  <label className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium flex items-center gap-2 cursor-pointer transition-colors">
-                    <FileSpreadsheet className="w-4 h-4 text-sky-400" />
+                  <label className="btn-3d btn-3d-blue px-3.5 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-2 cursor-pointer whitespace-nowrap">
+                    <FileSpreadsheet className="w-4 h-4" />
                     <span>Nhập File Excel (.xlsx)</span>
                     <input
                       type="file"
@@ -983,7 +1110,7 @@ export default function App() {
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">
                     Chuỗi JSON Đáp Án Chung Đã Giải Mã (có thể chỉnh sửa hoặc dán trực tiếp):
                   </label>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2.5">
                     <input
                       type="text"
                       value={qrRawInput}
@@ -993,7 +1120,7 @@ export default function App() {
                     />
                     <button
                       onClick={() => applyQrPayloadString(qrRawInput)}
-                      className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 shrink-0 cursor-pointer"
+                      className="btn-3d btn-3d-slate px-4 py-2.5 rounded-xl text-white text-xs font-bold shrink-0 cursor-pointer"
                     >
                       Nạp Dữ Liệu
                     </button>
@@ -1006,14 +1133,19 @@ export default function App() {
                     src={SAMPLE_QR_IMAGE_URL}
                     alt="QR Chung Mã 101-104"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).style.display = 'none';
+                    }}
                     className="w-14 h-14 rounded-lg object-contain bg-white p-1 shrink-0"
                   />
                   <div className="min-w-0">
-                    <div className="text-xs font-semibold text-white truncate">QR Chung (Mã 101-104)</div>
+                    <div className="text-xs font-semibold text-white truncate">
+                      QR Chung (Mã 101-104)
+                    </div>
                     <div className="text-[11px] text-slate-400">Môn Sinh Học 12 · KTCK I</div>
                     <button
                       onClick={handleScanAttachedSampleQrImage}
-                      className="text-[11px] text-emerald-400 hover:underline font-medium mt-0.5 cursor-pointer"
+                      className="text-[11px] text-emerald-400 hover:underline font-semibold mt-0.5 cursor-pointer"
                     >
                       Quét thử ảnh QR này →
                     </button>
@@ -1021,19 +1153,19 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Bảng chi tiết Đáp Án từng Mã Đề (Cho phép chỉnh sửa trực tiếp từng câu) */}
+              {/* Bảng chi tiết Đáp Án từng Mã Đề */}
               <div className="mt-6">
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-xs font-semibold text-slate-300">Danh sách Mã Đề:</span>
                     {Object.keys(answerKeys).map((code) => (
                       <button
                         key={code}
                         onClick={() => setSelectedExamCode(code)}
-                        className={`px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold transition-colors cursor-pointer ${
+                        className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer ${
                           selectedExamCode === code
-                            ? 'bg-emerald-600 text-white'
-                            : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                            ? `${currentTpl.btn3dClass} text-white`
+                            : 'btn-3d btn-3d-slate text-slate-300'
                         }`}
                       >
                         Mã đề {code}
@@ -1043,33 +1175,36 @@ export default function App() {
 
                   <button
                     onClick={() => setActiveTab('camera')}
-                    className="px-4 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                    className={`${currentTpl.btn3dClass} px-4 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer`}
                   >
-                    <Camera className="w-3.5 h-3.5" />
-                    <span>Chuyển sang Camera Chấm Thi →</span>
+                    <Camera className="w-4 h-4" />
+                    <span>Mở Camera Chấm Thi →</span>
                   </button>
                 </div>
 
                 {currentKey ? (
-                  <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4 space-y-5">
+                  <div className="bg-slate-950/75 border border-slate-800 rounded-2xl p-4 space-y-5">
                     {/* Phần I */}
                     <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-xs font-bold text-emerald-400">
-                          PHẦN I — Trắc Nghiệm Nhiều Lựa Chọn ({currentTpl.p1Count} câu · Tổng {currentTpl.p1TotalPoints.toFixed(2)} điểm ·{' '}
+                      <div className="flex items-center justify-between mb-2.5">
+                        <h3 className={`text-xs font-bold ${currentTpl.accentText}`}>
+                          PHẦN I — Trắc Nghiệm Nhiều Lựa Chọn ({currentTpl.p1Count} câu · Tổng{' '}
+                          {currentTpl.p1TotalPoints.toFixed(2)} điểm ·{' '}
                           {(currentTpl.p1TotalPoints / currentTpl.p1Count).toFixed(3)} đ/câu)
                         </h3>
-                        <span className="text-[11px] text-slate-400">Chạm vào chữ cái để đổi đáp án</span>
+                        <span className="text-[11px] text-slate-400">
+                          Chạm vào A, B, C, D để đổi đáp án
+                        </span>
                       </div>
                       <div className="grid grid-cols-3 sm:grid-cols-6 md:grid-cols-9 gap-2">
                         {currentKey.p1.slice(0, currentTpl.p1Count).map((ans, idx) => (
                           <div
                             key={idx}
-                            className="bg-slate-900 border border-slate-800 rounded-lg p-2 flex flex-col gap-1.5"
+                            className="bg-slate-900 border border-slate-800 rounded-xl p-2 flex flex-col gap-1.5"
                           >
                             <div className="flex items-center justify-between text-[11px] font-mono">
                               <span className="text-slate-400">Câu {idx + 1}</span>
-                              <strong className="text-emerald-400">{ans}</strong>
+                              <strong className={currentTpl.accentText}>{ans}</strong>
                             </div>
                             <div className="grid grid-cols-4 gap-1">
                               {['A', 'B', 'C', 'D'].map((ch) => (
@@ -1101,8 +1236,9 @@ export default function App() {
                     {/* Phần II */}
                     {currentTpl.p2Count > 0 && (
                       <div>
-                        <h3 className="text-xs font-bold text-sky-400 mb-2">
-                          PHẦN II — Trắc Nghiệm Đúng / Sai Lũy Tiến (4 câu · Tổng 4.00 điểm · 1 ý = 0.1đ, 2 ý = 0.25đ, 3 ý = 0.5đ, 4 ý = 1.0đ)
+                        <h3 className="text-xs font-bold text-sky-400 mb-2.5">
+                          PHẦN II — Trắc Nghiệm Đúng / Sai Lũy Tiến (4 câu · Tổng 4.00 điểm · 1 ý =
+                          0.1đ, 2 ý = 0.25đ, 3 ý = 0.5đ, 4 ý = 1.0đ)
                         </h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                           {currentKey.p2.slice(0, currentTpl.p2Count).map((qObj, qIdx) => (
@@ -1110,7 +1246,9 @@ export default function App() {
                               key={qIdx}
                               className="bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-2"
                             >
-                              <div className="text-xs font-bold text-white font-mono">Câu {qIdx + 1}</div>
+                              <div className="text-xs font-bold text-white font-mono">
+                                Câu {qIdx + 1}
+                              </div>
                               <div className="grid grid-cols-2 gap-2">
                                 {(['a', 'b', 'c', 'd'] as const).map((subKey) => {
                                   const val = qObj[subKey];
@@ -1119,7 +1257,9 @@ export default function App() {
                                       key={subKey}
                                       className="flex items-center justify-between bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5"
                                     >
-                                      <span className="text-xs font-mono text-slate-300">{subKey})</span>
+                                      <span className="text-xs font-mono text-slate-300">
+                                        {subKey})
+                                      </span>
                                       <div className="flex gap-1">
                                         {(['D', 'S'] as const).map((ds) => (
                                           <button
@@ -1129,7 +1269,10 @@ export default function App() {
                                               nextP2[qIdx] = { ...nextP2[qIdx], [subKey]: ds };
                                               setAnswerKeys((prev) => ({
                                                 ...prev,
-                                                [selectedExamCode]: { ...currentKey, p2: nextP2 },
+                                                [selectedExamCode]: {
+                                                  ...currentKey,
+                                                  p2: nextP2,
+                                                },
                                               }));
                                             }}
                                             className={`px-2 py-0.5 rounded text-[11px] font-mono font-bold cursor-pointer ${
@@ -1157,8 +1300,9 @@ export default function App() {
                     {/* Phần III */}
                     {currentTpl.p3Count > 0 && (
                       <div>
-                        <h3 className="text-xs font-bold text-amber-400 mb-2">
-                          PHẦN III — Trả Lời Ngắn Dạng Số ({currentTpl.p3Count} câu · Tổng {currentTpl.p3TotalPoints.toFixed(2)} điểm ·{' '}
+                        <h3 className="text-xs font-bold text-amber-400 mb-2.5">
+                          PHẦN III — Trả Lời Ngắn Dạng Số ({currentTpl.p3Count} câu · Tổng{' '}
+                          {currentTpl.p3TotalPoints.toFixed(2)} điểm ·{' '}
                           {(currentTpl.p3TotalPoints / currentTpl.p3Count).toFixed(2)} đ/câu)
                         </h3>
                         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
@@ -1168,7 +1312,7 @@ export default function App() {
                               className="bg-slate-900 border border-slate-800 rounded-xl p-2.5"
                             >
                               <label className="block text-[11px] text-slate-400 font-mono mb-1">
-                                Câu {qIdx + 1} (Tô phiếu: {String(val).replace('.', ',').slice(0, 4)})
+                                Câu {qIdx + 1} (Tô: {String(val).replace('.', ',').slice(0, 4)})
                               </label>
                               <input
                                 type="text"
@@ -1193,21 +1337,24 @@ export default function App() {
               </div>
             </section>
 
-            {/* Bước 3: Kiểm tra & Hiệu chuẩn Ma trận Tọa độ OMR trên Mẫu phiếu thực tế */}
+            {/* Bước 3: Kiểm tra & Hiệu chuẩn Ma trận Tọa độ OMR */}
             <section className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
                 <div>
                   <h2 className="text-base font-bold text-white flex items-center gap-2">
-                    <Sliders className="w-4 h-4 text-emerald-400" />
-                    <span>03. Bản Đồ Ma Trận Tọa Độ OMR Trên Phiếu Chuẩn (1024 × 550 px)</span>
+                    <Sliders className={`w-4 h-4 ${currentTpl.accentText}`} />
+                    <span>
+                      03. Bản Đồ Ma Trận Tọa Độ OMR Trên Phiếu Chuẩn (1024 × 550 px)
+                    </span>
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Kiểm tra trực quan vị trí các vòng tròn nhận diện: Mã đề (Xanh ngọc) · SBD (Xanh dương) · Phần I (Xanh lá) · Phần II (Vàng) · Phần III (Hồng).
+                    Kiểm tra trực quan vị trí các vòng tròn nhận diện: Mã đề (Xanh ngọc) · SBD
+                    (Xanh dương) · Phần I (Xanh lá) · Phần II (Vàng) · Phần III (Hồng).
                   </p>
                 </div>
                 <button
                   onClick={() => setShowMatrixPreview((v) => !v)}
-                  className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-200 border border-slate-700 shrink-0 cursor-pointer"
+                  className="btn-3d btn-3d-slate px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-200 shrink-0 cursor-pointer"
                 >
                   {showMatrixPreview ? 'Ẩn Bản Đồ Tọa Độ' : 'Hiện Bản Đồ Tọa Độ'}
                 </button>
@@ -1227,7 +1374,10 @@ export default function App() {
                         step="0.02"
                         value={omrSettings.fillThreshold}
                         onChange={(e) =>
-                          setOmrSettings((s) => ({ ...s, fillThreshold: Number(e.target.value) }))
+                          setOmrSettings((s) => ({
+                            ...s,
+                            fillThreshold: Number(e.target.value),
+                          }))
                         }
                         className="w-full accent-emerald-500 mt-1"
                       />
@@ -1276,7 +1426,10 @@ export default function App() {
                           step="0.05"
                           value={omrSettings.radiusScale}
                           onChange={(e) =>
-                            setOmrSettings((s) => ({ ...s, radiusScale: Number(e.target.value) }))
+                            setOmrSettings((s) => ({
+                              ...s,
+                              radiusScale: Number(e.target.value),
+                            }))
                           }
                           className="w-full accent-emerald-500 mt-1"
                         />
@@ -1290,7 +1443,7 @@ export default function App() {
                             radiusScale: 1.0,
                           })
                         }
-                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] text-slate-300 border border-slate-700 cursor-pointer"
+                        className="btn-3d btn-3d-slate px-2.5 py-1.5 rounded-lg text-[11px] text-slate-200 cursor-pointer"
                       >
                         Mặc định
                       </button>
@@ -1319,7 +1472,6 @@ export default function App() {
             {/* Cột Trái: Khung ngắm Camera & Bộ tạo phiếu giả lập */}
             <div className="lg:col-span-7 space-y-4">
               <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                {/* Thanh trạng thái Camera */}
                 <div className="p-3.5 bg-slate-950/80 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2.5">
                     <span
@@ -1333,7 +1485,7 @@ export default function App() {
                         ? 'Đã bắt đủ 4 góc định vị (Sẵn sàng quét)'
                         : cameraActive
                         ? 'Đang tìm 4 mốc vuông đen ở 4 góc phiếu...'
-                        : 'Chế độ Camera / Chấm Ảnh Phiếu'}
+                        : `Chế độ Chấm: ${currentTpl.name}`}
                     </span>
 
                     <label className="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer select-none">
@@ -1351,10 +1503,10 @@ export default function App() {
                     <button
                       onClick={handleToggleTorch}
                       disabled={!cameraActive}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium border flex items-center gap-1.5 transition-colors cursor-pointer ${
+                      className={`btn-3d px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer ${
                         torchActive
-                          ? 'bg-amber-500 text-slate-950 border-amber-400 font-semibold'
-                          : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700 disabled:opacity-50'
+                          ? 'btn-3d-amber text-white'
+                          : 'btn-3d-slate text-slate-300 disabled:opacity-50'
                       }`}
                     >
                       <Flashlight className="w-3.5 h-3.5" />
@@ -1364,7 +1516,7 @@ export default function App() {
                     {!cameraActive ? (
                       <button
                         onClick={startGradingCamera}
-                        className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                        className={`${currentTpl.btn3dClass} px-3.5 py-1.5 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer`}
                       >
                         <Camera className="w-3.5 h-3.5" />
                         <span>Bật Camera Sau</span>
@@ -1372,7 +1524,7 @@ export default function App() {
                     ) : (
                       <button
                         onClick={stopGradingCamera}
-                        className="px-3.5 py-1.5 rounded-lg bg-rose-600/80 hover:bg-rose-600 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                        className="btn-3d btn-3d-rose px-3.5 py-1.5 rounded-lg text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                       >
                         <X className="w-3.5 h-3.5" />
                         <span>Tắt Camera</span>
@@ -1397,20 +1549,22 @@ export default function App() {
                   />
 
                   {!cameraActive && (
-                    <div className="text-center p-6 max-w-md space-y-3">
-                      <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
+                    <div className="text-center p-6 max-w-md space-y-3.5">
+                      <div
+                        className={`w-14 h-14 rounded-2xl text-white flex items-center justify-center mx-auto ${currentTpl.btn3dClass}`}
+                      >
                         <Camera className="w-6 h-6" />
                       </div>
-                      <h3 className="text-sm font-bold text-white">
-                        Khung Ngắm Bắt 4 Góc Phiếu QM 2025 ({currentTpl.shortName})
+                      <h3 className="text-sm sm:text-base font-bold text-white">
+                        Khung Ngắm Bắt 4 Góc — {currentTpl.name}
                       </h3>
                       <p className="text-xs text-slate-400 leading-relaxed">
-                        Bấm <strong>"Bật Camera Sau"</strong> để quét phiếu trực tiếp, tải ảnh chụp phiếu từ máy, hoặc bấm <strong>"Tạo Phiếu Tô Mẫu & Chấm Thử Ngay"</strong> bên dưới để kiểm nghiệm thuật toán OMR tức thì.
+                        Bấm <strong>"Mở Camera Chấm Thi"</strong> để quét phiếu trực tiếp, tải ảnh chụp phiếu từ máy, hoặc bấm <strong>"Chấm Thử Phiếu Giả Lập Ngay"</strong> để kiểm nghiệm thuật toán OMR tức thì.
                       </p>
-                      <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+                      <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
                         <button
                           onClick={startGradingCamera}
-                          className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 cursor-pointer"
+                          className={`${currentTpl.btn3dClass} px-4 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-2 cursor-pointer`}
                         >
                           <Camera className="w-4 h-4" />
                           <span>Mở Camera Chấm Thi</span>
@@ -1418,7 +1572,7 @@ export default function App() {
                         <button
                           onClick={handleSimulateAndGradeSheet}
                           disabled={isSimulating}
-                          className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 text-xs font-semibold flex items-center gap-2 cursor-pointer"
+                          className="btn-3d btn-3d-amber px-4 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-2 cursor-pointer"
                         >
                           <Sparkles className="w-4 h-4" />
                           <span>Chấm Thử Phiếu Giả Lập Ngay</span>
@@ -1429,18 +1583,18 @@ export default function App() {
                 </div>
 
                 {/* Thanh tác vụ dưới khung ngắm */}
-                <div className="p-3.5 bg-slate-950/90 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2.5">
+                <div className="p-3.5 bg-slate-950/90 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
                   <button
                     onClick={captureCurrentVideoFrameAndGrade}
                     disabled={!cameraActive}
-                    className="flex-1 min-h-[44px] px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-xs font-bold flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                    className={`${currentTpl.btn3dClass} flex-1 min-h-[44px] px-4 py-2.5 rounded-xl disabled:opacity-40 text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer`}
                   >
                     <Camera className="w-4 h-4" />
                     <span>Chụp & Chấm Khung Hình Này</span>
                   </button>
 
-                  <label className="min-h-[44px] px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition-colors">
-                    <Upload className="w-4 h-4 text-sky-400" />
+                  <label className="btn-3d btn-3d-blue min-h-[44px] px-4 py-2.5 rounded-xl text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer">
+                    <Upload className="w-4 h-4" />
                     <span>Chấm Từ Ảnh Phiếu</span>
                     <input
                       type="file"
@@ -1453,14 +1607,14 @@ export default function App() {
               </div>
 
               {/* Bộ Giả Lập Tô Chì Thực Tế Trên 4 Mẫu Phiếu Gốc */}
-              <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4">
+              <div className={`rounded-2xl p-4 sm:p-5 border ${currentTpl.card3dClass} ${currentTpl.accentBorder}`}>
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-emerald-400" />
-                      <span>Bộ Tạo Phiếu Tô Chì 2B & Chấm Thử Tự Động (Simulator)</span>
+                      <Sparkles className={`w-4 h-4 ${currentTpl.accentText}`} />
+                      <span>Bộ Tạo Phiếu Tô Chì 2B & Chấm Thử Tự Động ({currentTpl.shortName})</span>
                     </h3>
-                    <p className="text-xs text-slate-400 mt-0.5">
+                    <p className="text-xs text-slate-300 mt-0.5">
                       Tự động tô chì SBD, Mã đề và các câu hỏi lên mẫu phiếu {currentTpl.shortName} rồi chạy toàn bộ thuật toán bắt 4 góc & chấm điểm.
                     </p>
                   </div>
@@ -1468,21 +1622,23 @@ export default function App() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
                   <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Số Báo Danh (6 số):</label>
+                    <label className="block text-[11px] text-slate-300 mb-1">
+                      Số Báo Danh (6 số):
+                    </label>
                     <input
                       type="text"
                       maxLength={6}
                       value={simSbd}
                       onChange={(e) => setSimSbd(e.target.value.replace(/\D/g, ''))}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white"
+                      className="w-full bg-slate-950/90 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">Mã Đề Thi:</label>
+                    <label className="block text-[11px] text-slate-300 mb-1">Mã Đề Thi:</label>
                     <select
                       value={simExamCode}
                       onChange={(e) => setSimExamCode(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-emerald-400"
+                      className="w-full bg-slate-950/90 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono font-bold text-emerald-400"
                     >
                       {Object.keys(answerKeys).map((c) => (
                         <option key={c} value={c}>
@@ -1492,13 +1648,13 @@ export default function App() {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[11px] text-slate-400 mb-1">
+                    <label className="block text-[11px] text-slate-300 mb-1">
                       Mức làm đúng: {Math.round(simAccuracy * 100)}%
                     </label>
                     <select
                       value={String(simAccuracy)}
                       onChange={(e) => setSimAccuracy(Number(e.target.value))}
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200"
+                      className="w-full bg-slate-950/90 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200"
                     >
                       <option value="1">100% (Tuyệt đối 10đ)</option>
                       <option value="0.88">~88% (Học sinh Giỏi)</option>
@@ -1509,7 +1665,7 @@ export default function App() {
                   <button
                     onClick={handleSimulateAndGradeSheet}
                     disabled={isSimulating}
-                    className="min-h-[40px] px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer"
+                    className={`${currentTpl.btn3dClass} min-h-[40px] px-4 py-2 rounded-xl text-white text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer`}
                   >
                     <Play className="w-3.5 h-3.5" />
                     <span>{isSimulating ? 'Đang chấm...' : 'Tô & Chấm Thử'}</span>
@@ -1522,12 +1678,13 @@ export default function App() {
             <div className="lg:col-span-5 space-y-4">
               {activeRecordHud ? (
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-5 space-y-4">
-                  {/* Tóm tắt Điểm số HUD */}
                   <div className="flex items-start justify-between gap-4 pb-3.5 border-b border-slate-800">
                     <div>
                       <div className="text-xs text-slate-400 flex items-center gap-2">
                         <span>SBD:</span>
-                        <strong className="text-base font-mono text-white">{activeRecordHud.sbd}</strong>
+                        <strong className="text-base font-mono text-white">
+                          {activeRecordHud.sbd}
+                        </strong>
                         <span aria-hidden="true">·</span>
                         <span>Mã đề:</span>
                         <strong className="text-base font-mono text-emerald-400">
@@ -1536,13 +1693,21 @@ export default function App() {
                       </div>
                       <div className="text-xs text-slate-400 mt-1 flex flex-wrap items-center gap-1.5 font-mono">
                         <span>
-                          P.I: <strong className="text-slate-200">{activeRecordHud.p1Score.toFixed(2)}đ</strong> ({activeRecordHud.p1CorrectCount}/{activeRecordHud.p1TotalCount})
+                          P.I:{' '}
+                          <strong className="text-slate-200">
+                            {activeRecordHud.p1Score.toFixed(2)}đ
+                          </strong>{' '}
+                          ({activeRecordHud.p1CorrectCount}/{activeRecordHud.p1TotalCount})
                         </span>
                         {TEMPLATES[activeRecordHud.templateId].p2Count > 0 && (
                           <>
                             <span>·</span>
                             <span>
-                              P.II: <strong className="text-slate-200">{activeRecordHud.p2Score.toFixed(2)}đ</strong>/4.0
+                              P.II:{' '}
+                              <strong className="text-slate-200">
+                                {activeRecordHud.p2Score.toFixed(2)}đ
+                              </strong>
+                              /4.0
                             </span>
                           </>
                         )}
@@ -1550,7 +1715,11 @@ export default function App() {
                           <>
                             <span>·</span>
                             <span>
-                              P.III: <strong className="text-slate-200">{activeRecordHud.p3Score.toFixed(2)}đ</strong> ({activeRecordHud.p3CorrectCount}/{activeRecordHud.p3TotalCount})
+                              P.III:{' '}
+                              <strong className="text-slate-200">
+                                {activeRecordHud.p3Score.toFixed(2)}đ
+                              </strong>{' '}
+                              ({activeRecordHud.p3CorrectCount}/{activeRecordHud.p3TotalCount})
                             </span>
                           </>
                         )}
@@ -1558,7 +1727,7 @@ export default function App() {
                     </div>
 
                     <div className="text-right shrink-0">
-                      <div className="text-[11px] text-slate-400 uppercase tracking-wider">Tổng điểm</div>
+                      <div className="text-[11px] text-slate-400">Tổng điểm</div>
                       <div className="text-3xl font-extrabold font-mono text-emerald-400 tabular-nums">
                         {activeRecordHud.totalScore.toFixed(2)}
                         <span className="text-xs font-normal text-slate-500"> / 10</span>
@@ -1566,7 +1735,6 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Cảnh báo tô lỗi nếu có */}
                   {activeRecordHud.warnings.length > 0 && (
                     <div className="bg-amber-950/60 border border-amber-800/60 rounded-xl p-3 text-xs text-amber-200 space-y-1">
                       <div className="font-semibold flex items-center gap-1.5 text-amber-300">
@@ -1581,7 +1749,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* Ảnh Phiếu Đã Nắn Phẳng kèm Lớp Phủ Đúng/Sai */}
                   <div>
                     <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5">
                       <span className="font-semibold text-slate-300">
@@ -1597,20 +1764,19 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Nút Sửa nhanh bài làm & Chuyển xem Sổ điểm */}
-                  <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
                     <button
                       onClick={() => setQuickEditModalOpen(true)}
-                      className="flex-1 min-h-[44px] px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold border border-slate-700 flex items-center justify-center gap-2 cursor-pointer"
+                      className="btn-3d btn-3d-amber flex-1 min-h-[44px] px-4 py-2.5 rounded-xl text-white text-xs font-bold flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      <Edit3 className="w-4 h-4 text-emerald-400" />
-                      <span>Sửa nhanh bài làm (Nếu tô mờ)</span>
+                      <Edit3 className="w-4 h-4" />
+                      <span>Sửa nhanh bài làm</span>
                     </button>
                     <button
                       onClick={() => setActiveTab('scores')}
-                      className="min-h-[44px] px-4 py-2.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold cursor-pointer"
+                      className="btn-3d btn-3d-emerald min-h-[44px] px-4 py-2.5 rounded-xl text-white text-xs font-bold cursor-pointer"
                     >
-                      Xem Sổ Điểm ({gradedRecords.length})
+                      Sổ Điểm ({gradedRecords.length})
                     </button>
                   </div>
                 </div>
@@ -1619,7 +1785,9 @@ export default function App() {
                   <div className="w-12 h-12 rounded-2xl bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
                     <Layers className="w-6 h-6" />
                   </div>
-                  <h3 className="text-sm font-bold text-white">Chưa Có Bài Chấm Trong Phiên Này</h3>
+                  <h3 className="text-sm font-bold text-white">
+                    Chưa Có Bài Chấm Trong Phiên Này
+                  </h3>
                   <p className="text-xs text-slate-400 leading-relaxed">
                     Khi quét phiếu thành công, hệ thống sẽ phát tiếng bíp, rung nhẹ điện thoại và hiển thị kết quả chi tiết kèm ảnh phiếu đã chấm tại đây.
                   </p>
@@ -1634,46 +1802,45 @@ export default function App() {
            ===================================================================== */}
         {activeTab === 'scores' && (
           <div className="space-y-6">
-            {/* 4 Thẻ Thống Kê Tổng Quan */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-                <div className="text-xs text-slate-400">Số Bài Đã Chấm</div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="card-3d-toan border border-blue-500/40 rounded-2xl p-4">
+                <div className="text-xs text-blue-200">Số Bài Đã Chấm</div>
                 <div className="text-2xl font-extrabold text-white font-mono tabular-nums mt-1">
                   {gradedRecords.length}
                 </div>
-                <div className="text-[11px] text-slate-400 mt-1">
-                  Điểm trung bình: <strong className="text-emerald-400 font-mono">{stats.avg.toFixed(2)}</strong>
+                <div className="text-[11px] text-slate-300 mt-1">
+                  Điểm trung bình:{' '}
+                  <strong className="text-blue-300 font-mono">{stats.avg.toFixed(2)}</strong>
                 </div>
               </div>
 
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-                <div className="text-xs text-slate-400">Điểm Cao Nhất</div>
+              <div className="card-3d-khtn border border-emerald-500/40 rounded-2xl p-4">
+                <div className="text-xs text-emerald-200">Điểm Cao Nhất</div>
                 <div className="text-2xl font-extrabold text-emerald-400 font-mono tabular-nums mt-1">
                   {stats.max.toFixed(2)}
                 </div>
-                <div className="text-[11px] text-slate-400 mt-1">Thang điểm 10.00 Bộ GD&ĐT</div>
+                <div className="text-[11px] text-slate-300 mt-1">Thang điểm 10.00 Bộ GD&ĐT</div>
               </div>
 
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-                <div className="text-xs text-slate-400">Điểm Thấp Nhất</div>
+              <div className="card-3d-ngoaingu border border-rose-500/40 rounded-2xl p-4">
+                <div className="text-xs text-rose-200">Điểm Thấp Nhất</div>
                 <div className="text-2xl font-extrabold text-rose-400 font-mono tabular-nums mt-1">
                   {stats.min.toFixed(2)}
                 </div>
-                <div className="text-[11px] text-slate-400 mt-1">Cần lưu ý phụ đạo nếu &lt; 5.0</div>
+                <div className="text-[11px] text-slate-300 mt-1">Cần lưu ý phụ đạo nếu &lt; 5.0</div>
               </div>
 
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
-                <div className="text-xs text-slate-400">Tỷ Lệ Trên Trung Bình (≥ 5.0)</div>
-                <div className="text-2xl font-extrabold text-sky-400 font-mono tabular-nums mt-1">
+              <div className="card-3d-khxh border border-amber-500/40 rounded-2xl p-4">
+                <div className="text-xs text-amber-200">Tỷ Lệ Trên Trung Bình (≥ 5.0)</div>
+                <div className="text-2xl font-extrabold text-amber-400 font-mono tabular-nums mt-1">
                   {stats.passRate}%
                 </div>
-                <div className="text-[11px] text-slate-400 mt-1">
+                <div className="text-[11px] text-slate-300 mt-1">
                   Đạt {stats.passCount} / {gradedRecords.length} học sinh
                 </div>
               </div>
             </div>
 
-            {/* Biểu đồ Phổ điểm */}
             {gradedRecords.length > 0 && (
               <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6">
                 <h3 className="text-sm font-bold text-white mb-4">
@@ -1684,14 +1851,19 @@ export default function App() {
                     const maxBucket = Math.max(1, ...stats.buckets);
                     const heightPct = Math.round((count / maxBucket) * 100);
                     return (
-                      <div key={idx} className="flex flex-col items-center justify-end h-full gap-1.5">
+                      <div
+                        key={idx}
+                        className="flex flex-col items-center justify-end h-full gap-1.5"
+                      >
                         <span className="text-[10px] font-mono text-emerald-400 font-bold">
                           {count > 0 ? count : ''}
                         </span>
                         <div className="w-full max-w-[32px] bg-slate-800/60 rounded-t-md h-20 flex items-end overflow-hidden">
                           <div
                             className="w-full bg-emerald-500 transition-all rounded-t-md"
-                            style={{ height: `${ Math.max(count > 0 ? 12 : 0, heightPct) }%` }}
+                            style={{
+                              height: `${Math.max(count > 0 ? 12 : 0, heightPct)}%`,
+                            }}
                           />
                         </div>
                         <span className="text-[10px] font-mono text-slate-400">
@@ -1704,7 +1876,6 @@ export default function App() {
               </section>
             )}
 
-            {/* Bảng Sổ Điểm & Xuất File Excel */}
             <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
                 <div>
@@ -1716,10 +1887,10 @@ export default function App() {
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-3">
                   <button
                     onClick={handleExportExcel}
-                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 cursor-pointer"
+                    className="btn-3d btn-3d-emerald px-4 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-2 cursor-pointer"
                   >
                     <Download className="w-4 h-4" />
                     <span>Xuất Excel (.xlsx)</span>
@@ -1728,7 +1899,7 @@ export default function App() {
                   {gradedRecords.length > 0 && (
                     <button
                       onClick={() => setGradedRecords([])}
-                      className="px-3.5 py-2.5 rounded-xl bg-rose-950/60 hover:bg-rose-900/70 text-rose-300 border border-rose-800/60 text-xs font-medium flex items-center gap-1.5 cursor-pointer"
+                      className="btn-3d btn-3d-rose px-3.5 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                       <span>Xóa Sổ Điểm</span>
@@ -1756,7 +1927,7 @@ export default function App() {
                     {gradedRecords.length === 0 ? (
                       <tr>
                         <td colSpan={9} className="py-10 text-center text-slate-500 font-sans">
-                          Chưa có bài chấm nào. Hãy chuyển sang Tab 2 để quét phiếu hoặc bấm "Chấm Thử Phiếu Giả Lập".
+                          Chưa có bài chấm nào. Hãy chuyển sang Tab 2 để quét phiếu hoặc bấm "Tô & Chấm Thử".
                         </td>
                       </tr>
                     ) : (
@@ -1764,7 +1935,9 @@ export default function App() {
                         <tr key={r.id} className="hover:bg-slate-800/40 transition-colors">
                           <td className="py-3 px-3 text-slate-400">{idx + 1}</td>
                           <td className="py-3 px-3 font-bold text-white">{r.sbd}</td>
-                          <td className="py-3 px-3 text-emerald-400 font-semibold">{r.examCode}</td>
+                          <td className="py-3 px-3 text-emerald-400 font-semibold">
+                            {r.examCode}
+                          </td>
                           <td className="py-3 px-3">
                             {r.p1Score.toFixed(2)}{' '}
                             <span className="text-[10px] text-slate-500">
@@ -1789,14 +1962,16 @@ export default function App() {
                                   setActiveRecordHud(r);
                                   setQuickEditModalOpen(true);
                                 }}
-                                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] flex items-center gap-1 cursor-pointer"
+                                className="btn-3d btn-3d-slate px-2.5 py-1 rounded-lg text-slate-200 text-[11px] flex items-center gap-1 cursor-pointer"
                               >
                                 <Edit3 className="w-3 h-3 text-emerald-400" />
                                 <span>Xem / Sửa</span>
                               </button>
                               <button
                                 onClick={() =>
-                                  setGradedRecords((prev) => prev.filter((item) => item.id !== r.id))
+                                  setGradedRecords((prev) =>
+                                    prev.filter((item) => item.id !== r.id)
+                                  )
                                 }
                                 className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950 text-slate-400 hover:text-rose-300 cursor-pointer"
                               >
@@ -1824,7 +1999,7 @@ export default function App() {
             <div className="px-4 py-3.5 border-b border-slate-800 flex items-center justify-between">
               <h3 className="text-sm font-bold text-white flex items-center gap-2">
                 <QrCode className="w-4 h-4 text-emerald-400" />
-                <span>Quét Mã QR Đáp Án Chung QM 2025</span>
+                <span>Quét Mã QR Đáp Án Chung — Edu Chấm Đề 2025</span>
               </h3>
               <button
                 onClick={closeQrModal}
@@ -1845,8 +2020,8 @@ export default function App() {
                 <div className="absolute inset-8 border-2 border-emerald-400/70 rounded-2xl pointer-events-none" />
               </div>
 
-              <div className="flex flex-col gap-2">
-                <label className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-100 text-xs font-semibold text-center cursor-pointer border border-slate-700">
+              <div className="flex flex-col gap-2.5">
+                <label className="btn-3d btn-3d-blue w-full py-2.5 px-4 rounded-xl text-white text-xs font-bold text-center cursor-pointer">
                   Chọn Ảnh Mã QR Từ Điện Thoại / Máy Tính
                   <input
                     type="file"
@@ -1861,7 +2036,7 @@ export default function App() {
                     handleScanAttachedSampleQrImage();
                     closeQrModal();
                   }}
-                  className="w-full py-2.5 px-4 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold cursor-pointer"
+                  className="btn-3d btn-3d-emerald w-full py-2.5 px-4 rounded-xl text-white text-xs font-bold cursor-pointer"
                 >
                   Dùng Ngay Ảnh QR Mẫu Sinh Học 12 (Mã 101-104)
                 </button>
@@ -1872,7 +2047,7 @@ export default function App() {
       )}
 
       {/* =====================================================================
-          MODAL SỬA NHANH BÀI LÀM CỦA HỌC SINH (KHI TÔ MỜ HOẶC TẨY CHƯA SẠCH)
+          MODAL SỬA NHANH BÀI LÀM CỦA HỌC SINH
          ===================================================================== */}
       {quickEditModalOpen && activeRecordHud && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
@@ -1880,7 +2055,8 @@ export default function App() {
             <div className="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between shrink-0">
               <div>
                 <h3 className="text-sm sm:text-base font-bold text-white">
-                  Sửa Nhanh Bài Làm Học Sinh — SBD: {activeRecordHud.sbd} · Mã đề: {activeRecordHud.examCode}
+                  Sửa Nhanh Bài Làm Học Sinh — SBD: {activeRecordHud.sbd} · Mã đề:{' '}
+                  {activeRecordHud.examCode}
                 </h3>
                 <p className="text-xs text-slate-400">
                   Tổng điểm cập nhật tức thì:{' '}
@@ -1891,14 +2067,13 @@ export default function App() {
               </div>
               <button
                 onClick={() => setQuickEditModalOpen(false)}
-                className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold cursor-pointer"
+                className="btn-3d btn-3d-emerald px-4 py-1.5 rounded-xl text-white text-xs font-bold cursor-pointer"
               >
                 Hoàn Tất
               </button>
             </div>
 
             <div className="p-4 sm:p-5 overflow-y-auto space-y-5 text-xs">
-              {/* Chỉnh SBD & Mã đề */}
               <div className="grid grid-cols-2 gap-3 bg-slate-950 p-3.5 rounded-xl border border-slate-800">
                 <div>
                   <label className="block text-slate-400 mb-1">Số Báo Danh:</label>
@@ -1917,14 +2092,16 @@ export default function App() {
                     type="text"
                     value={activeRecordHud.examCode}
                     onChange={(e) =>
-                      handleUpdateRecordInHud({ ...activeRecordHud, examCode: e.target.value })
+                      handleUpdateRecordInHud({
+                        ...activeRecordHud,
+                        examCode: e.target.value,
+                      })
                     }
                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 font-mono font-bold text-emerald-400"
                   />
                 </div>
               </div>
 
-              {/* Chỉnh Phần I */}
               <div>
                 <h4 className="font-bold text-emerald-400 mb-2">
                   Phần I ({activeRecordHud.p1CorrectCount}/{activeRecordHud.p1TotalCount} câu đúng ={' '}
@@ -1952,7 +2129,10 @@ export default function App() {
                             onClick={() => {
                               const nextP1 = [...activeRecordHud.p1Details];
                               nextP1[idx] = { ...item, studentAnswer: ch };
-                              handleUpdateRecordInHud({ ...activeRecordHud, p1Details: nextP1 });
+                              handleUpdateRecordInHud({
+                                ...activeRecordHud,
+                                p1Details: nextP1,
+                              });
                             }}
                             className={`py-1 rounded font-mono text-[10px] font-bold cursor-pointer ${
                               item.studentAnswer === ch
@@ -1971,7 +2151,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Chỉnh Phần II */}
               {activeRecordHud.p2Details.length > 0 && (
                 <div>
                   <h4 className="font-bold text-sky-400 mb-2">
@@ -1985,7 +2164,9 @@ export default function App() {
                       >
                         <div className="flex justify-between font-mono">
                           <span className="font-bold text-white">Câu {qItem.qIndex}</span>
-                          <span className="text-emerald-400">+{qItem.pointsEarned.toFixed(2)}đ</span>
+                          <span className="text-emerald-400">
+                            +{qItem.pointsEarned.toFixed(2)}đ
+                          </span>
                         </div>
                         {qItem.subResults.map((sub, sIdx) => (
                           <div
@@ -2029,7 +2210,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Chỉnh Phần III */}
               {activeRecordHud.p3Details.length > 0 && (
                 <div>
                   <h4 className="font-bold text-amber-400 mb-2">
@@ -2050,7 +2230,10 @@ export default function App() {
                           onChange={(e) => {
                             const nextP3 = [...activeRecordHud.p3Details];
                             nextP3[idx] = { ...item, studentString: e.target.value };
-                            handleUpdateRecordInHud({ ...activeRecordHud, p3Details: nextP3 });
+                            handleUpdateRecordInHud({
+                              ...activeRecordHud,
+                              p3Details: nextP3,
+                            });
                           }}
                           className={`w-full bg-slate-900 border rounded-lg px-2.5 py-1 font-mono font-bold ${
                             item.isCorrect
@@ -2069,7 +2252,7 @@ export default function App() {
       )}
 
       {/* =====================================================================
-          MOBILE FIXED BOTTOM NAVIGATION BAR (ERGONOMIC 1-TOUCH THUMB ZONE)
+          MOBILE FIXED BOTTOM NAVIGATION BAR
          ===================================================================== */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-md border-t border-slate-800">
         <div className="grid grid-cols-3 h-16 max-w-md mx-auto">

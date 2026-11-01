@@ -2,6 +2,7 @@ import {
   AnswerKeyData,
   BubblePoint,
   getTemplateBubbleMap,
+  renderVectorFallbackSheet1024x550,
   TARGET_CORNERS_1024x550,
   TemplateId,
   TEMPLATES,
@@ -963,24 +964,29 @@ export async function generateSimulatedSheetCanvas(
   accuracyRate = 0.85
 ): Promise<HTMLCanvasElement> {
   const tpl = TEMPLATES[templateId];
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
+  let sheetCanvas: HTMLCanvasElement;
 
-  await new Promise<void>((resolve, reject) => {
-    img.onload = () => resolve();
-    img.onerror = (e) => reject(e);
-    img.src = tpl.imageUrl;
-  });
+  try {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = (e) => reject(e);
+      img.src = tpl.imageUrl;
+    });
 
-  // Đưa ảnh gốc vào ImageData để phát hiện chính xác 4 góc trên ảnh gốc và nắn về 1024x550 chuẩn
-  const rawCanvas = document.createElement('canvas');
-  rawCanvas.width = img.width;
-  rawCanvas.height = img.height;
-  const rawCtx = rawCanvas.getContext('2d')!;
-  rawCtx.drawImage(img, 0, 0);
-  const rawData = rawCtx.getImageData(0, 0, img.width, img.height);
-  const detected = detectFourCornerMarkers(rawData);
-  const sheetCanvas = warpPerspectiveTo1024x550(rawData, detected);
+    const rawCanvas = document.createElement('canvas');
+    rawCanvas.width = img.width;
+    rawCanvas.height = img.height;
+    const rawCtx = rawCanvas.getContext('2d')!;
+    rawCtx.drawImage(img, 0, 0);
+    const rawData = rawCtx.getImageData(0, 0, img.width, img.height);
+    const detected = detectFourCornerMarkers(rawData);
+    sheetCanvas = warpPerspectiveTo1024x550(rawData, detected);
+  } catch {
+    sheetCanvas = renderVectorFallbackSheet1024x550(templateId);
+  }
+
   const ctx = sheetCanvas.getContext('2d')!;
 
   const map = getTemplateBubbleMap(templateId);

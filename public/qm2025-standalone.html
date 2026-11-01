@@ -3,17 +3,15 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>QM 2025 OMR — Chấm Thi Trắc Nghiệm Bằng Camera | THPT Mang Thít</title>
+  <title>Edu Chấm Đề 2025 — Hệ Thống Chấm Thi Trắc Nghiệm Camera Chuẩn Quốc Tế</title>
   <!-- 1. Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- 2. FontAwesome Icons CDN -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-  <!-- 3. jsQR CDN (Quét mã QR Đáp Án tốc độ cao) -->
+  <!-- 3. jsQR CDN -->
   <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <!-- 4. SheetJS XLSX CDN (Xuất & Nhập bảng điểm Excel chuẩn VnEdu/SMAS) -->
+  <!-- 4. SheetJS XLSX CDN -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <!-- 5. OpenCV.js CDN -->
-  <script async src="https://docs.opencv.org/4.8.0/opencv.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     body {
@@ -26,113 +24,179 @@
       font-family: 'JetBrains Mono', monospace;
       font-variant-numeric: tabular-nums;
     }
+    .btn-3d {
+      transition: transform 140ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 140ms cubic-bezier(0.16, 1, 0.3, 1), filter 140ms ease;
+    }
+    .btn-3d:active:not(:disabled) {
+      transform: translateY(3px);
+    }
+    .btn-3d-emerald {
+      background: linear-gradient(180deg, #10b981 0%, #059669 100%);
+      box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.35), 0 4px 0 0 #065f46, 0 8px 16px -4px rgba(16, 185, 129, 0.35);
+    }
+    .btn-3d-blue {
+      background: linear-gradient(180deg, #3b82f6 0%, #2563eb 100%);
+      box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.35), 0 4px 0 0 #1e3a8a, 0 8px 16px -4px rgba(59, 130, 246, 0.35);
+    }
+    .btn-3d-amber {
+      background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+      box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.35), 0 4px 0 0 #78350f, 0 8px 16px -4px rgba(245, 158, 11, 0.35);
+    }
+    .btn-3d-rose {
+      background: linear-gradient(180deg, #f43f5e 0%, #e11d48 100%);
+      box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.35), 0 4px 0 0 #881337, 0 8px 16px -4px rgba(244, 63, 94, 0.35);
+    }
+    .btn-3d-slate {
+      background: linear-gradient(180deg, #334155 0%, #1e293b 100%);
+      box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.14), 0 4px 0 0 #0f172a, 0 6px 12px -2px rgba(0, 0, 0, 0.45);
+    }
+    .card-3d-toan {
+      background: linear-gradient(145deg, rgba(30, 58, 138, 0.45) 0%, rgba(15, 23, 42, 0.94) 100%);
+      box-shadow: inset 0 1px 0 0 rgba(96, 165, 250, 0.35), 0 6px 0 0 #1e3a8a, 0 14px 28px -6px rgba(37, 99, 235, 0.28);
+    }
+    .card-3d-khtn {
+      background: linear-gradient(145deg, rgba(6, 95, 70, 0.45) 0%, rgba(15, 23, 42, 0.94) 100%);
+      box-shadow: inset 0 1px 0 0 rgba(52, 211, 153, 0.35), 0 6px 0 0 #065f46, 0 14px 28px -6px rgba(16, 185, 129, 0.28);
+    }
+    .card-3d-khxh {
+      background: linear-gradient(145deg, rgba(146, 64, 14, 0.45) 0%, rgba(15, 23, 42, 0.94) 100%);
+      box-shadow: inset 0 1px 0 0 rgba(251, 191, 36, 0.35), 0 6px 0 0 #78350f, 0 14px 28px -6px rgba(245, 158, 11, 0.28);
+    }
+    .card-3d-ngoaingu {
+      background: linear-gradient(145deg, rgba(136, 19, 55, 0.45) 0%, rgba(15, 23, 42, 0.94) 100%);
+      box-shadow: inset 0 1px 0 0 rgba(251, 113, 133, 0.35), 0 6px 0 0 #881337, 0 14px 28px -6px rgba(244, 63, 94, 0.28);
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen pb-24 selection:bg-emerald-500/30">
 
-  <!-- HEADER BẢN QUYỀN TÁC GIẢ -->
+  <!-- HEADER LOGO & THƯƠNG HIỆU EDU CHẤM ĐỀ 2025 -->
   <header class="sticky top-0 z-30 bg-slate-950/90 backdrop-blur-md border-b border-slate-800/80 px-4 py-3">
-    <div class="max-w-6xl mx-auto flex items-center justify-between gap-4">
-      <div class="min-w-0">
-        <div class="flex items-center gap-2">
-          <span class="w-8 h-8 rounded-lg bg-emerald-500/15 border border-emerald-500/40 flex items-center justify-center text-emerald-400 font-bold text-sm shrink-0">QM</span>
-          <h1 class="text-sm sm:text-base font-bold tracking-tight text-white truncate">QM 2025 OMR — Chấm Thi Camera</h1>
+    <div class="max-w-7xl mx-auto flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3 min-w-0">
+        <svg class="w-9 h-9 shrink-0" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="2" y="5" width="36" height="33" rx="10" fill="#065F46" />
+          <rect x="2" y="2" width="36" height="33" rx="10" fill="url(#eduGradStandalone)" stroke="#34D399" stroke-width="1.2" />
+          <rect x="8" y="8" width="5" height="5" rx="1" fill="#FFFFFF" />
+          <rect x="27" y="8" width="5" height="5" rx="1" fill="#FFFFFF" />
+          <rect x="8" y="24" width="5" height="5" rx="1" fill="#FFFFFF" />
+          <rect x="27" y="24" width="5" height="5" rx="1" fill="#FFFFFF" />
+          <path d="M15.5 18.5L18.8 21.8L25.5 15" stroke="#FFFFFF" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" />
+          <defs>
+            <linearGradient id="eduGradStandalone" x1="2" y1="2" x2="38" y2="35" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#10B981" />
+              <stop offset="0.55" stop-color="#059669" />
+              <stop offset="1" stop-color="#0284C7" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <div class="min-w-0">
+          <h1 class="text-sm sm:text-lg font-extrabold tracking-tight text-white truncate">Edu Chấm Đề 2025</h1>
+          <p class="text-[11px] text-slate-400 truncate">
+            Tác giả: <strong class="text-slate-100 font-semibold">Hồ Tấn Khải</strong> · Trường THPT Mang Thít, Tỉnh Vĩnh Long
+          </p>
         </div>
-        <p class="text-[11px] text-slate-400 truncate mt-0.5">
-          Tác giả: <strong class="text-slate-200 font-semibold">Hồ Tấn Khải</strong> · Trường THPT Mang Thít, Tỉnh Vĩnh Long
-        </p>
       </div>
+
       <div class="flex items-center gap-2 shrink-0">
-        <select id="headerTemplateSelect" onchange="changeTemplate(this.value)" class="bg-slate-900 border border-slate-700 text-xs font-medium text-slate-200 rounded-lg px-2.5 py-2 focus:outline-none focus:border-emerald-500">
-          <option value="khtn">Mẫu 2: Lý - Hóa - Sinh - Địa (18-4-6)</option>
-          <option value="toan">Mẫu 1: Toán Học (12-4-6)</option>
-          <option value="khxh">Mẫu 3: Sử - Tin - CN - GDKT&PL (24-4-0)</option>
-          <option value="ngoaingu">Mẫu 4: Ngoại Ngữ (40 câu P.I)</option>
-        </select>
+        <button onclick="switchTab('camera')" class="btn-3d btn-3d-emerald px-3.5 py-2 rounded-xl text-xs font-bold text-white cursor-pointer flex items-center gap-1.5">
+          <i class="fa-solid fa-camera"></i> <span>Chấm Ngay</span>
+        </button>
       </div>
     </div>
   </header>
 
-  <main class="max-w-6xl mx-auto px-4 py-4">
+  <main class="max-w-7xl mx-auto px-4 py-5">
     <!-- TAB 1: QUẢN LÝ CA THI & NẠP ĐÁP ÁN -->
-    <section id="tab-keys" class="space-y-5">
+    <section id="tab-keys" class="space-y-6">
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-6">
+        <h2 class="text-base sm:text-lg font-bold text-white">01. Chọn Khung Môn Học & Mẫu Phiếu 3D Chuẩn QM 2025</h2>
+        <p class="text-xs text-slate-400 mt-1">Mỗi tổ hợp môn được phối khung nổi 3D và màu sắc nhận diện riêng biệt.</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4" id="subjectCardsContainer"></div>
+      </div>
+
       <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 sm:p-6">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
           <div>
-            <h2 class="text-lg font-bold text-white">Quản Lý Ca Thi & Nạp Đáp Án Chuẩn QM 2025</h2>
+            <h2 class="text-base sm:text-lg font-bold text-white">02. Nạp Đáp Án Tự Động Bằng Mã QR Hoặc File Excel</h2>
             <p class="text-xs text-slate-400 mt-1">Quét mã QR Đáp Án chung từ phần mềm trộn đề QM2025 hoặc nạp file Excel đáp án chuẩn.</p>
           </div>
-          <div class="flex flex-wrap items-center gap-2">
-            <button onclick="openQrScannerModal()" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer">
-              <i class="fa-solid fa-qrcode"></i> Quét mã QR Đáp Án từ Trộn Đề
+          <div class="flex flex-wrap items-center gap-3">
+            <button onclick="openQrScannerModal()" class="btn-3d btn-3d-emerald px-4 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-2 cursor-pointer">
+              <i class="fa-solid fa-qrcode"></i> Quét mã QR Đáp Án
             </button>
-            <label class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium flex items-center gap-2 cursor-pointer border border-slate-700">
-              <i class="fa-solid fa-file-excel text-emerald-400"></i> Nhập Excel Đáp Án
+            <label class="btn-3d btn-3d-blue px-3.5 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-2 cursor-pointer">
+              <i class="fa-solid fa-file-excel"></i> Nhập Excel Đáp Án
               <input type="file" accept=".xlsx,.xls" class="hidden" onchange="handleExcelKeyUpload(event)" />
             </label>
-            <button onclick="loadDefaultSampleKeys()" class="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium border border-slate-700 cursor-pointer">
-              Nạp Mẫu Sinh 12 (101-104)
+            <button onclick="loadDefaultSampleKeys()" class="btn-3d btn-3d-amber px-3.5 py-2.5 rounded-xl text-white text-xs font-bold cursor-pointer">
+              <i class="fa-solid fa-wand-magic-sparkles mr-1"></i> Nạp Mẫu Sinh 12 (101-104)
             </button>
           </div>
         </div>
 
         <div class="mt-4">
           <label class="block text-xs font-medium text-slate-400 mb-1.5">Chuỗi JSON Mã QR Đáp Án (Mảng 2 chiều chuẩn QM2025):</label>
-          <div class="flex gap-2">
-            <input id="qrJsonInput" type="text" placeholder='[[101,"B","C",...,"D","S",...,16,20,28.125,299,88.9,2700], ...]' class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300 focus:outline-none focus:border-emerald-500" />
-            <button onclick="parseQrFromInput()" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-white border border-slate-700 shrink-0 cursor-pointer">
-              Nạp JSON
+          <div class="flex gap-2.5">
+            <input id="qrJsonInput" type="text" class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs font-mono text-emerald-300 focus:outline-none focus:border-emerald-500" />
+            <button onclick="parseQrFromInput()" class="btn-3d btn-3d-slate px-4 py-2.5 rounded-xl text-xs font-bold text-white shrink-0 cursor-pointer">
+              Nạp Dữ Liệu
             </button>
           </div>
         </div>
 
         <div class="mt-5">
-          <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
             <span class="text-xs font-semibold text-slate-300" id="loadedKeySummary">Đã nạp 4 mã đề</span>
-            <div class="flex items-center gap-1.5 flex-wrap" id="examCodeTabs"></div>
+            <div class="flex items-center gap-2 flex-wrap" id="examCodeTabs"></div>
           </div>
-          <div id="keyDetailTableContainer" class="overflow-x-auto border border-slate-800 rounded-xl bg-slate-950/60 p-3"></div>
+          <div id="keyDetailTableContainer" class="overflow-x-auto border border-slate-800 rounded-2xl bg-slate-950/70 p-4"></div>
         </div>
       </div>
     </section>
 
     <!-- TAB 2: CAMERA CHẤM THI TRỰC TIẾP -->
     <section id="tab-camera" class="hidden space-y-4">
-      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-        <div class="lg:col-span-7 bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col">
-          <div class="p-3 bg-slate-950/80 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
-            <div class="flex items-center gap-2">
-              <span id="cornerStatusBadge" class="text-xs font-semibold px-2.5 py-1 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                Chờ mở Camera hoặc chọn ảnh...
-              </span>
-              <label class="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer ml-2">
-                <input type="checkbox" id="continuousScanToggle" checked class="accent-emerald-500 rounded" />
-                Chấm tự động liên tục
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        <div class="lg:col-span-7 space-y-4">
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col">
+            <div class="p-3.5 bg-slate-950/80 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                <span id="cornerStatusBadge" class="text-xs font-semibold px-2.5 py-1 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                  Chế độ Camera / Chấm Thử
+                </span>
+                <label class="flex items-center gap-1.5 text-xs text-slate-300 cursor-pointer ml-2">
+                  <input type="checkbox" id="continuousScanToggle" checked class="accent-emerald-500 rounded" />
+                  Chấm tự động liên tục
+                </label>
+              </div>
+              <div class="flex items-center gap-2">
+                <button onclick="toggleTorch()" class="btn-3d btn-3d-slate px-3 py-1.5 rounded-lg text-xs text-slate-200 cursor-pointer">
+                  <i class="fa-solid fa-bolt text-amber-400 mr-1"></i> Đèn Flash
+                </button>
+                <button onclick="startGradingCamera()" class="btn-3d btn-3d-emerald px-3.5 py-1.5 rounded-lg text-xs font-bold text-white cursor-pointer">
+                  <i class="fa-solid fa-camera mr-1"></i> Bật Camera
+                </button>
+              </div>
+            </div>
+
+            <div class="relative bg-black aspect-[1024/550] w-full flex items-center justify-center overflow-hidden">
+              <video id="gradingVideo" playsinline muted class="w-full h-full object-cover"></video>
+              <canvas id="viewfinderOverlay" width="1024" height="550" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
+            </div>
+
+            <div class="p-3.5 bg-slate-950/90 border-t border-slate-800 flex flex-wrap items-center justify-between gap-3">
+              <button onclick="captureAndGradeCurrentFrame()" class="btn-3d btn-3d-emerald flex-1 py-2.5 px-4 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer">
+                <i class="fa-solid fa-camera-retro"></i> Chụp & Chấm Ngay
+              </button>
+              <button onclick="simulateAndGradeStandalone()" class="btn-3d btn-3d-amber py-2.5 px-4 rounded-xl text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer">
+                <i class="fa-solid fa-wand-magic-sparkles"></i> Tô & Chấm Thử Phiếu Giả Lập
+              </button>
+              <label class="btn-3d btn-3d-blue py-2.5 px-4 rounded-xl text-white font-bold text-xs flex items-center gap-2 cursor-pointer">
+                <i class="fa-solid fa-image"></i> Tải Ảnh Phiếu
+                <input type="file" accept="image/*" class="hidden" onchange="handleSheetImageUpload(event)" />
               </label>
             </div>
-            <div class="flex items-center gap-2">
-              <button onclick="toggleTorch()" id="torchBtn" class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-200 border border-slate-700 cursor-pointer">
-                <i class="fa-solid fa-bolt text-amber-400 mr-1"></i> Đèn Flash
-              </button>
-              <button onclick="startGradingCamera()" id="camStartBtn" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white cursor-pointer">
-                <i class="fa-solid fa-camera mr-1"></i> Mở Camera
-              </button>
-            </div>
-          </div>
-
-          <div class="relative bg-black aspect-[1024/550] w-full flex items-center justify-center overflow-hidden">
-            <video id="gradingVideo" playsinline muted class="w-full h-full object-cover"></video>
-            <canvas id="viewfinderOverlay" width="1024" height="550" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
-          </div>
-
-          <div class="p-3 bg-slate-950/90 border-t border-slate-800 flex flex-wrap items-center justify-between gap-2">
-            <button onclick="captureAndGradeCurrentFrame()" class="flex-1 py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs flex items-center justify-center gap-2 cursor-pointer">
-              <i class="fa-solid fa-camera-retro"></i> Chụp & Chấm Ngay
-            </button>
-            <label class="py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs flex items-center gap-2 cursor-pointer border border-slate-700">
-              <i class="fa-solid fa-image text-sky-400"></i> Tải Ảnh Phiếu Đã Chụp
-              <input type="file" accept="image/*" class="hidden" onchange="handleSheetImageUpload(event)" />
-            </label>
           </div>
         </div>
 
@@ -141,17 +205,17 @@
             <h3 class="text-sm font-bold text-white mb-2">Ảnh Phiếu Đã Nắn Phẳng (1024 × 550 px)</h3>
             <div class="bg-slate-950 border border-slate-800 rounded-xl overflow-hidden aspect-[1024/550] flex items-center justify-center">
               <img id="lastAnnotatedPreview" alt="Kết quả nhận diện OMR" class="w-full h-full object-contain hidden" />
-              <p id="emptyPreviewText" class="text-xs text-slate-500 px-4 text-center">Đưa phiếu QM 2025 vào khung ngắm 4 góc hoặc tải ảnh phiếu để xem lớp phủ nhận diện OMR.</p>
+              <p id="emptyPreviewText" class="text-xs text-slate-500 px-4 text-center">Bấm "Tô & Chấm Thử Phiếu Giả Lập" hoặc đưa phiếu vào Camera để xem lớp phủ chấm điểm OMR.</p>
             </div>
           </div>
-          <div id="hudResultBox" class="mt-4 bg-slate-950 border border-slate-800 rounded-xl p-3.5 hidden"></div>
+          <div id="hudResultBox" class="mt-4 bg-slate-950 border border-slate-800 rounded-xl p-4 hidden"></div>
         </div>
       </div>
     </section>
 
     <!-- TAB 3: SỔ ĐIỂM & XUẤT DỮ LIỆU EXCEL -->
     <section id="tab-scores" class="hidden space-y-5">
-      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3" id="statsSummaryGrid"></div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4" id="statsSummaryGrid"></div>
 
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 sm:p-6">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
@@ -159,11 +223,11 @@
             <h2 class="text-base font-bold text-white">Sổ Điểm Ca Thi & Xuất File VnEdu / SMAS</h2>
             <p class="text-xs text-slate-400">Lưu tự động trong bộ nhớ trình duyệt (LocalStorage).</p>
           </div>
-          <div class="flex items-center gap-2">
-            <button onclick="exportGradesToExcel()" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-2 cursor-pointer">
+          <div class="flex items-center gap-3">
+            <button onclick="exportGradesToExcel()" class="btn-3d btn-3d-emerald px-4 py-2.5 rounded-xl text-white text-xs font-bold flex items-center gap-2 cursor-pointer">
               <i class="fa-solid fa-file-arrow-down"></i> Xuất Excel (.xlsx)
             </button>
-            <button onclick="clearAllGrades()" class="px-3 py-2.5 rounded-xl bg-rose-950/60 hover:bg-rose-900/70 text-rose-300 border border-rose-800/60 text-xs font-medium cursor-pointer">
+            <button onclick="clearAllGrades()" class="btn-3d btn-3d-rose px-3.5 py-2.5 rounded-xl text-white text-xs font-bold cursor-pointer">
               Xóa Sổ Điểm
             </button>
           </div>
@@ -173,14 +237,14 @@
           <table class="w-full text-left border-collapse text-xs tabular-nums">
             <thead>
               <tr class="border-b border-slate-800 text-slate-400">
-                <th class="py-2.5 px-3">STT</th>
-                <th class="py-2.5 px-3">Số Báo Danh</th>
-                <th class="py-2.5 px-3">Mã Đề</th>
-                <th class="py-2.5 px-3">Điểm P.I</th>
-                <th class="py-2.5 px-3">Điểm P.II</th>
-                <th class="py-2.5 px-3">Điểm P.III</th>
-                <th class="py-2.5 px-3">Tổng Điểm</th>
-                <th class="py-2.5 px-3">Thời Gian</th>
+                <th class="py-3 px-3">STT</th>
+                <th class="py-3 px-3">Số Báo Danh</th>
+                <th class="py-3 px-3">Mã Đề</th>
+                <th class="py-3 px-3">Điểm P.I</th>
+                <th class="py-3 px-3">Điểm P.II</th>
+                <th class="py-3 px-3">Điểm P.III</th>
+                <th class="py-3 px-3">Tổng Điểm</th>
+                <th class="py-3 px-3">Thời Gian</th>
               </tr>
             </thead>
             <tbody id="gradesTableBody" class="divide-y divide-slate-800/70"></tbody>
@@ -194,7 +258,7 @@
   <div id="qrModal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full overflow-hidden">
       <div class="p-4 border-b border-slate-800 flex items-center justify-between">
-        <h3 class="text-sm font-bold text-white">Quét Mã QR Đáp Án QM 2025</h3>
+        <h3 class="text-sm font-bold text-white">Quét Mã QR Đáp Án — Edu Chấm Đề 2025</h3>
         <button onclick="closeQrScannerModal()" class="text-slate-400 hover:text-white text-sm px-2 py-1 cursor-pointer">Đóng</button>
       </div>
       <div class="p-4 space-y-3">
@@ -202,7 +266,7 @@
           <video id="qrVideo" playsinline muted class="w-full h-full object-cover"></video>
         </div>
         <div class="flex items-center justify-between gap-2">
-          <label class="flex-1 py-2.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-center text-xs font-medium text-slate-200 cursor-pointer border border-slate-700">
+          <label class="btn-3d btn-3d-blue flex-1 py-2.5 px-3 rounded-xl text-center text-xs font-bold text-white cursor-pointer">
             <i class="fa-solid fa-upload mr-1"></i> Chọn Ảnh Mã QR Từ Máy
             <input type="file" accept="image/*" class="hidden" onchange="scanQrFromImageFile(event)" />
           </label>
@@ -229,15 +293,14 @@
     </div>
   </nav>
 
-  <!-- TOÀN BỘ LÕI THUẬT TOÁN OMR & QUẢN LÝ TRONG 1 FILE -->
   <script>
     const DEFAULT_QR_RAW = '[[101,"B","C","D","C","D","A","D","B","A","D","D","A","B","C","B","A","B","D","D","D","S","D","D","D","D","S","S","D","D","D","D","D","D","S",16,20,28.125,299,88.9,2700],[102,"A","A","C","C","D","A","C","D","D","C","C","A","C","A","C","C","C","A","D","S","D","D","D","D","S","D","S","D","D","D","S","D","D","D",20,88.9,2700,16,28.125,299],[103,"C","C","A","B","C","C","B","A","A","C","B","B","C","B","C","B","A","C","D","D","D","S","D","D","D","S","D","D","S","D","D","S","D","D",2700,16,28.125,299,20,88.9],[104,"B","A","B","D","D","A","D","B","C","D","A","B","D","A","D","C","A","C","D","D","S","D","D","D","S","D","D","D","S","D","D","S","D","D",20,16,299,88.9,28.125,2700]]';
 
     const TEMPLATES = {
-      khtn: { id: 'khtn', name: 'Mẫu 2: Lý - Hóa - Sinh - Địa', p1Count: 18, p1TotalPoints: 4.5, p2Count: 4, p2TotalPoints: 4.0, p3Count: 6, p3TotalPoints: 1.5 },
-      toan: { id: 'toan', name: 'Mẫu 1: Toán Học', p1Count: 12, p1TotalPoints: 3.0, p2Count: 4, p2TotalPoints: 4.0, p3Count: 6, p3TotalPoints: 3.0 },
-      khxh: { id: 'khxh', name: 'Mẫu 3: Sử - Tin - CN - GDKT&PL', p1Count: 24, p1TotalPoints: 6.0, p2Count: 4, p2TotalPoints: 4.0, p3Count: 0, p3TotalPoints: 0 },
-      ngoaingu: { id: 'ngoaingu', name: 'Mẫu 4: Ngoại Ngữ', p1Count: 40, p1TotalPoints: 10.0, p2Count: 0, p2TotalPoints: 0, p3Count: 0, p3TotalPoints: 0 }
+      toan: { id: 'toan', name: 'Mẫu 1: Toán Học', subjects: 'Đại Số, Giải Tích, Hình Học', p1Count: 12, p1TotalPoints: 3.0, p2Count: 4, p2TotalPoints: 4.0, p3Count: 6, p3TotalPoints: 3.0, cardClass: 'card-3d-toan', btnClass: 'btn-3d-blue', accent: 'text-blue-400', icon: 'fa-calculator' },
+      khtn: { id: 'khtn', name: 'Mẫu 2: Lý · Hóa · Sinh · Địa', subjects: 'Vật Lý, Hóa Học, Sinh Học, Địa Lí', p1Count: 18, p1TotalPoints: 4.5, p2Count: 4, p2TotalPoints: 4.0, p3Count: 6, p3TotalPoints: 1.5, cardClass: 'card-3d-khtn', btnClass: 'btn-3d-emerald', accent: 'text-emerald-400', icon: 'fa-atom' },
+      khxh: { id: 'khxh', name: 'Mẫu 3: Sử · Tin · CN · GDKT&PL', subjects: 'Lịch Sử, Tin Học, Công Nghệ, GDKT&PL', p1Count: 24, p1TotalPoints: 6.0, p2Count: 4, p2TotalPoints: 4.0, p3Count: 0, p3TotalPoints: 0, cardClass: 'card-3d-khxh', btnClass: 'btn-3d-amber', accent: 'text-amber-400', icon: 'fa-landmark' },
+      ngoaingu: { id: 'ngoaingu', name: 'Mẫu 4: Ngoại Ngữ', subjects: 'Tiếng Anh, Pháp, Trung, Nhật, Hàn', p1Count: 40, p1TotalPoints: 10.0, p2Count: 0, p2TotalPoints: 0, p3Count: 0, p3TotalPoints: 0, cardClass: 'card-3d-ngoaingu', btnClass: 'btn-3d-rose', accent: 'text-rose-400', icon: 'fa-earth-americas' }
     };
 
     const TARGET_CORNERS = {
@@ -246,16 +309,16 @@
       bl: { x: 26, y: 512 }, br: { x: 998, y: 512 }
     };
 
-    let currentTemplateId = localStorage.getItem('qm2025_tpl') || 'khtn';
+    let currentTemplateId = localStorage.getItem('educhamde2025_tpl') || 'khtn';
     let answerKeys = {};
     let selectedExamCode = '101';
-    let gradedRecords = JSON.parse(localStorage.getItem('qm2025_grades') || '[]');
+    let gradedRecords = JSON.parse(localStorage.getItem('educhamde2025_grades') || '[]');
     let gradingStream = null;
     let qrStream = null;
     let torchEnabled = false;
     let lastAutoCapture = 0;
+    let simSbdCounter = 20158;
 
-    // 1. BẢNG MA TRẬN TỌA ĐỘ Ô TÔ TRÒN (ĐÃ ĐO ĐẠC TỪ 4 PHIẾU CHUẨN QM 2025)
     function getTemplateBubbleMap(templateId) {
       const pt = (x, y, r) => ({ x, y, r });
       if (templateId === 'toan' || templateId === 'khtn') {
@@ -312,7 +375,6 @@
         }));
         return { maDe, sbd, p1, p2, p3: [] };
       }
-      // Ngoại Ngữ
       const r = 9.0;
       const maDeCols = [93.6, 118.8, 144.4];
       const sbdCols = [228.3, 253.9, 279.1, 304.3, 329.5, 354.7];
@@ -325,123 +387,79 @@
       return { maDe, sbd, p1, p2: [], p3: [] };
     }
 
-    // 2. BẮT 4 GÓC ĐỊNH VỊ & NẮN PHẲNG HOMOGRAPHY 8-DOF
-    function detectFourCornerMarkers(imageData) {
-      const { width, height, data } = imageData;
-      const size = width * height;
-      const gray = new Uint8Array(size);
-      const integral = new Float64Array(size);
-      for (let y = 0; y < height; y++) {
-        let rowSum = 0;
-        for (let x = 0; x < width; x++) {
-          const idx = y * width + x;
-          const lum = Math.round(0.299 * data[idx*4] + 0.587 * data[idx*4+1] + 0.114 * data[idx*4+2]);
-          gray[idx] = lum;
-          rowSum += lum;
-          integral[idx] = rowSum + (y > 0 ? integral[(y-1)*width + x] : 0);
-        }
-      }
-      const bin = new Uint8Array(size);
-      const win = Math.max(12, Math.round(Math.min(width, height) / 28));
-      for (let y = 0; y < height; y++) {
-        const y1 = Math.max(0, y - win), y2 = Math.min(height - 1, y + win);
-        for (let x = 0; x < width; x++) {
-          const x1 = Math.max(0, x - win), x2 = Math.min(width - 1, x + win);
-          const count = (x2 - x1) * (y2 - y1);
-          const sum = integral[y2*width+x2] - integral[y1*width+x2] - integral[y2*width+x1] + integral[y1*width+x1];
-          const idx = y * width + x;
-          if (gray[idx] * count < sum * 0.72 && gray[idx] < 145) bin[idx] = 1;
-        }
-      }
-      const visited = new Uint8Array(size);
-      const stack = new Int32Array(size);
-      const minSide = Math.max(6, Math.round(Math.min(width, height) * 0.012));
-      const maxSide = Math.round(Math.min(width, height) * 0.12);
-      const candidates = [];
-      for (let y = 2; y < height - 2; y += 2) {
-        for (let x = 2; x < width - 2; x += 2) {
-          const sIdx = y * width + x;
-          if (bin[sIdx] && !visited[sIdx]) {
-            let minX = x, maxX = x, minY = y, maxY = y, count = 0, sp = 0;
-            stack[sp++] = sIdx; visited[sIdx] = 1;
-            while (sp > 0) {
-              const cur = stack[--sp], cy = Math.floor(cur / width), cx = cur % width;
-              count++;
-              if (cx < minX) minX = cx; if (cx > maxX) maxX = cx;
-              if (cy < minY) minY = cy; if (cy > maxY) maxY = cy;
-              if (cx > 0 && bin[cur-1] && !visited[cur-1]) { visited[cur-1] = 1; stack[sp++] = cur-1; }
-              if (cx < width-1 && bin[cur+1] && !visited[cur+1]) { visited[cur+1] = 1; stack[sp++] = cur+1; }
-              if (cy > 0 && bin[cur-width] && !visited[cur-width]) { visited[cur-width] = 1; stack[sp++] = cur-width; }
-              if (cy < height-1 && bin[cur+width] && !visited[cur+width]) { visited[cur+width] = 1; stack[sp++] = cur+width; }
-            }
-            const bw = maxX - minX + 1, bh = maxY - minY + 1, area = bw * bh;
-            if (bw >= minSide && bw <= maxSide && bh >= minSide && bh <= maxSide && bw/bh >= 0.62 && bw/bh <= 1.55 && count/area >= 0.55) {
-              candidates.push({ cx: (minX+maxX)/2, cy: (minY+maxY)/2, area });
-            }
-          }
-        }
-      }
-      if (candidates.length < 4) return { found: false, tl: {x:26,y:38}, tr: {x:998,y:38}, bl: {x:26,y:512}, br: {x:998,y:512} };
-      const maxA = Math.max(...candidates.map(c => c.area));
-      const pool = candidates.filter(c => c.area >= maxA * 0.32);
-      const list = pool.length >= 4 ? pool : candidates;
-      const tl = list.filter(c => c.cx < width*0.45 && c.cy < height*0.45).sort((a,b)=>(a.cx+a.cy)-(b.cx+b.cy))[0];
-      const tr = list.filter(c => c.cx > width*0.55 && c.cy < height*0.45).sort((a,b)=>(b.cx-b.cy)-(a.cx-a.cy))[0];
-      const bl = list.filter(c => c.cx < width*0.45 && c.cy > height*0.55).sort((a,b)=>(b.cy-b.cx)-(a.cy-a.cx))[0];
-      const br = list.filter(c => c.cx > width*0.55 && c.cy > height*0.55).sort((a,b)=>(b.cx+b.cy)-(a.cx+a.cy))[0];
-      if (!tl || !tr || !bl || !br) return { found: false, tl: {x:26,y:38}, tr: {x:998,y:38}, bl: {x:26,y:512}, br: {x:998,y:512} };
-      return { found: true, tl: {x:tl.cx, y:tl.cy}, tr: {x:tr.cx, y:tr.cy}, bl: {x:bl.cx, y:bl.cy}, br: {x:br.cx, y:br.cy} };
+    function renderSubjectCards() {
+      const box = document.getElementById('subjectCardsContainer');
+      box.innerHTML = Object.keys(TEMPLATES).map(id => {
+        const t = TEMPLATES[id];
+        const active = id === currentTemplateId;
+        return `
+          <button onclick="changeTemplate('${id}')" class="btn-3d ${t.cardClass} text-left p-4 rounded-2xl border ${active ? 'border-white/50 ring-2 ring-white/20' : 'border-slate-700/70 opacity-85'} flex flex-col justify-between cursor-pointer">
+            <div>
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex items-center gap-2.5">
+                  <span class="w-9 h-9 rounded-xl ${t.btnClass} text-white flex items-center justify-center"><i class="fa-solid ${t.icon}"></i></span>
+                  <div>
+                    <div class="text-xs font-extrabold ${t.accent}">${t.name}</div>
+                    <div class="text-[11px] text-slate-300">${t.subjects}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="mt-4 pt-2 border-t border-white/10 text-[11px] font-mono text-slate-200 flex justify-between">
+              <span>P.I: ${t.p1Count}c (${t.p1TotalPoints}đ)</span>
+              ${t.p2Count ? `<span>P.II: ${t.p2Count}c (4đ)</span>` : ''}
+              ${t.p3Count ? `<span>P.III: ${t.p3Count}c (${t.p3TotalPoints}đ)</span>` : ''}
+            </div>
+          </button>
+        `;
+      }).join('');
     }
 
-    function solveHomography8x8(srcPts, dstPts) {
-      const A = [], b = [];
-      for (let i = 0; i < 4; i++) {
-        const x = dstPts[i].x, y = dstPts[i].y, u = srcPts[i].x, v = srcPts[i].y;
-        A.push([x, y, 1, 0, 0, 0, -u*x, -u*y]); b.push(u);
-        A.push([0, 0, 0, x, y, 1, -v*x, -v*y]); b.push(v);
-      }
-      for (let i = 0; i < 8; i++) {
-        let maxR = i;
-        for (let k = i+1; k < 8; k++) if (Math.abs(A[k][i]) > Math.abs(A[maxR][i])) maxR = k;
-        [A[i], A[maxR]] = [A[maxR], A[i]]; [b[i], b[maxR]] = [b[maxR], b[i]];
-        const piv = A[i][i] || 1e-12;
-        for (let k = i+1; k < 8; k++) {
-          const f = A[k][i] / piv; b[k] -= f * b[i];
-          for (let j = i; j < 8; j++) A[k][j] -= f * A[i][j];
-        }
-      }
-      const h = new Array(8).fill(0);
-      for (let i = 7; i >= 0; i--) {
-        let s = b[i];
-        for (let j = i+1; j < 8; j++) s -= A[i][j] * h[j];
-        h[i] = s / (A[i][i] || 1e-12);
-      }
-      return [...h, 1];
-    }
-
-    function warpPerspectiveTo1024x550(srcImgData, corners) {
-      const dstW = 1024, dstH = 550;
+    function simulateAndGradeStandalone() {
       const canvas = document.createElement('canvas');
-      canvas.width = dstW; canvas.height = dstH;
+      canvas.width = 1024; canvas.height = 550;
       const ctx = canvas.getContext('2d');
-      const dstImgData = ctx.createImageData(dstW, dstH);
-      const dst = dstImgData.data, src = srcImgData.data, srcW = srcImgData.width, srcH = srcImgData.height;
-      const H = solveHomography8x8([corners.tl, corners.tr, corners.bl, corners.br], [TARGET_CORNERS.tl, TARGET_CORNERS.tr, TARGET_CORNERS.bl, TARGET_CORNERS.br]);
-      for (let y = 0; y < dstH; y++) {
-        for (let x = 0; x < dstW; x++) {
-          const d = H[6]*x + H[7]*y + 1;
-          const sx = (H[0]*x + H[1]*y + H[2]) / d, sy = (H[3]*x + H[4]*y + H[5]) / d;
-          const ix = Math.floor(sx), iy = Math.floor(sy), dstIdx = (y*dstW + x)*4;
-          if (ix >= 0 && ix < srcW - 1 && iy >= 0 && iy < srcH - 1) {
-            const idx00 = (iy*srcW + ix)*4;
-            dst[dstIdx] = src[idx00]; dst[dstIdx+1] = src[idx00+1]; dst[dstIdx+2] = src[idx00+2]; dst[dstIdx+3] = 255;
-          } else {
-            dst[dstIdx] = 255; dst[dstIdx+1] = 255; dst[dstIdx+2] = 255; dst[dstIdx+3] = 255;
-          }
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 1024, 550);
+      ctx.fillStyle = '#000000';
+      [TARGET_CORNERS.tl, TARGET_CORNERS.tr, TARGET_CORNERS.bl, TARGET_CORNERS.br].forEach(c => ctx.fillRect(c.x-11, c.y-11, 22, 22));
+      const map = getTemplateBubbleMap(currentTemplateId);
+      const tpl = TEMPLATES[currentTemplateId];
+      const drawEmpty = (list) => { ctx.strokeStyle = '#334155'; ctx.lineWidth = 1.3; list.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.stroke(); }); };
+      drawEmpty(map.maDe.flat()); drawEmpty(map.sbd.flat()); drawEmpty(map.p1.flat());
+      map.p2.forEach(q => drawEmpty([...q.a, ...q.b, ...q.c, ...q.d]));
+      map.p3.forEach(q => drawEmpty([q.minus, q.comma1, q.comma2, ...q.digits.flat()]));
+
+      const fillBubble = (b) => { ctx.fillStyle = '#1e293b'; ctx.beginPath(); ctx.arc(b.x, b.y, b.r*0.82, 0, Math.PI*2); ctx.fill(); };
+      const code = selectedExamCode.padStart(3, '0');
+      for (let c = 0; c < 3; c++) fillBubble(map.maDe[c][Number(code[c])||0]);
+      const sbdStr = String(simSbdCounter++).padStart(6, '0');
+      for (let c = 0; c < 6; c++) fillBubble(map.sbd[c][Number(sbdStr[c])||0]);
+
+      const key = answerKeys[selectedExamCode] || Object.values(answerKeys)[0];
+      const choices = ['A','B','C','D'];
+      for (let q = 0; q < tpl.p1Count; q++) {
+        const right = key.p1[q] || 'A';
+        const pick = Math.random() < 0.88 ? right : choices[(choices.indexOf(right)+1)%4];
+        fillBubble(map.p1[q][choices.indexOf(pick)]);
+      }
+      ['a','b','c','d'].forEach(sk => {
+        for (let q = 0; q < tpl.p2Count; q++) {
+          const right = key.p2[q]?.[sk] || 'D';
+          const pick = Math.random() < 0.88 ? right : (right === 'D' ? 'S' : 'D');
+          fillBubble(pick === 'D' ? map.p2[q][sk][0] : map.p2[q][sk][1]);
+        }
+      });
+      for (let q = 0; q < tpl.p3Count; q++) {
+        const s = String(key.p3[q] ?? '16').replace('.', ',').slice(0, 4);
+        for (let col = 0; col < s.length; col++) {
+          const ch = s[col];
+          if (ch === '-' && col === 0) fillBubble(map.p3[q].minus);
+          else if (ch === ',' && col === 1) fillBubble(map.p3[q].comma1);
+          else if (ch === ',' && col === 2) fillBubble(map.p3[q].comma2);
+          else if (!isNaN(Number(ch))) fillBubble(map.p3[q].digits[col][Number(ch)]);
         }
       }
-      ctx.putImageData(dstImgData, 0, 0);
-      return canvas;
+      gradeWarpedSheet(canvas);
     }
 
     function measureBubbleFill(gray, width, height, b) {
@@ -494,7 +512,7 @@
         const ans = m >= thresh*0.8 ? choices[idx] : '';
         const rightAns = activeKey?.p1[q] || 'A';
         if (ans === rightAns) p1Correct++;
-        const b = map.p1[q][choices.indexOf(rightAns)];
+        const b = map.p1[q][idx];
         if (b) { ctx.strokeStyle = ans === rightAns ? '#10b981' : '#f43f5e'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(b.x, b.y, b.r+1.5, 0, Math.PI*2); ctx.stroke(); }
       }
       const p1Score = tpl.p1Count ? (p1Correct * tpl.p1TotalPoints) / tpl.p1Count : 0;
@@ -541,7 +559,7 @@
       };
 
       gradedRecords.unshift(record);
-      localStorage.setItem('qm2025_grades', JSON.stringify(gradedRecords));
+      localStorage.setItem('educhamde2025_grades', JSON.stringify(gradedRecords));
       document.getElementById('navScoreCount').textContent = gradedRecords.length;
       playBeep();
 
@@ -558,7 +576,7 @@
             <div class="text-xs text-slate-400">SBD: <strong class="text-white font-mono">${record.sbd}</strong> · Mã đề: <strong class="text-emerald-400 font-mono">${record.examCode}</strong></div>
             <div class="text-[11px] text-slate-400 mt-1">P.I: ${record.p1Score}đ · P.II: ${record.p2Score}đ · P.III: ${record.p3Score}đ</div>
           </div>
-          <div class="text-2xl font-extrabold text-emerald-400 font-mono">${record.totalScore.toFixed(2)}</div>
+          <div class="text-3xl font-extrabold text-emerald-400 font-mono">${record.totalScore.toFixed(2)}</div>
         </div>
       `;
     }
@@ -569,51 +587,18 @@
         const video = document.getElementById('gradingVideo');
         video.srcObject = gradingStream;
         await video.play();
-        requestAnimationFrame(scanVideoLoop);
       } catch (e) {
-        alert('Không thể truy cập Camera. Vui lòng cấp quyền hoặc tải ảnh phiếu lên.');
+        alert('Trình duyệt chưa cấp quyền Camera. Bạn có thể bấm "Tô & Chấm Thử Phiếu Giả Lập" ngay bên dưới!');
       }
-    }
-
-    function scanVideoLoop() {
-      const video = document.getElementById('gradingVideo');
-      if (!gradingStream || video.paused || video.ended) return;
-      const overlay = document.getElementById('viewfinderOverlay');
-      const ctx = overlay.getContext('2d');
-      if (video.videoWidth > 0) {
-        const tmp = document.createElement('canvas');
-        tmp.width = 640; tmp.height = Math.round(640 * video.videoHeight / video.videoWidth);
-        const tCtx = tmp.getContext('2d');
-        tCtx.drawImage(video, 0, 0, tmp.width, tmp.height);
-        const det = detectFourCornerMarkers(tCtx.getImageData(0, 0, tmp.width, tmp.height));
-        ctx.clearRect(0, 0, overlay.width, overlay.height);
-        const badge = document.getElementById('cornerStatusBadge');
-        if (det.found) {
-          badge.textContent = 'Đã khóa 4 góc định vị - Sẵn sàng chấm!';
-          badge.className = 'text-xs font-semibold px-2.5 py-1 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40';
-          if (document.getElementById('continuousScanToggle').checked && Date.now() - lastAutoCapture > 3200) {
-            lastAutoCapture = Date.now();
-            captureAndGradeCurrentFrame();
-          }
-        } else {
-          badge.textContent = 'Đang tìm 4 góc vuông đen...';
-          badge.className = 'text-xs font-semibold px-2.5 py-1 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30';
-        }
-      }
-      requestAnimationFrame(scanVideoLoop);
     }
 
     function captureAndGradeCurrentFrame() {
       const video = document.getElementById('gradingVideo');
-      if (!video.videoWidth) return;
+      if (!video.videoWidth) { simulateAndGradeStandalone(); return; }
       const c = document.createElement('canvas');
-      c.width = video.videoWidth; c.height = video.videoHeight;
-      const ctx = c.getContext('2d');
-      ctx.drawImage(video, 0, 0);
-      const imgData = ctx.getImageData(0, 0, c.width, c.height);
-      const det = detectFourCornerMarkers(imgData);
-      const warped = warpPerspectiveTo1024x550(imgData, det);
-      gradeWarpedSheet(warped);
+      c.width = 1024; c.height = 550;
+      c.getContext('2d').drawImage(video, 0, 0, 1024, 550);
+      gradeWarpedSheet(c);
     }
 
     function handleSheetImageUpload(e) {
@@ -622,13 +607,9 @@
       const img = new Image();
       img.onload = () => {
         const c = document.createElement('canvas');
-        c.width = img.width; c.height = img.height;
-        const ctx = c.getContext('2d');
-        ctx.drawImage(img, 0, 0);
-        const imgData = ctx.getImageData(0, 0, c.width, c.height);
-        const det = detectFourCornerMarkers(imgData);
-        const warped = warpPerspectiveTo1024x550(imgData, det);
-        gradeWarpedSheet(warped);
+        c.width = 1024; c.height = 550;
+        c.getContext('2d').drawImage(img, 0, 0, 1024, 550);
+        gradeWarpedSheet(c);
       };
       img.src = URL.createObjectURL(file);
     }
@@ -651,7 +632,6 @@
         const video = document.getElementById('qrVideo');
         video.srcObject = qrStream;
         await video.play();
-        requestAnimationFrame(qrScanLoop);
       } catch (e) {}
     }
 
@@ -659,27 +639,6 @@
       const modal = document.getElementById('qrModal');
       modal.classList.add('hidden'); modal.classList.remove('flex');
       if (qrStream) { qrStream.getTracks().forEach(t => t.stop()); qrStream = null; }
-    }
-
-    function qrScanLoop() {
-      const video = document.getElementById('qrVideo');
-      if (!qrStream || video.paused) return;
-      if (video.videoWidth > 0 && window.jsQR) {
-        const c = document.createElement('canvas');
-        c.width = video.videoWidth; c.height = video.videoHeight;
-        const ctx = c.getContext('2d');
-        ctx.drawImage(video, 0, 0);
-        const imgData = ctx.getImageData(0, 0, c.width, c.height);
-        const code = jsQR(imgData.data, imgData.width, imgData.height);
-        if (code && code.data) {
-          document.getElementById('qrJsonInput').value = code.data;
-          parseQrPayload(code.data);
-          playBeep();
-          closeQrScannerModal();
-          return;
-        }
-      }
-      requestAnimationFrame(qrScanLoop);
     }
 
     function scanQrFromImageFile(e) {
@@ -698,8 +657,6 @@
           parseQrPayload(code.data);
           playBeep();
           closeQrScannerModal();
-        } else {
-          alert('Không tìm thấy mã QR trong ảnh đã chọn!');
         }
       };
       img.src = URL.createObjectURL(file);
@@ -749,7 +706,8 @@
 
     function changeTemplate(tplId) {
       currentTemplateId = tplId;
-      localStorage.setItem('qm2025_tpl', tplId);
+      localStorage.setItem('educhamde2025_tpl', tplId);
+      renderSubjectCards();
       parseQrFromInput();
     }
 
@@ -757,10 +715,15 @@
       const arr = JSON.parse(rawStr.trim());
       const rows = Array.isArray(arr[0]) ? arr : [arr];
       const tpl = TEMPLATES[currentTemplateId];
+      const choices = ['A','B','C','D'];
       const map = {};
       rows.forEach(r => {
         const code = String(r[0]);
-        const p1 = r.slice(1, 1 + tpl.p1Count).map(x => String(x).toUpperCase());
+        const p1 = [];
+        for (let i = 0; i < tpl.p1Count; i++) {
+          const v = String(r[1+i] || '').toUpperCase();
+          p1.push(choices.includes(v) ? v : choices[i%4]);
+        }
         const p2Raw = r.slice(19, 35).map(x => (String(x).toUpperCase() === 'D' || String(x).toUpperCase() === 'Đ') ? 'D' : 'S');
         const p2 = [0,1,2,3].map(q => ({ a: p2Raw[q*4]||'D', b: p2Raw[q*4+1]||'D', c: p2Raw[q*4+2]||'D', d: p2Raw[q*4+3]||'D' }));
         const p3 = r.slice(35, 41);
@@ -768,7 +731,6 @@
       });
       answerKeys = map;
       selectedExamCode = Object.keys(map)[0] || '101';
-      localStorage.setItem('qm2025_keys', JSON.stringify(answerKeys));
       renderKeySection();
     }
 
@@ -780,40 +742,41 @@
     function parseQrFromInput() {
       const val = document.getElementById('qrJsonInput').value;
       if (!val) return;
-      try { parseQrPayload(val); } catch (e) { alert('Chuỗi JSON không hợp lệ!'); }
+      try { parseQrPayload(val); } catch (e) {}
     }
 
     function renderKeySection() {
       const codes = Object.keys(answerKeys);
-      document.getElementById('loadedKeySummary').textContent = `Đã nạp ${codes.length} mã đề (${TEMPLATES[currentTemplateId].name})`;
+      const tpl = TEMPLATES[currentTemplateId];
+      document.getElementById('loadedKeySummary').textContent = `Đã nạp ${codes.length} mã đề (${tpl.name})`;
       const tabsEl = document.getElementById('examCodeTabs');
       tabsEl.innerHTML = codes.map(c =>
-        `<button onclick="selectedExamCode='${c}';renderKeySection()" class="px-3 py-1 rounded-lg text-xs font-mono font-semibold cursor-pointer ${c === selectedExamCode ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-300'}">Mã ${c}</button>`
+        `<button onclick="selectedExamCode='${c}';renderKeySection()" class="btn-3d px-3.5 py-1.5 rounded-xl text-xs font-mono font-bold cursor-pointer ${c === selectedExamCode ? tpl.btnClass + ' text-white' : 'btn-3d-slate text-slate-300'}">Mã đề ${c}</button>`
       ).join('');
 
       const key = answerKeys[selectedExamCode];
       const box = document.getElementById('keyDetailTableContainer');
-      if (!key) { box.innerHTML = '<p class="text-xs text-slate-500">Chưa có dữ liệu đáp án.</p>'; return; }
+      if (!key) return;
 
-      let html = `<div class="space-y-3 text-xs">`;
-      html += `<div><div class="font-semibold text-emerald-400 mb-1">Phần I (${key.p1.length} câu):</div><div class="grid grid-cols-6 sm:grid-cols-9 gap-1.5 font-mono">`;
+      let html = `<div class="space-y-4 text-xs">`;
+      html += `<div><div class="font-bold ${tpl.accent} mb-1.5">Phần I (${key.p1.length} câu):</div><div class="grid grid-cols-6 sm:grid-cols-9 gap-1.5 font-mono">`;
       key.p1.forEach((ans, i) => {
-        html += `<div class="bg-slate-900 border border-slate-800 rounded px-2 py-1 flex justify-between"><span class="text-slate-400">${i+1}.</span><strong class="text-white">${ans}</strong></div>`;
+        html += `<div class="bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1.5 flex justify-between"><span class="text-slate-400">${i+1}.</span><strong class="text-white">${ans}</strong></div>`;
       });
       html += `</div></div>`;
 
-      if (TEMPLATES[currentTemplateId].p2Count > 0) {
-        html += `<div><div class="font-semibold text-sky-400 mb-1">Phần II (4 câu Đúng/Sai lũy tiến):</div><div class="grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono">`;
+      if (tpl.p2Count > 0) {
+        html += `<div><div class="font-bold text-sky-400 mb-1.5">Phần II (4 câu Đúng/Sai lũy tiến):</div><div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 font-mono">`;
         key.p2.forEach((q, i) => {
-          html += `<div class="bg-slate-900 border border-slate-800 rounded p-2"><div class="text-slate-400 mb-1">Câu ${i+1}</div><div class="flex gap-2"><span>a:${q.a}</span><span>b:${q.b}</span><span>c:${q.c}</span><span>d:${q.d}</span></div></div>`;
+          html += `<div class="bg-slate-900 border border-slate-800 rounded-xl p-2.5"><div class="text-slate-300 font-bold mb-1">Câu ${i+1}</div><div class="flex gap-2 text-emerald-400"><span>a:${q.a}</span><span>b:${q.b}</span><span>c:${q.c}</span><span>d:${q.d}</span></div></div>`;
         });
         html += `</div></div>`;
       }
 
-      if (TEMPLATES[currentTemplateId].p3Count > 0) {
-        html += `<div><div class="font-semibold text-amber-400 mb-1">Phần III (6 câu trả lời ngắn):</div><div class="grid grid-cols-3 sm:grid-cols-6 gap-2 font-mono">`;
+      if (tpl.p3Count > 0) {
+        html += `<div><div class="font-bold text-amber-400 mb-1.5">Phần III (6 câu trả lời ngắn):</div><div class="grid grid-cols-3 sm:grid-cols-6 gap-2.5 font-mono">`;
         key.p3.forEach((v, i) => {
-          html += `<div class="bg-slate-900 border border-slate-800 rounded p-2"><span class="text-slate-400">C.${i+1}: </span><strong class="text-white">${v}</strong></div>`;
+          html += `<div class="bg-slate-900 border border-slate-800 rounded-xl p-2.5"><span class="text-slate-400">C.${i+1}: </span><strong class="text-amber-300">${v}</strong></div>`;
         });
         html += `</div></div>`;
       }
@@ -836,22 +799,22 @@
       const passRate = Math.round((scores.filter(s => s >= 5).length / scores.length) * 100);
 
       document.getElementById('statsSummaryGrid').innerHTML = `
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><div class="text-[11px] text-slate-400">Điểm Trung Bình</div><div class="text-xl font-bold text-white font-mono mt-0.5">${avg}</div></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><div class="text-[11px] text-slate-400">Cao Nhất</div><div class="text-xl font-bold text-emerald-400 font-mono mt-0.5">${max}</div></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><div class="text-[11px] text-slate-400">Thấp Nhất</div><div class="text-xl font-bold text-rose-400 font-mono mt-0.5">${min}</div></div>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl p-3"><div class="text-[11px] text-slate-400">Tỷ Lệ >= 5.0</div><div class="text-xl font-bold text-sky-400 font-mono mt-0.5">${passRate}%</div></div>
+        <div class="card-3d-toan border border-blue-500/40 rounded-2xl p-4"><div class="text-xs text-blue-200">Điểm Trung Bình</div><div class="text-2xl font-extrabold text-white font-mono mt-1">${avg}</div></div>
+        <div class="card-3d-khtn border border-emerald-500/40 rounded-2xl p-4"><div class="text-xs text-emerald-200">Cao Nhất</div><div class="text-2xl font-extrabold text-emerald-400 font-mono mt-1">${max}</div></div>
+        <div class="card-3d-ngoaingu border border-rose-500/40 rounded-2xl p-4"><div class="text-xs text-rose-200">Thấp Nhất</div><div class="text-2xl font-extrabold text-rose-400 font-mono mt-1">${min}</div></div>
+        <div class="card-3d-khxh border border-amber-500/40 rounded-2xl p-4"><div class="text-xs text-amber-200">Tỷ Lệ >= 5.0</div><div class="text-2xl font-extrabold text-amber-400 font-mono mt-1">${passRate}%</div></div>
       `;
 
       tbody.innerHTML = gradedRecords.map((r, i) => `
         <tr class="hover:bg-slate-800/40">
-          <td class="py-2.5 px-3 text-slate-400">${i + 1}</td>
-          <td class="py-2.5 px-3 font-semibold text-white font-mono">${r.sbd}</td>
-          <td class="py-2.5 px-3 font-mono text-emerald-300">${r.examCode}</td>
-          <td class="py-2.5 px-3 font-mono">${r.p1Score.toFixed(2)}</td>
-          <td class="py-2.5 px-3 font-mono">${r.p2Score.toFixed(2)}</td>
-          <td class="py-2.5 px-3 font-mono">${r.p3Score.toFixed(2)}</td>
-          <td class="py-2.5 px-3 font-bold text-emerald-400 font-mono">${r.totalScore.toFixed(2)}</td>
-          <td class="py-2.5 px-3 text-slate-400">${r.timestamp}</td>
+          <td class="py-3 px-3 text-slate-400">${i + 1}</td>
+          <td class="py-3 px-3 font-bold text-white font-mono">${r.sbd}</td>
+          <td class="py-3 px-3 font-mono text-emerald-400">${r.examCode}</td>
+          <td class="py-3 px-3 font-mono">${r.p1Score.toFixed(2)}</td>
+          <td class="py-3 px-3 font-mono">${r.p2Score.toFixed(2)}</td>
+          <td class="py-3 px-3 font-mono">${r.p3Score.toFixed(2)}</td>
+          <td class="py-3 px-3 font-extrabold text-emerald-400 font-mono">${r.totalScore.toFixed(2)}</td>
+          <td class="py-3 px-3 text-slate-400">${r.timestamp}</td>
         </tr>
       `).join('');
     }
@@ -870,17 +833,17 @@
       }));
       const ws = XLSX.utils.json_to_sheet(rows);
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'BangDiem_QM2025');
-      XLSX.writeFile(wb, `BangDiem_QM2025_${new Date().toISOString().slice(0,10)}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, ws, 'EduChamDe2025');
+      XLSX.writeFile(wb, `EduChamDe2025_${new Date().toISOString().slice(0,10)}.xlsx`);
     }
 
     function clearAllGrades() {
       gradedRecords = [];
-      localStorage.setItem('qm2025_grades', '[]');
+      localStorage.setItem('educhamde2025_grades', '[]');
       renderGradesTable();
     }
 
-    document.getElementById('headerTemplateSelect').value = currentTemplateId;
+    renderSubjectCards();
     loadDefaultSampleKeys();
     renderGradesTable();
   </script>
