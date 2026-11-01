@@ -1,0 +1,6 @@
+{
+  "name": "QM 2025 OMR - Chấm Thi Trắc Nghiệm Camera",
+  "description": "Ứng dụng chấm thi trắc nghiệm tự động bằng Camera theo chuẩn Bộ GD&ĐT 2025 (Phiếu QM 2025) - Tác giả: Hồ Tấn Khải, THPT Mang Thít, Vĩnh Long.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
