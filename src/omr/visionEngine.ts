@@ -634,40 +634,48 @@ export function gradeWarpedSheet(
   // A. Đọc Mã Đề (3 hoặc 4 cột tùy mẫu phiếu)
   const maDeColCount = map.maDe.length;
   let examCode = '';
-  for (let col = 0; col < maDeColCount; col++) {
-    const fills = map.maDe[col].map((b) => measureBubbleFill(gray, width, height, b));
-    const maxFill = Math.max(...fills);
-    const maxIdx = fills.indexOf(maxFill);
-    if (maxFill >= thresh * 0.85) {
-      examCode += String(maxIdx);
-      const b = map.maDe[col][maxIdx];
-      outCtx.strokeStyle = '#06b6d4';
-      outCtx.lineWidth = 2;
-      outCtx.beginPath();
-      outCtx.arc(b.x, b.y, b.r + 1.5, 0, Math.PI * 2);
-      outCtx.stroke();
-    } else {
-      examCode += '?';
+  if (maDeColCount === 0) {
+    examCode = Object.keys(answerKeys)[0] || '101';
+  } else {
+    for (let col = 0; col < maDeColCount; col++) {
+      const fills = map.maDe[col].map((b) => measureBubbleFill(gray, width, height, b));
+      const maxFill = Math.max(...fills);
+      const maxIdx = fills.indexOf(maxFill);
+      if (maxFill >= thresh * 0.85) {
+        examCode += String(maxIdx);
+        const b = map.maDe[col][maxIdx];
+        outCtx.strokeStyle = '#10b981';
+        outCtx.lineWidth = 2.2;
+        outCtx.beginPath();
+        outCtx.arc(b.x, b.y, b.r + 1.5, 0, Math.PI * 2);
+        outCtx.stroke();
+      } else {
+        examCode += '?';
+      }
     }
   }
 
   // B. Đọc Số Báo Danh (6 hoặc 8 cột tùy mẫu phiếu)
   const sbdColCount = map.sbd.length;
   let rawSbd = '';
-  for (let col = 0; col < sbdColCount; col++) {
-    const fills = map.sbd[col].map((b) => measureBubbleFill(gray, width, height, b));
-    const maxFill = Math.max(...fills);
-    const maxIdx = fills.indexOf(maxFill);
-    if (maxFill >= thresh * 0.85) {
-      rawSbd += String(maxIdx);
-      const b = map.sbd[col][maxIdx];
-      outCtx.strokeStyle = '#3b82f6';
-      outCtx.lineWidth = 2;
-      outCtx.beginPath();
-      outCtx.arc(b.x, b.y, b.r + 1.5, 0, Math.PI * 2);
-      outCtx.stroke();
-    } else {
-      rawSbd += '?';
+  if (sbdColCount === 0) {
+    rawSbd = '010001';
+  } else {
+    for (let col = 0; col < sbdColCount; col++) {
+      const fills = map.sbd[col].map((b) => measureBubbleFill(gray, width, height, b));
+      const maxFill = Math.max(...fills);
+      const maxIdx = fills.indexOf(maxFill);
+      if (maxFill >= thresh * 0.85) {
+        rawSbd += String(maxIdx);
+        const b = map.sbd[col][maxIdx];
+        outCtx.strokeStyle = '#10b981';
+        outCtx.lineWidth = 2.2;
+        outCtx.beginPath();
+        outCtx.arc(b.x, b.y, b.r + 1.5, 0, Math.PI * 2);
+        outCtx.stroke();
+      } else {
+        rawSbd += '?';
+      }
     }
   }
 
@@ -677,10 +685,10 @@ export function gradeWarpedSheet(
       ? rawSbd.slice(0, 6)
       : rawSbd;
 
-  if (examCode.includes('?')) {
+  if (maDeColCount > 0 && examCode.includes('?')) {
     warnings.push(`Mã đề chưa tô đủ ${maDeColCount} chữ số (${examCode})`);
   }
-  if (sbd.includes('?')) {
+  if (sbdColCount > 0 && sbd.includes('?')) {
     warnings.push(`SBD có cột chưa tô (${sbd})`);
   }
 

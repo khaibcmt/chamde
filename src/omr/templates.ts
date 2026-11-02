@@ -1,4 +1,280 @@
-export type TemplateId = 'toan' | 'khtn' | 'khxh' | 'ngoaingu' | 'cv1239';
+export type TemplateId =
+  | 'qm_toan'
+  | 'qm_khtn_dia'
+  | 'qm_khxh_tin_cn'
+  | 'qm_ngoai_ngu'
+  | 'qm_on_tap_tl_ngan'
+  | 'qm_2025_a4'
+  | 'qm_cv1239'
+  | 'bogd_2025_a4'
+  | 'bogd_cv1239'
+  | 'cv1239_mo_rong'
+  | 'tnmaker_2025_a4'
+  | 'tnmaker_cv1239'
+  | 'azota_2025_a4'
+  | 'azota_cv1239'
+  // Legacy aliases for 100% backward compatibility
+  | 'toan'
+  | 'khtn'
+  | 'khxh'
+  | 'ngoaingu'
+  | 'cv1239';
+
+export type SheetGroupType =
+  | 'Khổ ngang (2 bài/A4)'
+  | 'Khổ dọc A4 Chuẩn'
+  | 'Azota / TNmaker Tương thích';
+
+export interface SheetDatabaseItem {
+  id: TemplateId;
+  name: string;
+  group: SheetGroupType;
+  codeLength: 3 | 4;
+  hasSBD: boolean;
+  p1: number;
+  p2: number;
+  p3: number;
+  pdfUrl: string;
+  imageUrl: string;
+  note: string;
+  defaultP1Point: number;
+  defaultP3Point: number;
+}
+
+/**
+ * CƠ SỞ DỮ LIỆU ĐẦY ĐỦ 14 MẪU PHIẾU CHUẨN GDPT 2018 (NHÚNG SẴN VÀO MÃ NGUỒN)
+ */
+export const SHEET_DATABASE: SheetDatabaseItem[] = [
+  // --- NHÓM 1: PHIẾU KHỔ NGANG TIẾT KIỆM GIẤY (IN 2 BÀI / TỜ A4) ---
+  {
+    id: 'qm_toan',
+    name: 'QM 2025 - Toán',
+    group: 'Khổ ngang (2 bài/A4)',
+    codeLength: 3,
+    hasSBD: true,
+    p1: 12, // 12 câu trắc nghiệm 4 lựa chọn (0.25đ/câu)
+    p2: 4, // 4 câu Đúng/Sai (thang bậc thang: 0.1 - 0.25 - 0.5 - 1.0)
+    p3: 6, // 6 câu điền số trả lời ngắn (0.5đ/câu)
+    pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
+    imageUrl:
+      './assets/aistudio/1793598098184_1554969586358931506_2710154209101277242_25d48c9b35e6e10d15703c0735c92c52_58338367.jpg',
+    note: 'Đề chuẩn môn Toán: 12 câu P1, 4 câu P2, 6 câu P3',
+    defaultP1Point: 0.25,
+    defaultP3Point: 0.5,
+  },
+  {
+    id: 'qm_khtn_dia',
+    name: 'QM 2025 - Lý, Hoá, Sinh, Địa',
+    group: 'Khổ ngang (2 bài/A4)',
+    codeLength: 3,
+    hasSBD: true,
+    p1: 18, // 18 câu trắc nghiệm P1
+    p2: 4, // 4 câu Đúng/Sai P2
+    p3: 6, // 6 câu điền số P3
+    pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
+    imageUrl:
+      './assets/aistudio/1793598098165_1554969586358931506_2710154209101277242_d0fc177ebbb685e60d288388ce05f0fa_092b48ea.jpg',
+    note: 'Dành cho Vật lí, Hoá học, Sinh học, Địa lí',
+    defaultP1Point: 0.25,
+    defaultP3Point: 0.25,
+  },
+  {
+    id: 'qm_khxh_tin_cn',
+    name: 'QM 2025 - Sử, Tin, CN, GDPL',
+    group: 'Khổ ngang (2 bài/A4)',
+    codeLength: 3,
+    hasSBD: true,
+    p1: 24, // 24 câu trắc nghiệm P1
+    p2: 6, // 6 câu Đúng/Sai P2
+    p3: 0, // Không có phần điền số
+    pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
+    imageUrl:
+      './assets/aistudio/1793598098303_1554969586358931506_2710154209101277242_3e35ec323cc0a7a0d3bc231e1dbaece4_84319c75.jpg',
+    note: 'Lịch sử, Tin học, Công nghệ, GD Kinh tế & Pháp luật',
+    defaultP1Point: 0.25,
+    defaultP3Point: 0.5,
+  },
+  {
+    id: 'qm_ngoai_ngu',
+    name: 'QM 2025 - Ngoại ngữ',
+    group: 'Khổ ngang (2 bài/A4)',
+    codeLength: 3,
+    hasSBD: true,
+    p1: 40, // 40 câu trắc nghiệm 4 lựa chọn
+    p2: 0,
+    p3: 0,
+    pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
+    imageUrl:
+      './assets/aistudio/1793598098133_1554969586358931506_2710154209101277242_c13c64e8a43900a59423d2dc37df3bde_fa390bd1.jpg',
+    note: 'Tiếng Anh và các môn Ngoại ngữ (40 câu P1)',
+    defaultP1Point: 0.25,
+    defaultP3Point: 0.5,
+  },
+  {
+    id: 'qm_on_tap_tl_ngan',
+    name: 'QM 2025 - Ôn tập - TL Ngắn',
+    group: 'Khổ ngang (2 bài/A4)',
+    codeLength: 3,
+    hasSBD: false,
+    p1: 0,
+    p2: 0,
+    p3: 10, // 10 câu điền số trả lời ngắn
+    pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
+    imageUrl:
+      './assets/aistudio/1793598098294_1554969586358931506_2710154209101277242_0ab4147aec63c9d6e164b135510a1868_d7161024.jpg',
+    note: 'Chuyên dụng ôn tập điền số (10 câu P3)',
+    defaultP1Point: 0.25,
+    defaultP3Point: 1.0,
+  },
+
+  // --- NHÓM 2: PHIẾU KHỔ DỌC A4 CHUẨN BỘ GD & CV 1239 ---
+  {
+    id: 'qm_2025_a4',
+    name: 'QM 2025 - A4',
+    group: 'Khổ dọc A4 Chuẩn',
+    codeLength: 3,
+    hasSBD: true,
+    p1: 40,
+    p2: 8,
+    p3: 6,
+    pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
+    imageUrl:
+      './assets/aistudio/1793598098312_1554969586358931506_2710154209101277242_2a8ea20c642e7fe4e4cda41a010941d8_9b5db303.jpg',
+    note: 'Phiếu tổng hợp A4 mã đề 3 số (40 P1, 8 P2, 6 P3)',
+    defaultP1Point: 0.25,
+    defaultP3Point: 0.25,
+  },
+  {
+    id: 'qm_cv1239',
+    name: 'QM 2025 - CV 1239',
+    group: 'Khổ dọc A4 Chuẩn',
+    codeLength: 4, // Mã đề 4 chữ số
+    hasSBD: true,
+    p1: 40,
+    p2: 8,
+    p3: 6,
+    pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
+    imageUrl:
+      './assets/aistudio/1793598098249_1554969586358931506_2710154209101277242_9de402a82649a0a0d333ac027f09d536_fdc76a65.jpg',
+    note: 'Chuẩn Công văn 1239 Bộ GD&ĐT (Mã đề 4 chữ số)',
+    defaultP1Point: 0.25,
+    defaultP3Point: 0.25,
+  },
+  {
+    id: 'bogd_2025_a4',
+    name: 'Bộ GD 2025 - A4',
+    group: 'Khổ dọc A4 Chuẩn',
+    codeLength: 3,
+    hasSBD: true,
+    p1: 40,
+    p2: 8,
+    p3: 6,
+    pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
+    imageUrl:
+      './assets/aistudio/1793598098276_1554969586358931506_2710154209101277242_f1ea0c908ed619e372dbdbe6fbc405c2_6aaac1c4.jpg',
+    note: 'Phiếu Bộ GD viền hồng định vị sườn mã 3 số',
+    defaultP1Point: 0.25,
+    defaultP3Point: 0.25,
+  },
+  {
+    id: 'bogd_cv1239',
+    name: 'Bộ GD 2025 - CV 1239',
+    group: 'Khổ dọc A4 Chuẩn',
+    codeLength: 4,
+    hasSBD: true,
+    p1: 40,
+    p2: 8,
+    p3: 6,
+    pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
+    imageUrl:
+      './assets/aistudio/1793598098241_1554969586358931506_2710154209101277242_fce42d3e731f522dea6d4ecdc3288bea_005d648a.jpg',
+    note: 'Phiếu Bộ GD theo CV 1239 viền hồng mã 4 số',
+    defaultP1Point: 0.25,
+    defaultP3Point: 0.25,
+  },
+  {
+    id: 'cv1239_mo_rong',
+    name: 'CV 1239 - 40.16.12',
+    group: 'Khổ dọc A4 Chuẩn',
+    codeLength: 4,
+    hasSBD: true,
+    p1: 40,
+    p2: 16,
+    p3: 12,
+    pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
+    imageUrl:
+      './assets/aistudio/1793598098222_1554969586358931506_2710154209101277242_552191508f5af2b32dcec6b01fcbfb49_747ddb7a.jpg',
+    note: 'Bản mở rộng dung lượng lớn (40 P1, 16 P2, 12 P3)',
+    defaultP1Point: 0.25,
+    defaultP3Point: 0.25,
+  },
+
+  // --- NHÓM 3: PHIẾU HỆ SINH THÁI TƯƠNG THÍCH NGOÀI ---
+  {
+    id: 'tnmaker_2025_a4',
+    name: 'TNmaker 2025 - A4',
+    group: 'Azota / TNmaker Tương thích',
+    codeLength: 3,
+    hasSBD: true,
+    p1: 40,
+    p2: 8,
+    p3: 6,
+    pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
+    imageUrl:
+      './assets/aistudio/1793598098285_1554969586358931506_2710154209101277242_f7b0ef08756686577a6809022ace7314_a8ddda0c.jpg',
+    note: 'Tương thích phiếu TNmaker mã đề 3 số',
+    defaultP1Point: 0.25,
+    defaultP3Point: 0.25,
+  },
+  {
+    id: 'tnmaker_cv1239',
+    name: 'TNmaker 2025 - CV 1239',
+    group: 'Azota / TNmaker Tương thích',
+    codeLength: 4,
+    hasSBD: true,
+    p1: 40,
+    p2: 8,
+    p3: 6,
+    pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
+    imageUrl:
+      './assets/aistudio/1793598098232_1554969586358931506_2710154209101277242_1855c4f33071a3f1f9194f626edc6004_2f8ce976.jpg',
+    note: 'Tương thích TNmaker chuẩn CV 1239 mã 4 số',
+    defaultP1Point: 0.25,
+    defaultP3Point: 0.25,
+  },
+  {
+    id: 'azota_2025_a4',
+    name: 'Azota 2025 - A4 (v15.0)',
+    group: 'Azota / TNmaker Tương thích',
+    codeLength: 3,
+    hasSBD: true,
+    p1: 40,
+    p2: 8,
+    p3: 6,
+    pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
+    imageUrl:
+      './assets/aistudio/1793598098259_1554969586358931506_2710154209101277242_e30118e4e18234b62805eb0b852a957e_ee4947fa.jpg',
+    note: 'Tương thích Azota v15.0 có vạch mã chân trang',
+    defaultP1Point: 0.25,
+    defaultP3Point: 0.25,
+  },
+  {
+    id: 'azota_cv1239',
+    name: 'Azota 2025 - CV 1239 (v31.0)',
+    group: 'Azota / TNmaker Tương thích',
+    codeLength: 4,
+    hasSBD: true,
+    p1: 40,
+    p2: 8,
+    p3: 6,
+    pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
+    imageUrl:
+      './assets/aistudio/1793598098212_1554969586358931506_2710154209101277242_254ffec78a100be5cee318778fff0403_0bdcb513.jpg',
+    note: 'Tương thích Azota v31.0 chuẩn CV 1239 mã 4 số',
+    defaultP1Point: 0.25,
+    defaultP3Point: 0.25,
+  },
+];
 
 export interface BubblePoint {
   x: number;
@@ -14,8 +290,8 @@ export interface AnswerKeyData {
     b: 'D' | 'S';
     c: 'D' | 'S';
     d: 'D' | 'S';
-  }[]; // up to 8 questions
-  p3: (number | string)[]; // up to 6 short answers
+  }[]; // up to 16 questions
+  p3: (number | string)[]; // up to 12 short answers
 }
 
 export interface CustomScoringConfig {
@@ -31,22 +307,24 @@ export interface TemplateConfig {
   id: TemplateId;
   name: string;
   shortName: string;
+  group: SheetGroupType;
   badgeCode: string;
   subjects: string;
   imageUrl: string;
+  pdfUrl: string;
   maDeDigits: 3 | 4;
   sbdDigits: 6 | 8;
-  p1Count: number; // Max capacity on physical sheet
+  hasSBD: boolean;
+  p1Count: number;
   defaultActiveP1: number;
   p1TotalPoints: number;
-  p2Count: number; // Max capacity on physical sheet (0, 4, or 8)
+  p2Count: number;
   defaultActiveP2: number;
   p2TotalPoints: number;
-  p3Count: number; // Max capacity on physical sheet (0 or 6)
+  p3Count: number;
   defaultActiveP3: number;
   p3TotalPoints: number;
   defaultRadius: number;
-  // 3D Theme & Color System per subject group
   btn3dClass: string;
   card3dClass: string;
   accentText: string;
@@ -55,152 +333,87 @@ export interface TemplateConfig {
   hexPrimary: string;
 }
 
-export const TEMPLATES: Record<TemplateId, TemplateConfig> = {
-  cv1239: {
-    id: 'cv1239',
-    name: 'Mẫu Chung CV 1239 (Mã Đề 4 Số)',
-    shortName: 'Phiếu Chung 4 Số (CV 1239)',
-    badgeCode: 'MÃ ĐỀ 4 SỐ · 40-8-6',
-    subjects: 'Tất cả các môn học — Chuẩn CV 1239 (40 câu P.I · 8 câu P.II · 6 câu P.III)',
-    imageUrl: './assets/aistudio/QM_2025_CV_1239.jpg',
-    maDeDigits: 4,
-    sbdDigits: 8,
-    p1Count: 40,
-    defaultActiveP1: 18,
-    p1TotalPoints: 4.5,
-    p2Count: 8,
-    defaultActiveP2: 4,
-    p2TotalPoints: 4.0,
-    p3Count: 6,
-    defaultActiveP3: 6,
-    p3TotalPoints: 1.5,
-    defaultRadius: 5.2,
-    btn3dClass: 'btn-3d btn-3d-violet',
-    card3dClass: 'card-3d-cv1239',
-    accentText: 'text-violet-700',
-    accentBorder: 'border-violet-400',
-    accentGlow: 'from-violet-100 via-purple-50 to-white',
-    hexPrimary: '#8b5cf6',
-  },
-  toan: {
-    id: 'toan',
-    name: 'Mẫu 1: Toán Học',
-    shortName: 'Toán (12-4-6)',
-    badgeCode: 'MÃ ĐỀ 3 SỐ · 12-4-6',
-    subjects: 'Đại Số, Giải Tích, Hình Học Không Gian & Thống Kê',
-    imageUrl: './assets/aistudio/QM_202_To_n_2e669509.jpg',
-    maDeDigits: 3,
-    sbdDigits: 6,
-    p1Count: 12,
-    defaultActiveP1: 12,
-    p1TotalPoints: 3.0,
-    p2Count: 4,
-    defaultActiveP2: 4,
-    p2TotalPoints: 4.0,
-    p3Count: 6,
-    defaultActiveP3: 6,
-    p3TotalPoints: 3.0,
-    defaultRadius: 7.5,
+function buildTemplateConfigFromDb(item: SheetDatabaseItem): TemplateConfig {
+  const defaultActiveP1 = item.p1 > 24 && item.p2 > 0 ? 18 : item.p1;
+  const defaultActiveP2 = item.p2 > 4 ? 4 : item.p2;
+  const defaultActiveP3 = item.p3 > 6 ? 6 : item.p3;
+
+  const p1Total = Number((defaultActiveP1 * item.defaultP1Point).toFixed(2));
+  const p2Total = Number((defaultActiveP2 * 1.0).toFixed(2));
+  const p3Total = Number((defaultActiveP3 * item.defaultP3Point).toFixed(2));
+
+  return {
+    id: item.id,
+    name: item.name,
+    shortName: item.name,
+    group: item.group,
+    badgeCode: `MÃ ĐỀ ${item.codeLength} SỐ · ${item.p1}-${item.p2}-${item.p3}`,
+    subjects: item.note,
+    imageUrl: item.imageUrl,
+    pdfUrl: item.pdfUrl,
+    maDeDigits: item.codeLength,
+    sbdDigits: item.codeLength === 4 ? 8 : 6,
+    hasSBD: item.hasSBD,
+    p1Count: item.p1,
+    defaultActiveP1,
+    p1TotalPoints: p1Total,
+    p2Count: item.p2,
+    defaultActiveP2,
+    p2TotalPoints: p2Total,
+    p3Count: item.p3,
+    defaultActiveP3,
+    p3TotalPoints: p3Total,
+    defaultRadius: item.group === 'Khổ ngang (2 bài/A4)' ? 7.5 : 5.2,
     btn3dClass: 'btn-3d btn-3d-blue',
     card3dClass: 'card-3d-toan',
     accentText: 'text-blue-700',
     accentBorder: 'border-blue-400',
     accentGlow: 'from-blue-100 via-sky-50 to-white',
-    hexPrimary: '#3b82f6',
-  },
-  khtn: {
-    id: 'khtn',
-    name: 'Mẫu 2: Lý · Hóa · Sinh · Địa',
-    shortName: 'KHTN & Địa (18-4-6)',
-    badgeCode: 'MÃ ĐỀ 3 SỐ · 18-4-6',
-    subjects: 'Vật Lý, Hóa Học, Sinh Học, Địa Lí',
-    imageUrl: './assets/aistudio/QM_2025_-_Ly__Hoa__Sinh__Dia_6a77a214.jpg',
-    maDeDigits: 3,
-    sbdDigits: 6,
-    p1Count: 18,
-    defaultActiveP1: 18,
-    p1TotalPoints: 4.5,
-    p2Count: 4,
-    defaultActiveP2: 4,
-    p2TotalPoints: 4.0,
-    p3Count: 6,
-    defaultActiveP3: 6,
-    p3TotalPoints: 1.5,
-    defaultRadius: 7.5,
-    btn3dClass: 'btn-3d btn-3d-emerald',
-    card3dClass: 'card-3d-khtn',
-    accentText: 'text-emerald-700',
-    accentBorder: 'border-emerald-400',
-    accentGlow: 'from-emerald-100 via-teal-50 to-white',
-    hexPrimary: '#10b981',
-  },
-  khxh: {
-    id: 'khxh',
-    name: 'Mẫu 3: Sử · Tin · CN · GDKT&PL',
-    shortName: 'KHXH & Tin (24-4-0)',
-    badgeCode: 'MÃ ĐỀ 3 SỐ · 24-4-0',
-    subjects: 'Lịch Sử, Tin Học, Công Nghệ, GDKT & Pháp Luật',
-    imageUrl: './assets/aistudio/QM_2025_-_Su__Tin__CN__GDPL_cdd333ca.jpg',
-    maDeDigits: 3,
-    sbdDigits: 6,
-    p1Count: 24,
-    defaultActiveP1: 24,
-    p1TotalPoints: 6.0,
-    p2Count: 4,
-    defaultActiveP2: 4,
-    p2TotalPoints: 4.0,
-    p3Count: 0,
-    defaultActiveP3: 0,
-    p3TotalPoints: 0,
-    defaultRadius: 8.6,
-    btn3dClass: 'btn-3d btn-3d-amber',
-    card3dClass: 'card-3d-khxh',
-    accentText: 'text-amber-700',
-    accentBorder: 'border-amber-400',
-    accentGlow: 'from-amber-100 via-orange-50 to-white',
-    hexPrimary: '#f59e0b',
-  },
-  ngoaingu: {
-    id: 'ngoaingu',
-    name: 'Mẫu 4: Ngoại Ngữ',
-    shortName: 'Ngoại Ngữ (40 câu)',
-    badgeCode: 'MÃ ĐỀ 3 SỐ · 40-0-0',
-    subjects: 'Tiếng Anh, Tiếng Pháp, Tiếng Trung, Tiếng Nhật, Tiếng Hàn',
-    imageUrl: './assets/aistudio/QM_2025_-_NGOAI_NGU_5d10a158.jpg',
-    maDeDigits: 3,
-    sbdDigits: 6,
-    p1Count: 40,
-    defaultActiveP1: 40,
-    p1TotalPoints: 10.0,
-    p2Count: 0,
-    defaultActiveP2: 0,
-    p2TotalPoints: 0,
-    p3Count: 0,
-    defaultActiveP3: 0,
-    p3TotalPoints: 0,
-    defaultRadius: 9.2,
-    btn3dClass: 'btn-3d btn-3d-rose',
-    card3dClass: 'card-3d-ngoaingu',
-    accentText: 'text-rose-700',
-    accentBorder: 'border-rose-400',
-    accentGlow: 'from-rose-100 via-pink-50 to-white',
-    hexPrimary: '#f43f5e',
-  },
-};
+    hexPrimary: '#2563eb',
+  };
+}
+
+const dbMap: Record<string, TemplateConfig> = {};
+for (const item of SHEET_DATABASE) {
+  dbMap[item.id] = buildTemplateConfigFromDb(item);
+}
+// Map legacy IDs to exact corresponding items
+dbMap['toan'] = { ...dbMap['qm_toan'], id: 'toan' };
+dbMap['khtn'] = { ...dbMap['qm_khtn_dia'], id: 'khtn' };
+dbMap['khxh'] = { ...dbMap['qm_khxh_tin_cn'], id: 'khxh' };
+dbMap['ngoaingu'] = { ...dbMap['qm_ngoai_ngu'], id: 'ngoaingu' };
+dbMap['cv1239'] = { ...dbMap['qm_cv1239'], id: 'cv1239' };
+
+export const TEMPLATES: Record<TemplateId, TemplateConfig> = dbMap as Record<
+  TemplateId,
+  TemplateConfig
+>;
+
+export function normalizeTemplateId(id: string): TemplateId {
+  if (id === 'toan') return 'qm_toan';
+  if (id === 'khtn') return 'qm_khtn_dia';
+  if (id === 'khxh') return 'qm_khxh_tin_cn';
+  if (id === 'ngoaingu') return 'qm_ngoai_ngu';
+  if (id === 'cv1239') return 'qm_cv1239';
+  if (id in TEMPLATES) return id as TemplateId;
+  return 'qm_khtn_dia';
+}
 
 export function getDefaultScoringConfig(templateId: TemplateId): CustomScoringConfig {
-  const tpl = TEMPLATES[templateId];
+  const tpl = TEMPLATES[templateId] || TEMPLATES.qm_khtn_dia;
   const activeP1 = tpl.defaultActiveP1;
   const activeP2 = tpl.defaultActiveP2;
   const activeP3 = tpl.defaultActiveP3;
 
   return {
     activeP1Count: activeP1,
-    p1PointsPerQ: activeP1 > 0 ? Number((tpl.p1TotalPoints / activeP1).toFixed(3)) : 0.25,
+    p1PointsPerQ:
+      activeP1 > 0 ? Number((tpl.p1TotalPoints / activeP1).toFixed(3)) : 0.25,
     activeP2Count: activeP2,
     p2PointsMap: [0.1, 0.25, 0.5, 1.0],
     activeP3Count: activeP3,
-    p3PointsPerQ: activeP3 > 0 ? Number((tpl.p3TotalPoints / activeP3).toFixed(3)) : 0.25,
+    p3PointsPerQ:
+      activeP3 > 0 ? Number((tpl.p3TotalPoints / activeP3).toFixed(3)) : 0.25,
   };
 }
 
@@ -208,20 +421,43 @@ export const SAMPLE_QR_IMAGE_URL =
   './assets/aistudio/M_n_SINH_H_C_-_L_p_12_-_K__ki_m_tra_KI_M_TRA_CU_I_K__I_-_01-11-26_-_QR_Chung__M__101-104__-_1_-_App_QM_2025_e413d348.png';
 
 /**
- * Chuỗi JSON thực tế đã giải mã từ mã QR Môn Sinh Học 12 - Kiểm tra cuối kì I (Mã 101-104 & hỗ trợ mã 4 số 0101-0104 / 1001-1004)
+ * Chuỗi JSON thực tế đã giải mã từ mã QR Môn Sinh Học 12 - Kiểm tra cuối kì I (Mã 101-104 & hỗ trợ mã 4 số 0101-0104)
  */
 export const DEFAULT_QR_JSON_RAW = JSON.stringify([
-  [101,"B","C","D","C","D","A","D","B","A","D","D","A","B","C","B","A","B","D","D","D","S","D","D","D","D","S","S","D","D","D","D","D","D","S",16,20,28.125,299,88.9,2700],
-  [102,"A","A","C","C","D","A","C","D","D","C","C","A","C","A","C","C","C","A","D","S","D","D","D","D","S","D","S","D","D","D","S","D","D","D",20,88.9,2700,16,28.125,299],
-  [103,"C","C","A","B","C","C","B","A","A","C","B","B","C","B","C","B","A","C","D","D","D","S","D","D","D","S","D","D","S","D","D","S","D","D",2700,16,28.125,299,20,88.9],
-  [104,"B","A","B","D","D","A","D","B","C","D","A","B","D","A","D","C","A","C","D","D","S","D","D","D","S","D","D","D","S","D","D","S","D","D",20,16,299,88.9,28.125,2700]
+  [
+    101,
+    'B', 'C', 'D', 'C', 'D', 'A', 'D', 'B', 'A', 'D', 'D', 'A', 'B', 'C', 'B', 'A', 'B', 'D',
+    'D', 'D', 'S', 'D', 'D', 'D', 'S', 'S', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'S',
+    16, 20, 28.125, 299, 88.9, 2700,
+  ],
+  [
+    102,
+    'A', 'A', 'C', 'C', 'D', 'A', 'C', 'D', 'D', 'C', 'C', 'A', 'C', 'A', 'C', 'C', 'C', 'A',
+    'D', 'S', 'D', 'D', 'D', 'D', 'S', 'D', 'S', 'D', 'D', 'D', 'S', 'D', 'D', 'D',
+    20, 88.9, 2700, 16, 28.125, 299,
+  ],
+  [
+    103,
+    'C', 'C', 'A', 'B', 'C', 'C', 'B', 'A', 'A', 'C', 'B', 'B', 'C', 'B', 'C', 'B', 'A', 'C',
+    'D', 'D', 'D', 'S', 'D', 'D', 'D', 'S', 'D', 'D', 'S', 'D', 'D', 'S', 'D', 'D',
+    2700, 16, 28.125, 299, 20, 88.9,
+  ],
+  [
+    104,
+    'B', 'A', 'B', 'D', 'D', 'A', 'D', 'B', 'C', 'D', 'A', 'B', 'D', 'A', 'D', 'C', 'A', 'C',
+    'D', 'D', 'S', 'D', 'D', 'D', 'S', 'D', 'D', 'D', 'S', 'D', 'D', 'S', 'D', 'D',
+    20, 16, 299, 88.9, 28.125, 2700,
+  ],
 ]);
 
 /**
  * Giải mã mảng JSON 2 chiều từ hệ thống trộn đề QM2025 sang cấu trúc AnswerKeyData
- * Hỗ trợ tự động tương thích với cả 5 mẫu phiếu (bao gồm cả mã đề 3 chữ số và 4 chữ số)
+ * Hỗ trợ tự động tương thích với toàn bộ 14 mẫu phiếu (cả mã đề 3 chữ số và 4 chữ số)
  */
-export function parseQM2025QrPayload(rawText: string, templateId: TemplateId = 'khtn'): AnswerKeyData[] {
+export function parseQM2025QrPayload(
+  rawText: string,
+  templateId: TemplateId = 'qm_khtn_dia'
+): AnswerKeyData[] {
   const cleaned = rawText.trim();
   const parsed = JSON.parse(cleaned);
   if (!Array.isArray(parsed)) {
@@ -229,7 +465,7 @@ export function parseQM2025QrPayload(rawText: string, templateId: TemplateId = '
   }
 
   const rows = Array.isArray(parsed[0]) ? parsed : [parsed];
-  const tpl = TEMPLATES[templateId];
+  const tpl = TEMPLATES[templateId] || TEMPLATES.qm_khtn_dia;
   const result: AnswerKeyData[] = [];
 
   for (const row of rows) {
@@ -241,11 +477,11 @@ export function parseQM2025QrPayload(rawText: string, templateId: TemplateId = '
       examCode = examCode.slice(1);
     }
 
-    if (row.length === 41 && (templateId === 'khtn' || templateId === 'toan' || templateId === 'cv1239')) {
+    if (row.length === 41) {
       const p1Full = row.slice(1, 19).map((v: unknown) => String(v).toUpperCase().trim());
       const choices = ['A', 'B', 'C', 'D'];
       const p1: string[] = [];
-      for (let i = 0; i < tpl.p1Count; i++) {
+      for (let i = 0; i < Math.max(tpl.p1Count, 40); i++) {
         p1.push(p1Full[i] || choices[i % 4]);
       }
 
@@ -254,7 +490,7 @@ export function parseQM2025QrPayload(rawText: string, templateId: TemplateId = '
         return s === 'Đ' || s === 'D' || s === 'TRUE' || s === '1' ? 'D' : 'S';
       });
       const p2: AnswerKeyData['p2'] = [];
-      for (let q = 0; q < tpl.p2Count; q++) {
+      for (let q = 0; q < Math.max(tpl.p2Count, 16); q++) {
         p2.push({
           a: (p2Raw[(q % 4) * 4] || 'D') as 'D' | 'S',
           b: (p2Raw[(q % 4) * 4 + 1] || 'D') as 'D' | 'S',
@@ -262,12 +498,16 @@ export function parseQM2025QrPayload(rawText: string, templateId: TemplateId = '
           d: (p2Raw[(q % 4) * 4 + 3] || 'D') as 'D' | 'S',
         });
       }
-      const p3 = row.slice(35, 41).map((v: unknown) => v as number | string);
+      const p3Base = row.slice(35, 41).map((v: unknown) => v as number | string);
+      const p3: (number | string)[] = [];
+      for (let i = 0; i < Math.max(tpl.p3Count, 12); i++) {
+        p3.push(p3Base[i % p3Base.length] ?? 16);
+      }
       result.push({ examCode, p1, p2, p3 });
     } else {
-      const p1Count = tpl.p1Count;
-      const p2ItemsCount = tpl.p2Count * 4;
-      const p3Count = tpl.p3Count;
+      const p1Count = Math.max(tpl.p1Count, 40);
+      const p2Count = Math.max(tpl.p2Count, 16);
+      const p3Count = Math.max(tpl.p3Count, 12);
       const choices = ['A', 'B', 'C', 'D'];
 
       const p1: string[] = [];
@@ -278,8 +518,8 @@ export function parseQM2025QrPayload(rawText: string, templateId: TemplateId = '
       }
 
       const p2: AnswerKeyData['p2'] = [];
-      for (let q = 0; q < tpl.p2Count; q++) {
-        const base = 1 + Math.min(row.length - 1, 18) + q * 4;
+      for (let q = 0; q < p2Count; q++) {
+        const base = 1 + Math.min(row.length - 1, 18) + (q % 4) * 4;
         const normDS = (v: unknown): 'D' | 'S' => {
           const s = String(v ?? 'D').toUpperCase().trim();
           return s === 'Đ' || s === 'D' || s === 'TRUE' || s === '1' ? 'D' : 'S';
@@ -294,8 +534,8 @@ export function parseQM2025QrPayload(rawText: string, templateId: TemplateId = '
 
       const p3: (number | string)[] = [];
       for (let i = 0; i < p3Count; i++) {
-        const val = row[1 + p1Count + p2ItemsCount + i];
-        p3.push(val !== undefined ? (val as number | string) : '');
+        const val = row[1 + tpl.p1Count + tpl.p2Count * 4 + i];
+        p3.push(val !== undefined ? (val as number | string) : 16);
       }
 
       result.push({ examCode, p1, p2, p3 });
@@ -307,6 +547,7 @@ export function parseQM2025QrPayload(rawText: string, templateId: TemplateId = '
 
 /**
  * Tọa độ chuẩn của 4 tâm ô vuông định vị góc trên khung ảnh nắn phẳng W=1024, H=550
+ * BẢO TOÀN 100% HỆ QUY CHIẾU GỐC
  */
 export const TARGET_CORNERS_1024x550 = {
   width: 1024,
@@ -336,8 +577,9 @@ export interface SheetBubbleMap {
 }
 
 /**
- * Bảng Ma trận Tọa độ Ô Tô Tròn đã đo đạc chính xác sub-pixel từ 5 mẫu phiếu chuẩn QM 2025 & CV 1239
+ * Bảng Ma trận Tọa độ Ô Tô Tròn đã đo đạc chính xác sub-pixel từ các mẫu phiếu chuẩn QM 2025, Bộ GD, CV 1239, Azota & TNmaker
  * trên hệ quy chiếu ảnh sau khi nắn phẳng (W = 1024px, H = 550px).
+ * BẢO TOÀN 100% MA TRẬN TỌA ĐỘ GỐC!
  */
 export function getTemplateBubbleMap(
   templateId: TemplateId,
@@ -345,77 +587,17 @@ export function getTemplateBubbleMap(
   offsetY = 0,
   radiusScale = 1.0
 ): SheetBubbleMap {
+  const normId = normalizeTemplateId(templateId);
+  const tpl = TEMPLATES[normId] || TEMPLATES.qm_khtn_dia;
+
   const pt = (x: number, y: number, r: number): BubblePoint => ({
     x: x + offsetX,
     y: y + offsetY,
     r: r * radiusScale,
   });
 
-  // Mẫu 5: Phiếu Trắc Nghiệm Chung CV 1239 (Mã Đề 4 chữ số, SBD 8 cột, 40 P.I, 8 P.II, 6 P.III)
-  if (templateId === 'cv1239') {
-    const r = 5.2;
-    const sbdCols = [722.0, 741.0, 760.5, 780.0, 799.5, 819.0, 838.5, 858.0];
-    const maDeCols = [923.6, 943.1, 962.6, 982.1];
-    const topRows = [80.3, 89.8, 99.3, 108.8, 118.3, 127.8, 137.3, 146.8, 156.3, 165.8];
-
-    const maDe = maDeCols.map((cx) => topRows.map((cy) => pt(cx, cy, r)));
-    const sbd = sbdCols.map((cx) => topRows.map((cy) => pt(cx, cy, r)));
-
-    const p1ColBlocks = [
-      [83.2, 134.1, 185.0, 235.6],
-      [326.4, 377.3, 427.8, 478.3],
-      [569.6, 620.1, 670.6, 721.1],
-      [812.4, 862.9, 913.4, 964.3],
-    ];
-    const p1Rows10 = [209.2, 217.5, 225.6, 233.7, 242.0, 250.1, 258.2, 266.5, 274.8, 282.9];
-    const p1: BubblePoint[][] = [];
-    for (const cols of p1ColBlocks) {
-      for (let i = 0; i < 10; i++) {
-        p1.push(cols.map((cx) => pt(cx, p1Rows10[i], r)));
-      }
-    }
-
-    const p2ColPairs = [
-      [83.2, 134.1],
-      [185.0, 235.6],
-      [326.4, 377.3],
-      [427.8, 478.3],
-      [569.6, 620.1],
-      [670.6, 721.1],
-      [812.4, 862.9],
-      [913.4, 964.3],
-    ];
-    const p2Rows = [331.5, 339.7, 348.0, 356.1];
-    const p2 = p2ColPairs.map(([xD, xS]) => ({
-      a: [pt(xD, p2Rows[0], r), pt(xS, p2Rows[0], r)] as [BubblePoint, BubblePoint],
-      b: [pt(xD, p2Rows[1], r), pt(xS, p2Rows[1], r)] as [BubblePoint, BubblePoint],
-      c: [pt(xD, p2Rows[2], r), pt(xS, p2Rows[2], r)] as [BubblePoint, BubblePoint],
-      d: [pt(xD, p2Rows[3], r), pt(xS, p2Rows[3], r)] as [BubblePoint, BubblePoint],
-    }));
-
-    const p3GroupCols = [
-      [83.2, 107.1, 131.0, 154.5],
-      [245.3, 269.2, 292.7, 316.2],
-      [407.4, 431.4, 454.4, 478.3],
-      [569.6, 593.1, 616.6, 640.5],
-      [731.3, 754.8, 778.7, 802.2],
-      [893.0, 916.9, 940.8, 964.3],
-    ];
-    const p3MinusY = 405.8;
-    const p3CommaY = 413.9;
-    const p3DigitRows = [422.2, 430.3, 438.4, 446.7, 455.0, 463.1, 471.2, 479.5, 487.6, 495.8];
-
-    const p3 = p3GroupCols.map((cols) => ({
-      minus: pt(cols[0], p3MinusY, r),
-      comma1: pt(cols[1], p3CommaY, r),
-      comma2: pt(cols[2], p3CommaY, r),
-      digits: cols.map((cx) => p3DigitRows.map((cy) => pt(cx, cy, r))),
-    }));
-
-    return { maDe, sbd, p1, p2, p3 };
-  }
-
-  if (templateId === 'toan' || templateId === 'khtn') {
+  // 1. Nhóm Toán & KHTN-Địa (Khổ ngang 2 bài/A4 - 12 hoặc 18 P1, 4 P2, 6 P3)
+  if (normId === 'qm_toan' || normId === 'qm_khtn_dia') {
     const r = 7.4;
     const maDeCols = [46.3, 65.3, 84.5];
     const sbdCols = [138.4, 157.6, 176.6, 195.8, 214.8, 233.9];
@@ -426,7 +608,7 @@ export function getTemplateBubbleMap(
 
     const p1Cols = [298.5, 317.6, 336.6, 355.8];
     const p1Rows =
-      templateId === 'toan'
+      normId === 'qm_toan'
         ? [263.2, 282.4, 301.6, 320.7, 339.9, 359.5, 378.7, 397.9, 417.0, 436.6, 455.8, 475.0]
         : [
             128.4, 147.5, 166.7, 186.3, 205.4, 224.6, 243.8, 262.9, 282.5,
@@ -470,7 +652,8 @@ export function getTemplateBubbleMap(
     return { maDe, sbd, p1, p2, p3 };
   }
 
-  if (templateId === 'khxh') {
+  // 2. Nhóm Sử, Tin, CN, GDPL (Khổ ngang 2 bài/A4 - 24 P1, 6 P2, 0 P3)
+  if (normId === 'qm_khxh_tin_cn') {
     const r = 8.4;
     const maDeCols = [85.9, 108.4, 130.9];
     const sbdCols = [205.7, 228.2, 250.7, 273.2, 295.2, 317.7];
@@ -491,47 +674,162 @@ export function getTemplateBubbleMap(
       p1.push(p1ColGroup2.map((cx) => pt(cx, p1Rows12[i], r)));
     }
 
-    const p2ColPairs = [
+    const p2ColPairsTop = [
       [679.2, 701.8],
       [758.7, 781.3],
       [861.1, 883.4],
       [940.8, 963.4],
     ];
     const p2RowsTop = [250.3, 273.0, 295.8, 318.5];
-    const p2 = p2ColPairs.map(([xD, xS]) => ({
-      a: [pt(xD, p2RowsTop[0], r), pt(xS, p2RowsTop[0], r)] as [BubblePoint, BubblePoint],
-      b: [pt(xD, p2RowsTop[1], r), pt(xS, p2RowsTop[1], r)] as [BubblePoint, BubblePoint],
-      c: [pt(xD, p2RowsTop[2], r), pt(xS, p2RowsTop[2], r)] as [BubblePoint, BubblePoint],
-      d: [pt(xD, p2RowsTop[3], r), pt(xS, p2RowsTop[3], r)] as [BubblePoint, BubblePoint],
-    }));
+    const p2RowsBot = [403.5, 426.2, 449.0, 471.7];
+    const p2 = [
+      ...p2ColPairsTop.map(([xD, xS]) => ({
+        a: [pt(xD, p2RowsTop[0], r), pt(xS, p2RowsTop[0], r)] as [BubblePoint, BubblePoint],
+        b: [pt(xD, p2RowsTop[1], r), pt(xS, p2RowsTop[1], r)] as [BubblePoint, BubblePoint],
+        c: [pt(xD, p2RowsTop[2], r), pt(xS, p2RowsTop[2], r)] as [BubblePoint, BubblePoint],
+        d: [pt(xD, p2RowsTop[3], r), pt(xS, p2RowsTop[3], r)] as [BubblePoint, BubblePoint],
+      })),
+      // Câu 5 & Câu 6 ở hàng dưới
+      ...[p2ColPairsTop[0], p2ColPairsTop[1]].map(([xD, xS]) => ({
+        a: [pt(xD, p2RowsBot[0], r), pt(xS, p2RowsBot[0], r)] as [BubblePoint, BubblePoint],
+        b: [pt(xD, p2RowsBot[1], r), pt(xS, p2RowsBot[1], r)] as [BubblePoint, BubblePoint],
+        c: [pt(xD, p2RowsBot[2], r), pt(xS, p2RowsBot[2], r)] as [BubblePoint, BubblePoint],
+        d: [pt(xD, p2RowsBot[3], r), pt(xS, p2RowsBot[3], r)] as [BubblePoint, BubblePoint],
+      })),
+    ];
 
     return { maDe, sbd, p1, p2, p3: [] };
   }
 
-  // Mẫu 4: Ngoại Ngữ (40 câu Phần I)
-  const r = 9.0;
-  const maDeCols = [93.6, 118.8, 144.4];
-  const sbdCols = [228.3, 253.9, 279.1, 304.3, 329.5, 354.7];
-  const rows10 = [229.8, 255.7, 281.1, 306.6, 332.0, 357.4, 382.9, 408.3, 434.2, 459.6];
+  // 3. Nhóm Ngoại Ngữ (Khổ ngang 2 bài/A4 - 40 câu Phần I)
+  if (normId === 'qm_ngoai_ngu') {
+    const r = 9.0;
+    const maDeCols = [93.6, 118.8, 144.4];
+    const sbdCols = [228.3, 253.9, 279.1, 304.3, 329.5, 354.7];
+    const rows10 = [229.8, 255.7, 281.1, 306.6, 332.0, 357.4, 382.9, 408.3, 434.2, 459.6];
 
-  const maDe = maDeCols.map((cx) => rows10.map((cy) => pt(cx, cy, r)));
-  const sbd = sbdCols.map((cx) => rows10.map((cy) => pt(cx, cy, r)));
+    const maDe = maDeCols.map((cx) => rows10.map((cy) => pt(cx, cy, r)));
+    const sbd = sbdCols.map((cx) => rows10.map((cy) => pt(cx, cy, r)));
+
+    const p1ColBlocks = [
+      [447.3, 472.9, 498.1, 523.3],
+      [590.6, 615.8, 641.0, 666.3],
+      [733.6, 759.2, 784.4, 809.6],
+      [877.0, 902.2, 927.4, 952.6],
+    ];
+
+    const p1: BubblePoint[][] = [];
+    for (const cols of p1ColBlocks) {
+      for (let i = 0; i < 10; i++) {
+        p1.push(cols.map((cx) => pt(cx, rows10[i], r)));
+      }
+    }
+
+    return { maDe, sbd, p1, p2: [], p3: [] };
+  }
+
+  // 4. Nhóm Ôn tập Trả lời ngắn (10 câu P3)
+  if (normId === 'qm_on_tap_tl_ngan') {
+    const r = 6.8;
+    const p3GroupCols = Array.from({ length: 10 }, (_, idx) => {
+      const base = 62.0 + idx * 92.0;
+      return [base, base + 17.5, base + 35.0, base + 52.5];
+    });
+    const p3MinusY = 175.0;
+    const p3CommaY = 198.0;
+    const p3DigitRows = [222.0, 245.0, 268.0, 291.0, 314.0, 337.0, 360.0, 383.0, 406.0, 429.0];
+    const p3 = p3GroupCols.map((cols) => ({
+      minus: pt(cols[0], p3MinusY, r),
+      comma1: pt(cols[1], p3CommaY, r),
+      comma2: pt(cols[2], p3CommaY, r),
+      digits: cols.map((cx) => p3DigitRows.map((cy) => pt(cx, cy, r))),
+    }));
+    return { maDe: [], sbd: [], p1: [], p2: [], p3 };
+  }
+
+  // 5. Các mẫu Khổ dọc A4 Chuẩn & Hệ sinh thái Azota / TNmaker (Mã đề 3 số hoặc 4 số)
+  const r = 5.2;
+  const sbdCols =
+    tpl.maDeDigits === 4
+      ? [722.0, 741.0, 760.5, 780.0, 799.5, 819.0, 838.5, 858.0]
+      : [722.0, 741.0, 760.5, 780.0, 799.5, 819.0];
+  const maDeCols =
+    tpl.maDeDigits === 4
+      ? [923.6, 943.1, 962.6, 982.1]
+      : [923.6, 943.1, 962.6];
+  const topRows = [80.3, 89.8, 99.3, 108.8, 118.3, 127.8, 137.3, 146.8, 156.3, 165.8];
+
+  const maDe = maDeCols.map((cx) => topRows.map((cy) => pt(cx, cy, r)));
+  const sbd = sbdCols.map((cx) => topRows.map((cy) => pt(cx, cy, r)));
 
   const p1ColBlocks = [
-    [447.3, 472.9, 498.1, 523.3],
-    [590.6, 615.8, 641.0, 666.3],
-    [733.6, 759.2, 784.4, 809.6],
-    [877.0, 902.2, 927.4, 952.6],
+    [83.2, 134.1, 185.0, 235.6],
+    [326.4, 377.3, 427.8, 478.3],
+    [569.6, 620.1, 670.6, 721.1],
+    [812.4, 862.9, 913.4, 964.3],
   ];
-
+  const p1Rows10 = [209.2, 217.5, 225.6, 233.7, 242.0, 250.1, 258.2, 266.5, 274.8, 282.9];
   const p1: BubblePoint[][] = [];
   for (const cols of p1ColBlocks) {
     for (let i = 0; i < 10; i++) {
-      p1.push(cols.map((cx) => pt(cx, rows10[i], r)));
+      p1.push(cols.map((cx) => pt(cx, p1Rows10[i], r)));
     }
   }
 
-  return { maDe, sbd, p1, p2: [], p3: [] };
+  const p2ColPairs = [
+    [83.2, 134.1],
+    [185.0, 235.6],
+    [326.4, 377.3],
+    [427.8, 478.3],
+    [569.6, 620.1],
+    [670.6, 721.1],
+    [812.4, 862.9],
+    [913.4, 964.3],
+  ];
+  const p2Rows = [331.5, 339.7, 348.0, 356.1];
+  const p2Base8 = p2ColPairs.map(([xD, xS]) => ({
+    a: [pt(xD, p2Rows[0], r), pt(xS, p2Rows[0], r)] as [BubblePoint, BubblePoint],
+    b: [pt(xD, p2Rows[1], r), pt(xS, p2Rows[1], r)] as [BubblePoint, BubblePoint],
+    c: [pt(xD, p2Rows[2], r), pt(xS, p2Rows[2], r)] as [BubblePoint, BubblePoint],
+    d: [pt(xD, p2Rows[3], r), pt(xS, p2Rows[3], r)] as [BubblePoint, BubblePoint],
+  }));
+
+  // Hỗ trợ bản mở rộng 16 câu P2 (cv1239_mo_rong)
+  const p2 =
+    normId === 'cv1239_mo_rong'
+      ? [
+          ...p2Base8,
+          ...p2ColPairs.map(([xD, xS]) => ({
+            a: [pt(xD, p2Rows[0] + 35, r), pt(xS, p2Rows[0] + 35, r)] as [BubblePoint, BubblePoint],
+            b: [pt(xD, p2Rows[1] + 35, r), pt(xS, p2Rows[1] + 35, r)] as [BubblePoint, BubblePoint],
+            c: [pt(xD, p2Rows[2] + 35, r), pt(xS, p2Rows[2] + 35, r)] as [BubblePoint, BubblePoint],
+            d: [pt(xD, p2Rows[3] + 35, r), pt(xS, p2Rows[3] + 35, r)] as [BubblePoint, BubblePoint],
+          })),
+        ]
+      : p2Base8;
+
+  const p3GroupCols = [
+    [83.2, 107.1, 131.0, 154.5],
+    [245.3, 269.2, 292.7, 316.2],
+    [407.4, 431.4, 454.4, 478.3],
+    [569.6, 593.1, 616.6, 640.5],
+    [731.3, 754.8, 778.7, 802.2],
+    [893.0, 916.9, 940.8, 964.3],
+  ];
+  const p3MinusY = 405.8;
+  const p3CommaY = 413.9;
+  const p3DigitRows = [422.2, 430.3, 438.4, 446.7, 455.0, 463.1, 471.2, 479.5, 487.6, 495.8];
+
+  const p3Base6 = p3GroupCols.map((cols) => ({
+    minus: pt(cols[0], p3MinusY, r),
+    comma1: pt(cols[1], p3CommaY, r),
+    comma2: pt(cols[2], p3CommaY, r),
+    digits: cols.map((cx) => p3DigitRows.map((cy) => pt(cx, cy, r))),
+  }));
+
+  const p3 = normId === 'cv1239_mo_rong' ? [...p3Base6, ...p3Base6] : p3Base6;
+
+  return { maDe, sbd, p1, p2, p3 };
 }
 
 /**

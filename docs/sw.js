@@ -96,7 +96,7 @@ define(['./workbox-afac4cd2'], (function (workbox) { 'use strict';
     "revision": "2e21fb3844cf8a77227f6e5436c45f7e"
   }, {
     "url": "index.html",
-    "revision": "b436e07746f43cfec634fc7fc500b759"
+    "revision": "32c09381560d8a5b54f99dba5c1ef57d"
   }, {
     "url": "icon.svg",
     "revision": "3f60b84d931a21387284e561f9cb7a4a"
@@ -110,16 +110,19 @@ define(['./workbox-afac4cd2'], (function (workbox) { 'use strict';
     "url": "app.js",
     "revision": "501257e2177cf9c5adb62c8f51e060dd"
   }, {
-    "url": "assets/index-sfktoWt8.js",
+    "url": "assets/index-Ds-UVGQY.js",
     "revision": null
   }, {
-    "url": "assets/index-akfZDMiC.css",
+    "url": "assets/index-AbUDbgyB.css",
     "revision": null
   }, {
     "url": "assets/aistudio/image_8efee6da.png",
     "revision": null
   }, {
     "url": "assets/aistudio/image_423077af.png",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/image_0dd6614d.png",
     "revision": null
   }, {
     "url": "assets/aistudio/QM_202_To_n_2e669509.jpg",
@@ -138,6 +141,102 @@ define(['./workbox-afac4cd2'], (function (workbox) { 'use strict';
     "revision": null
   }, {
     "url": "assets/aistudio/M_n_SINH_H_C_-_L_p_12_-_K__ki_m_tra_KI_M_TRA_CU_I_K__I_-_01-11-26_-_QR_Chung__M__101-104__-_1_-_App_QM_2025_e413d348.png",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793601576993_1554969586358931506_2710154209101277242_cdf143086778f5f53468fb7d6c44cf56_43e662f1.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793601576973_1554969586358931506_2710154209101277242_062c5be86979d7c0ffc20f29967325e7_af5934c4.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098312_1554969586358931506_2710154209101277242_2a8ea20c642e7fe4e4cda41a010941d8_9b5db303.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098303_1554969586358931506_2710154209101277242_3e35ec323cc0a7a0d3bc231e1dbaece4_84319c75.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098294_1554969586358931506_2710154209101277242_0ab4147aec63c9d6e164b135510a1868_d7161024.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098285_1554969586358931506_2710154209101277242_f7b0ef08756686577a6809022ace7314_a8ddda0c.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098276_1554969586358931506_2710154209101277242_f1ea0c908ed619e372dbdbe6fbc405c2_6aaac1c4.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098268_1554969586358931506_2710154209101277242_01621426d1f92b4bcec0785b016359c8_47f6e210.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098259_1554969586358931506_2710154209101277242_e30118e4e18234b62805eb0b852a957e_ee4947fa.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098249_1554969586358931506_2710154209101277242_9de402a82649a0a0d333ac027f09d536_fdc76a65.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098241_1554969586358931506_2710154209101277242_fce42d3e731f522dea6d4ecdc3288bea_005d648a.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098232_1554969586358931506_2710154209101277242_1855c4f33071a3f1f9194f626edc6004_2f8ce976.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098222_1554969586358931506_2710154209101277242_552191508f5af2b32dcec6b01fcbfb49_747ddb7a.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098212_1554969586358931506_2710154209101277242_254ffec78a100be5cee318778fff0403_0bdcb513.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098199_1554969586358931506_2710154209101277242_4c7b1b8da95952cfad991e29284d68c2_e85d5151.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098184_1554969586358931506_2710154209101277242_25d48c9b35e6e10d15703c0735c92c52_58338367.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098165_1554969586358931506_2710154209101277242_d0fc177ebbb685e60d288388ce05f0fa_092b48ea.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793598098133_1554969586358931506_2710154209101277242_c13c64e8a43900a59423d2dc37df3bde_fa390bd1.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793597369703_1554969586358931506_2710154209101277242_38779ba7a4a098759b8f06adc38f4ad4_192c908e.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793597369694_1554969586358931506_2710154209101277242_d4e758cd78a1b47820e8373f1f40613a_59ef9124.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793597369685_1554969586358931506_2710154209101277242_60de24a10a40b83f49eb98eeedc9d91d_1e601cb3.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793597369677_1554969586358931506_2710154209101277242_de27c2e81da61f5ea7bce6dde42827e0_5f434a9b.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793597369667_1554969586358931506_2710154209101277242_2568e1b436fef82d0eb2c227a209efce_15980efc.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793597369658_1554969586358931506_2710154209101277242_a7b63e2cbbc024abd1a99a5d9fc217fc_4d2d6a97.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793597369649_1554969586358931506_2710154209101277242_03d08eff5248a82c0be5362e1f90e7c4_09a31495.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793597369639_1554969586358931506_2710154209101277242_f00f504973f09775455fa3d30345e6ff_3380c019.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793597369629_1554969586358931506_2710154209101277242_07e1252b6c32911f321039cbdb257f80_bd6e0da1.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793597369618_1554969586358931506_2710154209101277242_346de385d97e8a29c44fae53391861de_b0b21264.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793597369606_1554969586358931506_2710154209101277242_3e2985ee40075193690e7a475a2a298f_4bd7ad7a.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793597369590_1554969586358931506_2710154209101277242_acde6161e1049661d0047f65c5e834b4_67e3a50c.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793597369570_1554969586358931506_2710154209101277242_a60582e73a9017f6c4a3b0df0b1893f6_4818f808.jpg",
+    "revision": null
+  }, {
+    "url": "assets/aistudio/1793597369541_1554969586358931506_2710154209101277242_a174ec15fddf5b6a9d2e50b4e71a0758_8e9f3e33.jpg",
     "revision": null
   }, {
     "url": "apple-touch-icon.png",
