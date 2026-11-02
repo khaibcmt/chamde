@@ -237,9 +237,6 @@ export default function App() {
   // Modal Hướng Dẫn, Sứ Mệnh & Cập Nhật Phiên Bản
   const [showGuideModal, setShowGuideModal] = useState(false);
   const [showPwaModal, setShowPwaModal] = useState(false);
-  const [activePwaCodeTab, setActivePwaCodeTab] = useState<
-    'guide' | 'index.html' | 'style.css' | 'camera.js' | 'app.js' | 'manifest.json' | 'sw.js'
-  >('guide');
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const { isInstallable, isInstalled, isOnline, promptInstall } = usePWAInstall();
   const [lastUpdatedTime, setLastUpdatedTime] = useState<string>(() =>
@@ -1718,18 +1715,11 @@ export default function App() {
             </div>
 
             <button
-              onClick={async () => {
-                if (isInstallable) {
-                  const res = await promptInstall();
-                  if (res === 'manual') setShowPwaModal(true);
-                } else {
-                  setShowPwaModal(true);
-                }
-              }}
+              onClick={() => setShowPwaModal(true)}
               className="btn-3d btn-3d-rose px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white flex items-center gap-1.5"
             >
               <Smartphone className="w-4 h-4" />
-              {isInstalled ? 'Cài App & Mã Nguồn PWA' : 'Tạo Phím Tắt ĐT (iOS/Android)'}
+              Tạo Phím Tắt ĐT (iOS / Android)
             </button>
 
             <button
@@ -4034,10 +4024,10 @@ export default function App() {
         </div>
       )}
 
-      {/* MODAL CÀI ĐẶT PHÍM TẮT MÀN HÌNH CHÍNH (iOS SAFARI & ANDROID CHROME/SAMSUNG INTERNET) + BỘ MÃ NGUỒN PWA */}
+      {/* MODAL HƯỚNG DẪN TẠO PHÍM TẮT MÀN HÌNH ĐIỆN THOẠI (iOS SAFARI & ANDROID CHROME/SAMSUNG INTERNET) */}
       {showPwaModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto">
-          <div className="bg-slate-50 border-2 border-rose-400 rounded-3xl max-w-5xl w-full overflow-hidden shadow-2xl my-6 flex flex-col max-h-[90vh]">
+          <div className="bg-slate-50 border-2 border-rose-400 rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl my-6 flex flex-col max-h-[90vh]">
             <div className="px-5 py-4 bg-gradient-to-r from-rose-600 via-violet-700 to-blue-700 text-white flex flex-wrap items-center justify-between gap-3 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center">
@@ -4045,10 +4035,10 @@ export default function App() {
                 </div>
                 <div>
                   <h3 className="text-base sm:text-xl font-black uppercase tracking-tight">
-                    Tạo Phím Tắt Màn Hình Điện Thoại (iPhone iOS & Android) — Chuẩn PWA Offline
+                    Hướng Dẫn Tạo Phím Tắt Màn Hình Điện Thoại (iOS & Android)
                   </h3>
                   <p className="text-xs sm:text-sm text-white/90 font-semibold">
-                    Chạy độc lập toàn màn hình (Standalone), xử lý tai thỏ Dynamic Island, bật Flash Android & chấm bài ngay cả khi mất mạng trong phòng thi
+                    Đưa biểu tượng Edu Chấm Đề ra màn hình chính, mở 1 chạm toàn màn hình không thanh địa chỉ, dùng mượt mà ngay cả khi mất mạng trong phòng thi
                   </p>
                 </div>
               </div>
@@ -4060,12 +4050,12 @@ export default function App() {
                     className="btn-3d btn-3d-emerald px-4 py-2 rounded-xl text-white font-black text-xs sm:text-sm flex items-center gap-1.5"
                   >
                     <Download className="w-4 h-4" />
-                    Cài Đặt Tự Động Ngay
+                    Cài Đặt Nhanh (Android)
                   </button>
                 )}
                 <button
                   onClick={() => setShowPwaModal(false)}
-                  className="btn-3d btn-3d-white px-3 py-2 rounded-xl text-slate-900 font-black text-xs sm:text-sm flex items-center gap-1"
+                  className="btn-3d btn-3d-white px-3.5 py-2 rounded-xl text-slate-900 font-black text-xs sm:text-sm flex items-center gap-1"
                 >
                   <X className="w-4 h-4" />
                   Đóng
@@ -4073,150 +4063,99 @@ export default function App() {
               </div>
             </div>
 
-            {/* Thanh chuyển tab giữa Hướng dẫn cài đặt và 6 File mã nguồn PWA */}
-            <div className="px-4 py-2.5 bg-white border-b-2 border-slate-200 flex items-center gap-2 overflow-x-auto shrink-0">
-              {(
-                [
-                  { id: 'guide', label: '📱 Hướng Dẫn Cài Trên iPhone & Android' },
-                  { id: 'index.html', label: '1. index.html' },
-                  { id: 'style.css', label: '2. style.css' },
-                  { id: 'camera.js', label: '3. camera.js' },
-                  { id: 'app.js', label: '4. app.js' },
-                  { id: 'manifest.json', label: '5. manifest.json' },
-                  { id: 'sw.js', label: '6. sw.js' },
-                ] as const
-              ).map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActivePwaCodeTab(tab.id)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all ${
-                    activePwaCodeTab === tab.id
-                      ? 'btn-3d btn-3d-blue text-white'
-                      : 'btn-3d btn-3d-white text-slate-700'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-
             <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
-              {activePwaCodeTab === 'guide' ? (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Cột 1: iPhone / iPad (iOS Safari) */}
-                    <div className="feature-3d-card feature-3d-blue rounded-2xl p-5 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-black uppercase">
-                          Hệ Điều Hành 1 • iPhone / iPad (iOS Safari)
-                        </span>
-                        <span className="text-xs font-mono font-bold text-blue-800">
-                          Hỗ trợ Dynamic Island & Tai thỏ
-                        </span>
-                      </div>
-                      <h4 className="text-base sm:text-lg font-black text-blue-950">
-                        4 Bước Tạo Phím Tắt Toàn Màn Hình Trên iPhone (Safari)
-                      </h4>
-                      <ol className="space-y-2.5 text-xs sm:text-sm text-slate-800 font-medium list-decimal pl-5">
-                        <li>
-                          <strong>Bước 1:</strong> Mở đường dẫn trang web <strong>Edu Chấm Đề 2025</strong> bằng trình duyệt <strong>Safari</strong> mặc định trên iPhone hoặc iPad.
-                        </li>
-                        <li>
-                          <strong>Bước 2:</strong> Nhấn vào biểu tượng <strong>Chia sẻ (Share)</strong> <span className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-900 rounded font-mono font-bold">[↑]</span> nằm ở thanh công cụ dưới cùng màn hình Safari.
-                        </li>
-                        <li>
-                          <strong>Bước 3:</strong> Cuộn menu xuống dưới và nhấn chọn dòng <strong>&ldquo;Thêm vào MH chính&rdquo; (Add to Home Screen [+])</strong>.
-                        </li>
-                        <li>
-                          <strong>Bước 4:</strong> Nhấn nút <strong>&ldquo;Thêm&rdquo; (Add)</strong> ở góc trên bên phải. Biểu tượng <strong>EduChấmĐề</strong> sẽ xuất hiện ngay trên màn hình chính như một ứng dụng gốc (không còn thanh địa chỉ Safari).
-                        </li>
-                      </ol>
-                      <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-950 font-semibold">
-                        <strong>Cấu hình kỹ thuật iOS đã kích hoạt:</strong> <code>apple-mobile-web-app-capable=&quot;yes&quot;</code>, <code>apple-mobile-web-app-status-bar-style=&quot;black-translucent&quot;</code>, <code>playsinline=&quot;true&quot;</code> (không bị văng sang trình phát video toàn màn hình) và <code>apple-touch-icon.png</code> 180×180.
-                      </div>
-                    </div>
-
-                    {/* Cột 2: Android (Google Chrome / Samsung Internet) */}
-                    <div className="feature-3d-card feature-3d-emerald rounded-2xl p-5 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-black uppercase">
-                          Hệ Điều Hành 2 • Android (Chrome / Samsung)
-                        </span>
-                        <span className="text-xs font-mono font-bold text-emerald-800">
-                          Hỗ trợ Đèn Flash (Torch)
-                        </span>
-                      </div>
-                      <h4 className="text-base sm:text-lg font-black text-emerald-950">
-                        4 Bước Cài Đặt Ứng Dụng PWA Trên Điện Thoại Android
-                      </h4>
-                      <ol className="space-y-2.5 text-xs sm:text-sm text-slate-800 font-medium list-decimal pl-5">
-                        <li>
-                          <strong>Bước 1:</strong> Mở trang web bằng trình duyệt <strong>Google Chrome</strong> hoặc <strong>Samsung Internet</strong> trên điện thoại Android.
-                        </li>
-                        <li>
-                          <strong>Bước 2:</strong> Nhấn nút <strong>&ldquo;Cài Đặt Tự Động Ngay&rdquo;</strong> trên thanh thông báo hoặc nhấn vào biểu tượng <strong>Menu 3 chấm (⋮)</strong> ở góc phải thanh địa chỉ.
-                        </li>
-                        <li>
-                          <strong>Bước 3:</strong> Chọn mục <strong>&ldquo;Cài đặt ứng dụng&rdquo; (Install App)</strong> hoặc <strong>&ldquo;Thêm vào màn hình chính&rdquo; (Add to Home screen)</strong>.
-                        </li>
-                        <li>
-                          <strong>Bước 4:</strong> Nhấn xác nhận <strong>&ldquo;Cài đặt&rdquo;</strong>. Ứng dụng sẽ được đóng gói chuẩn APK/WebAPK độc lập trên màn hình chính và ngăn kéo ứng dụng.
-                        </li>
-                      </ol>
-                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 font-semibold">
-                        <strong>Cấu hình kỹ thuật Android đã kích hoạt:</strong> <code>manifest.json</code> chuẩn <code>display: standalone</code>, icon <code>maskable</code> 512×512, tự động kiểm tra phần cứng đèn Flash (Torch) qua <code>MediaTrackCapabilities / ImageCapture</code> để hiện nút <strong>Bật/Tắt Flash</strong> khi thiếu sáng.
-                      </div>
-                    </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Cột 1: iPhone / iPad (iOS Safari) */}
+                <div className="feature-3d-card feature-3d-blue rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-black uppercase">
+                      HỆ ĐIỀU HÀNH 1 • IPHONE / IPAD (SAFARI)
+                    </span>
+                    <span className="text-xs font-mono font-bold text-blue-800">
+                      Tự fit Dynamic Island & Tai thỏ
+                    </span>
                   </div>
-
-                  {/* Khung kiểm tra trạng thái Offline & Base64 Capture */}
-                  <div className="feature-3d-card feature-3d-violet rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <div className="text-sm sm:text-base font-black text-violet-950 uppercase flex items-center gap-2">
-                        <ShieldCheck className="w-5 h-5 text-violet-600" />
-                        Trạng Thái Bộ Nhớ Đệm Phòng Thi (Service Worker sw.js) & Chụp Ảnh Base64
-                      </div>
-                      <p className="text-xs sm:text-sm text-slate-700 font-medium">
-                        Toàn bộ tài nguyên HTML, CSS, JS, Icon và thuật toán chấm OMR đã được lưu vào Cache trình duyệt để giáo viên mở và chấm bài ngay cả khi tắt Wi-Fi / 4G trong phòng thi.
-                      </p>
+                  <h4 className="text-base sm:text-lg font-black text-blue-950">
+                    4 Bước Tạo Phím Tắt Toàn Màn Hình Trên iPhone (Safari)
+                  </h4>
+                  <ol className="space-y-3 text-xs sm:text-sm text-slate-800 font-medium list-decimal pl-5">
+                    <li>
+                      <strong>Bước 1:</strong> Mở trang web <strong>Edu Chấm Đề 2025</strong> bằng trình duyệt <strong>Safari</strong> mặc định trên iPhone hoặc iPad.
+                    </li>
+                    <li>
+                      <strong>Bước 2:</strong> Nhấn vào nút <strong>Chia sẻ (Share)</strong> có biểu tượng hình vuông có mũi tên trỏ lên <span className="inline-block px-2 py-0.5 bg-blue-100 text-blue-900 rounded-md font-mono font-bold">[↑]</span> ở thanh công cụ dưới cùng Safari.
+                    </li>
+                    <li>
+                      <strong>Bước 3:</strong> Cuộn bảng danh mục xuống và bấm chọn dòng <strong>&ldquo;Thêm vào MH chính&rdquo; (Add to Home Screen [+])</strong>.
+                    </li>
+                    <li>
+                      <strong>Bước 4:</strong> Bấm <strong>&ldquo;Thêm&rdquo; (Add)</strong> ở góc trên bên phải màn hình. Biểu tượng <strong>Edu Chấm Đề</strong> sẽ xuất hiện trên màn hình chính như một ứng dụng tải từ App Store.
+                    </li>
+                  </ol>
+                  <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-950 font-semibold space-y-1">
+                    <div className="font-black text-blue-900 flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4 text-blue-600" />
+                      Ưu điểm vượt trội trên iPhone:
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <a
-                        href="./manifest.json"
-                        download="manifest.json"
-                        className="btn-3d btn-3d-white px-3 py-2 rounded-xl text-xs font-black text-violet-900"
-                      >
-                        Tải manifest.json
-                      </a>
-                      <a
-                        href="./sw.js"
-                        download="sw.js"
-                        className="btn-3d btn-3d-white px-3 py-2 rounded-xl text-xs font-black text-violet-900"
-                      >
-                        Tải sw.js
-                      </a>
-                      <a
-                        href="./camera.js"
-                        download="camera.js"
-                        className="btn-3d btn-3d-white px-3 py-2 rounded-xl text-xs font-black text-violet-900"
-                      >
-                        Tải camera.js
-                      </a>
-                      {lastCapturedBase64Jpeg && (
-                        <a
-                          href={lastCapturedBase64Jpeg}
-                          download="Anh_Chup_Camera_Base64.jpg"
-                          className="btn-3d btn-3d-emerald px-3 py-2 rounded-xl text-xs font-black text-white"
-                        >
-                          Tải Ảnh Base64 Vừa Chụp
-                        </a>
-                      )}
-                    </div>
+                    <p className="text-slate-700">
+                      Khi mở từ phím tắt màn hình chính, ứng dụng chạy độc lập toàn màn hình (không còn thanh tìm kiếm URL của Safari), mở camera liền mạch và tự canh lề tránh tai thỏ.
+                    </p>
                   </div>
-                </>
-              ) : (
-                <PwaSourceCodePreview fileKey={activePwaCodeTab} />
-              )}
+                </div>
+
+                {/* Cột 2: Android (Google Chrome / Samsung Internet) */}
+                <div className="feature-3d-card feature-3d-emerald rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-black uppercase">
+                      HỆ ĐIỀU HÀNH 2 • ANDROID (CHROME / SAMSUNG)
+                    </span>
+                    <span className="text-xs font-mono font-bold text-emerald-800">
+                      Hỗ trợ Bật/Tắt Flash (Torch)
+                    </span>
+                  </div>
+                  <h4 className="text-base sm:text-lg font-black text-emerald-950">
+                    4 Bước Tạo Phím Tắt / Cài Đặt Trên Điện Thoại Android
+                  </h4>
+                  <ol className="space-y-3 text-xs sm:text-sm text-slate-800 font-medium list-decimal pl-5">
+                    <li>
+                      <strong>Bước 1:</strong> Mở trang web bằng trình duyệt <strong>Google Chrome</strong> hoặc <strong>Samsung Internet</strong> trên điện thoại Android.
+                    </li>
+                    <li>
+                      <strong>Bước 2:</strong> Nhấn vào nút <strong>&ldquo;Cài Đặt Nhanh (Android)&rdquo;</strong> ở trên, hoặc nhấn vào biểu tượng <strong>Menu 3 dấu chấm dọc (⋮)</strong> ở góc trên cùng bên phải.
+                    </li>
+                    <li>
+                      <strong>Bước 3:</strong> Chọn mục <strong>&ldquo;Cài đặt ứng dụng&rdquo; (Install App)</strong> hoặc <strong>&ldquo;Thêm vào màn hình chính&rdquo; (Add to Home screen)</strong>.
+                    </li>
+                    <li>
+                      <strong>Bước 4:</strong> Nhấn nút <strong>&ldquo;Cài đặt&rdquo;</strong> xác nhận. Biểu tượng ứng dụng sẽ được ghim ra màn hình chính điện thoại và khay ứng dụng.
+                    </li>
+                  </ol>
+                  <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 font-semibold space-y-1">
+                    <div className="font-black text-emerald-900 flex items-center gap-1.5">
+                      <Zap className="w-4 h-4 text-emerald-600" />
+                      Ưu điểm vượt trội trên Android:
+                    </div>
+                    <p className="text-slate-700">
+                      Tự động kích hoạt điều khiển đèn Flash phần cứng khi chấm bài trong phòng thi thiếu sáng, tốc độ khung hình 60 FPS mượt mà và nạp điểm tức thì.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Khung tóm tắt lợi ích tiện ích phím tắt */}
+              <div className="feature-3d-card feature-3d-violet rounded-2xl p-4 sm:p-5 flex items-center gap-3.5">
+                <div className="w-10 h-10 rounded-2xl bg-violet-600 text-white flex items-center justify-center shrink-0">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div className="space-y-0.5 text-xs sm:text-sm">
+                  <div className="font-black text-violet-950 uppercase">
+                    Sẵn Sàng Chấm Bài Mọi Lúc Mọi Nơi — Kể Cả Khi Mất Mạng Wi-Fi / 4G
+                  </div>
+                  <p className="text-slate-700 font-medium">
+                    Sau khi đã tạo phím tắt ra màn hình chính một lần, ứng dụng lưu sẵn toàn bộ dữ liệu mẫu phiếu và thuật toán OMR trong bộ nhớ máy. Thầy cô chỉ cần chạm vào biểu tượng trên màn hình là có thể chấm bài tức thì trong bất kỳ phòng thi nào.
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -4272,7 +4211,7 @@ export default function App() {
             className="btn-3d btn-3d-rose py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black text-white"
           >
             <Smartphone className="w-4 h-4 shrink-0" />
-            <span className="truncate">Cài App ĐT</span>
+            <span className="truncate">Tạo Phím Tắt</span>
           </button>
 
           <button
@@ -4342,70 +4281,4 @@ function TemplateCoordinatePreviewOverlay({
   );
 }
 
-/**
- * Component hiển thị & tải về trực tiếp 6 file mã nguồn PWA chuẩn (index.html, style.css, camera.js, app.js, manifest.json, sw.js)
- */
-function PwaSourceCodePreview({
-  fileKey,
-}: {
-  fileKey: 'index.html' | 'style.css' | 'camera.js' | 'app.js' | 'manifest.json' | 'sw.js';
-}) {
-  const [content, setContent] = useState<string>('Đang tải mã nguồn...');
-  const [copied, setCopied] = useState<boolean>(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setContent('Đang tải mã nguồn...');
-    fetch(`./${fileKey}`)
-      .then((res) => res.text())
-      .then((txt) => {
-        if (!cancelled) setContent(txt);
-      })
-      .catch(() => {
-        if (!cancelled) setContent(`// Không thể đọc trực tiếp ./${fileKey}`);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [fileKey]);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(content);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      // ignore
-    }
-  };
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-900 text-white px-4 py-3 rounded-2xl">
-        <div className="font-mono font-black text-sm text-sky-300">
-          📄 File cấu hình PWA độc lập: ./{fileKey}
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleCopy}
-            className="btn-3d btn-3d-blue px-3 py-1.5 rounded-xl text-xs font-black text-white"
-          >
-            {copied ? '✓ Đã sao chép mã nguồn' : 'Sao chép mã nguồn'}
-          </button>
-          <a
-            href={`./${fileKey}`}
-            download={fileKey}
-            className="btn-3d btn-3d-emerald px-3 py-1.5 rounded-xl text-xs font-black text-white flex items-center gap-1"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Tải file {fileKey}
-          </a>
-        </div>
-      </div>
-      <pre className="p-4 rounded-2xl bg-slate-950 text-emerald-300 font-mono text-xs overflow-x-auto max-h-[55vh] leading-relaxed border-2 border-slate-800 select-text">
-        <code>{content}</code>
-      </pre>
-    </div>
-  );
-}
 

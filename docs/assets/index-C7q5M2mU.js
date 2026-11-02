@@ -51443,7 +51443,6 @@ function App() {
 	const [showClassModal, setShowClassModal] = (0, import_react.useState)(false);
 	const [showGuideModal, setShowGuideModal] = (0, import_react.useState)(false);
 	const [showPwaModal, setShowPwaModal] = (0, import_react.useState)(false);
-	const [activePwaCodeTab, setActivePwaCodeTab] = (0, import_react.useState)("guide");
 	const [isCheckingUpdate, setIsCheckingUpdate] = (0, import_react.useState)(false);
 	const { isInstallable, isInstalled, isOnline, promptInstall } = usePWAInstall();
 	const [lastUpdatedTime, setLastUpdatedTime] = (0, import_react.useState)(() => (/* @__PURE__ */ new Date()).toLocaleDateString("vi-VN", {
@@ -52654,13 +52653,9 @@ function App() {
 								})]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								onClick: async () => {
-									if (isInstallable) {
-										if (await promptInstall() === "manual") setShowPwaModal(true);
-									} else setShowPwaModal(true);
-								},
+								onClick: () => setShowPwaModal(true),
 								className: "btn-3d btn-3d-rose px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white flex items-center gap-1.5",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Smartphone, { className: "w-4 h-4" }), isInstalled ? "Cài App & Mã Nguồn PWA" : "Tạo Phím Tắt ĐT (iOS/Android)"]
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Smartphone, { className: "w-4 h-4" }), "Tạo Phím Tắt ĐT (iOS / Android)"]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 								onClick: () => setShowGuideModal(true),
@@ -55097,261 +55092,184 @@ function App() {
 			showPwaModal && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto",
 				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "bg-slate-50 border-2 border-rose-400 rounded-3xl max-w-5xl w-full overflow-hidden shadow-2xl my-6 flex flex-col max-h-[90vh]",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "px-5 py-4 bg-gradient-to-r from-rose-600 via-violet-700 to-blue-700 text-white flex flex-wrap items-center justify-between gap-3 shrink-0",
+					className: "bg-slate-50 border-2 border-rose-400 rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl my-6 flex flex-col max-h-[90vh]",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "px-5 py-4 bg-gradient-to-r from-rose-600 via-violet-700 to-blue-700 text-white flex flex-wrap items-center justify-between gap-3 shrink-0",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center gap-3",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Smartphone, { className: "w-6 h-6 text-white" })
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+								className: "text-base sm:text-xl font-black uppercase tracking-tight",
+								children: "Hướng Dẫn Tạo Phím Tắt Màn Hình Điện Thoại (iOS & Android)"
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+								className: "text-xs sm:text-sm text-white/90 font-semibold",
+								children: "Đưa biểu tượng Edu Chấm Đề ra màn hình chính, mở 1 chạm toàn màn hình không thanh địa chỉ, dùng mượt mà ngay cả khi mất mạng trong phòng thi"
+							})] })]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "flex items-center gap-2",
+							children: [isInstallable && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								onClick: promptInstall,
+								className: "btn-3d btn-3d-emerald px-4 py-2 rounded-xl text-white font-black text-xs sm:text-sm flex items-center gap-1.5",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "w-4 h-4" }), "Cài Đặt Nhanh (Android)"]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								onClick: () => setShowPwaModal(false),
+								className: "btn-3d btn-3d-white px-3.5 py-2 rounded-xl text-slate-900 font-black text-xs sm:text-sm flex items-center gap-1",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "w-4 h-4" }), "Đóng"]
+							})]
+						})]
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "p-4 sm:p-6 overflow-y-auto space-y-5",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "grid grid-cols-1 md:grid-cols-2 gap-4",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center gap-3",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center",
-									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Smartphone, { className: "w-6 h-6 text-white" })
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
-									className: "text-base sm:text-xl font-black uppercase tracking-tight",
-									children: "Tạo Phím Tắt Màn Hình Điện Thoại (iPhone iOS & Android) — Chuẩn PWA Offline"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-									className: "text-xs sm:text-sm text-white/90 font-semibold",
-									children: "Chạy độc lập toàn màn hình (Standalone), xử lý tai thỏ Dynamic Island, bật Flash Android & chấm bài ngay cả khi mất mạng trong phòng thi"
-								})] })]
+								className: "feature-3d-card feature-3d-blue rounded-2xl p-5 space-y-3",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex items-center justify-between",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-black uppercase",
+											children: "HỆ ĐIỀU HÀNH 1 • IPHONE / IPAD (SAFARI)"
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "text-xs font-mono font-bold text-blue-800",
+											children: "Tự fit Dynamic Island & Tai thỏ"
+										})]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", {
+										className: "text-base sm:text-lg font-black text-blue-950",
+										children: "4 Bước Tạo Phím Tắt Toàn Màn Hình Trên iPhone (Safari)"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("ol", {
+										className: "space-y-3 text-xs sm:text-sm text-slate-800 font-medium list-decimal pl-5",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 1:" }),
+												" Mở trang web ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Edu Chấm Đề 2025" }),
+												" bằng trình duyệt ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Safari" }),
+												" mặc định trên iPhone hoặc iPad."
+											] }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 2:" }),
+												" Nhấn vào nút ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Chia sẻ (Share)" }),
+												" có biểu tượng hình vuông có mũi tên trỏ lên ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "inline-block px-2 py-0.5 bg-blue-100 text-blue-900 rounded-md font-mono font-bold",
+													children: "[↑]"
+												}),
+												" ở thanh công cụ dưới cùng Safari."
+											] }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 3:" }),
+												" Cuộn bảng danh mục xuống và bấm chọn dòng ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Thêm vào MH chính” (Add to Home Screen [+])" }),
+												"."
+											] }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 4:" }),
+												" Bấm ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Thêm” (Add)" }),
+												" ở góc trên bên phải màn hình. Biểu tượng ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Edu Chấm Đề" }),
+												" sẽ xuất hiện trên màn hình chính như một ứng dụng tải từ App Store."
+											] })
+										]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-950 font-semibold space-y-1",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "font-black text-blue-900 flex items-center gap-1.5",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ShieldCheck, { className: "w-4 h-4 text-blue-600" }), "Ưu điểm vượt trội trên iPhone:"]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+											className: "text-slate-700",
+											children: "Khi mở từ phím tắt màn hình chính, ứng dụng chạy độc lập toàn màn hình (không còn thanh tìm kiếm URL của Safari), mở camera liền mạch và tự canh lề tránh tai thỏ."
+										})]
+									})
+								]
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center gap-2",
-								children: [isInstallable && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									onClick: promptInstall,
-									className: "btn-3d btn-3d-emerald px-4 py-2 rounded-xl text-white font-black text-xs sm:text-sm flex items-center gap-1.5",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "w-4 h-4" }), "Cài Đặt Tự Động Ngay"]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-									onClick: () => setShowPwaModal(false),
-									className: "btn-3d btn-3d-white px-3 py-2 rounded-xl text-slate-900 font-black text-xs sm:text-sm flex items-center gap-1",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "w-4 h-4" }), "Đóng"]
+								className: "feature-3d-card feature-3d-emerald rounded-2xl p-5 space-y-3",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex items-center justify-between",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-black uppercase",
+											children: "HỆ ĐIỀU HÀNH 2 • ANDROID (CHROME / SAMSUNG)"
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+											className: "text-xs font-mono font-bold text-emerald-800",
+											children: "Hỗ trợ Bật/Tắt Flash (Torch)"
+										})]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", {
+										className: "text-base sm:text-lg font-black text-emerald-950",
+										children: "4 Bước Tạo Phím Tắt / Cài Đặt Trên Điện Thoại Android"
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("ol", {
+										className: "space-y-3 text-xs sm:text-sm text-slate-800 font-medium list-decimal pl-5",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 1:" }),
+												" Mở trang web bằng trình duyệt ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Google Chrome" }),
+												" hoặc ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Samsung Internet" }),
+												" trên điện thoại Android."
+											] }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 2:" }),
+												" Nhấn vào nút ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Cài Đặt Nhanh (Android)”" }),
+												" ở trên, hoặc nhấn vào biểu tượng ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Menu 3 dấu chấm dọc (⋮)" }),
+												" ở góc trên cùng bên phải."
+											] }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 3:" }),
+												" Chọn mục ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Cài đặt ứng dụng” (Install App)" }),
+												" hoặc ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Thêm vào màn hình chính” (Add to Home screen)" }),
+												"."
+											] }),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 4:" }),
+												" Nhấn nút ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Cài đặt”" }),
+												" xác nhận. Biểu tượng ứng dụng sẽ được ghim ra màn hình chính điện thoại và khay ứng dụng."
+											] })
+										]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 font-semibold space-y-1",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "font-black text-emerald-900 flex items-center gap-1.5",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Zap, { className: "w-4 h-4 text-emerald-600" }), "Ưu điểm vượt trội trên Android:"]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+											className: "text-slate-700",
+											children: "Tự động kích hoạt điều khiển đèn Flash phần cứng khi chấm bài trong phòng thi thiếu sáng, tốc độ khung hình 60 FPS mượt mà và nạp điểm tức thì."
+										})]
+									})
+								]
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "feature-3d-card feature-3d-violet rounded-2xl p-4 sm:p-5 flex items-center gap-3.5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "w-10 h-10 rounded-2xl bg-violet-600 text-white flex items-center justify-center shrink-0",
+								children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(ShieldCheck, { className: "w-6 h-6" })
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "space-y-0.5 text-xs sm:text-sm",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "font-black text-violet-950 uppercase",
+									children: "Sẵn Sàng Chấm Bài Mọi Lúc Mọi Nơi — Kể Cả Khi Mất Mạng Wi-Fi / 4G"
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "text-slate-700 font-medium",
+									children: "Sau khi đã tạo phím tắt ra màn hình chính một lần, ứng dụng lưu sẵn toàn bộ dữ liệu mẫu phiếu và thuật toán OMR trong bộ nhớ máy. Thầy cô chỉ cần chạm vào biểu tượng trên màn hình là có thể chấm bài tức thì trong bất kỳ phòng thi nào."
 								})]
 							})]
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "px-4 py-2.5 bg-white border-b-2 border-slate-200 flex items-center gap-2 overflow-x-auto shrink-0",
-							children: [
-								{
-									id: "guide",
-									label: "📱 Hướng Dẫn Cài Trên iPhone & Android"
-								},
-								{
-									id: "index.html",
-									label: "1. index.html"
-								},
-								{
-									id: "style.css",
-									label: "2. style.css"
-								},
-								{
-									id: "camera.js",
-									label: "3. camera.js"
-								},
-								{
-									id: "app.js",
-									label: "4. app.js"
-								},
-								{
-									id: "manifest.json",
-									label: "5. manifest.json"
-								},
-								{
-									id: "sw.js",
-									label: "6. sw.js"
-								}
-							].map((tab) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-								onClick: () => setActivePwaCodeTab(tab.id),
-								className: `px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all ${activePwaCodeTab === tab.id ? "btn-3d btn-3d-blue text-white" : "btn-3d btn-3d-white text-slate-700"}`,
-								children: tab.label
-							}, tab.id))
-						}),
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-							className: "p-4 sm:p-6 overflow-y-auto space-y-5",
-							children: activePwaCodeTab === "guide" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "grid grid-cols-1 md:grid-cols-2 gap-4",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "feature-3d-card feature-3d-blue rounded-2xl p-5 space-y-3",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex items-center justify-between",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-black uppercase",
-												children: "Hệ Điều Hành 1 • iPhone / iPad (iOS Safari)"
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-xs font-mono font-bold text-blue-800",
-												children: "Hỗ trợ Dynamic Island & Tai thỏ"
-											})]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", {
-											className: "text-base sm:text-lg font-black text-blue-950",
-											children: "4 Bước Tạo Phím Tắt Toàn Màn Hình Trên iPhone (Safari)"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("ol", {
-											className: "space-y-2.5 text-xs sm:text-sm text-slate-800 font-medium list-decimal pl-5",
-											children: [
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 1:" }),
-													" Mở đường dẫn trang web ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Edu Chấm Đề 2025" }),
-													" bằng trình duyệt ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Safari" }),
-													" mặc định trên iPhone hoặc iPad."
-												] }),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 2:" }),
-													" Nhấn vào biểu tượng ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Chia sẻ (Share)" }),
-													" ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-														className: "inline-block px-1.5 py-0.5 bg-blue-100 text-blue-900 rounded font-mono font-bold",
-														children: "[↑]"
-													}),
-													" nằm ở thanh công cụ dưới cùng màn hình Safari."
-												] }),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 3:" }),
-													" Cuộn menu xuống dưới và nhấn chọn dòng ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Thêm vào MH chính” (Add to Home Screen [+])" }),
-													"."
-												] }),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 4:" }),
-													" Nhấn nút ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Thêm” (Add)" }),
-													" ở góc trên bên phải. Biểu tượng ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "EduChấmĐề" }),
-													" sẽ xuất hiện ngay trên màn hình chính như một ứng dụng gốc (không còn thanh địa chỉ Safari)."
-												] })
-											]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-950 font-semibold",
-											children: [
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Cấu hình kỹ thuật iOS đã kích hoạt:" }),
-												" ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "apple-mobile-web-app-capable=\"yes\"" }),
-												", ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "apple-mobile-web-app-status-bar-style=\"black-translucent\"" }),
-												", ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "playsinline=\"true\"" }),
-												" (không bị văng sang trình phát video toàn màn hình) và ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "apple-touch-icon.png" }),
-												" 180×180."
-											]
-										})
-									]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "feature-3d-card feature-3d-emerald rounded-2xl p-5 space-y-3",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex items-center justify-between",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-black uppercase",
-												children: "Hệ Điều Hành 2 • Android (Chrome / Samsung)"
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-xs font-mono font-bold text-emerald-800",
-												children: "Hỗ trợ Đèn Flash (Torch)"
-											})]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", {
-											className: "text-base sm:text-lg font-black text-emerald-950",
-											children: "4 Bước Cài Đặt Ứng Dụng PWA Trên Điện Thoại Android"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("ol", {
-											className: "space-y-2.5 text-xs sm:text-sm text-slate-800 font-medium list-decimal pl-5",
-											children: [
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 1:" }),
-													" Mở trang web bằng trình duyệt ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Google Chrome" }),
-													" hoặc ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Samsung Internet" }),
-													" trên điện thoại Android."
-												] }),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 2:" }),
-													" Nhấn nút ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Cài Đặt Tự Động Ngay”" }),
-													" trên thanh thông báo hoặc nhấn vào biểu tượng ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Menu 3 chấm (⋮)" }),
-													" ở góc phải thanh địa chỉ."
-												] }),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 3:" }),
-													" Chọn mục ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Cài đặt ứng dụng” (Install App)" }),
-													" hoặc ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Thêm vào màn hình chính” (Add to Home screen)" }),
-													"."
-												] }),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 4:" }),
-													" Nhấn xác nhận ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Cài đặt”" }),
-													". Ứng dụng sẽ được đóng gói chuẩn APK/WebAPK độc lập trên màn hình chính và ngăn kéo ứng dụng."
-												] })
-											]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 font-semibold",
-											children: [
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Cấu hình kỹ thuật Android đã kích hoạt:" }),
-												" ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "manifest.json" }),
-												" chuẩn ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "display: standalone" }),
-												", icon ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "maskable" }),
-												" 512×512, tự động kiểm tra phần cứng đèn Flash (Torch) qua ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "MediaTrackCapabilities / ImageCapture" }),
-												" để hiện nút ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bật/Tắt Flash" }),
-												" khi thiếu sáng."
-											]
-										})
-									]
-								})]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "feature-3d-card feature-3d-violet rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "space-y-1",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "text-sm sm:text-base font-black text-violet-950 uppercase flex items-center gap-2",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ShieldCheck, { className: "w-5 h-5 text-violet-600" }), "Trạng Thái Bộ Nhớ Đệm Phòng Thi (Service Worker sw.js) & Chụp Ảnh Base64"]
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-										className: "text-xs sm:text-sm text-slate-700 font-medium",
-										children: "Toàn bộ tài nguyên HTML, CSS, JS, Icon và thuật toán chấm OMR đã được lưu vào Cache trình duyệt để giáo viên mở và chấm bài ngay cả khi tắt Wi-Fi / 4G trong phòng thi."
-									})]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-center gap-2 flex-wrap",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
-											href: "./manifest.json",
-											download: "manifest.json",
-											className: "btn-3d btn-3d-white px-3 py-2 rounded-xl text-xs font-black text-violet-900",
-											children: "Tải manifest.json"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
-											href: "./sw.js",
-											download: "sw.js",
-											className: "btn-3d btn-3d-white px-3 py-2 rounded-xl text-xs font-black text-violet-900",
-											children: "Tải sw.js"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
-											href: "./camera.js",
-											download: "camera.js",
-											className: "btn-3d btn-3d-white px-3 py-2 rounded-xl text-xs font-black text-violet-900",
-											children: "Tải camera.js"
-										}),
-										lastCapturedBase64Jpeg && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
-											href: lastCapturedBase64Jpeg,
-											download: "Anh_Chup_Camera_Base64.jpg",
-											className: "btn-3d btn-3d-emerald px-3 py-2 rounded-xl text-xs font-black text-white",
-											children: "Tải Ảnh Base64 Vừa Chụp"
-										})
-									]
-								})]
-							})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PwaSourceCodePreview, { fileKey: activePwaCodeTab })
-						})
-					]
+						})]
+					})]
 				})
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("nav", {
@@ -55398,7 +55316,7 @@ function App() {
 							className: "btn-3d btn-3d-rose py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black text-white",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Smartphone, { className: "w-4 h-4 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "truncate",
-								children: "Cài App ĐT"
+								children: "Tạo Phím Tắt"
 							})]
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
@@ -55456,61 +55374,6 @@ function TemplateCoordinatePreviewOverlay({ templateId, settings }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("canvas", {
 		ref: canvasRef,
 		className: "absolute inset-0 w-full h-full object-contain pointer-events-none z-0"
-	});
-}
-/**
-* Component hiển thị & tải về trực tiếp 6 file mã nguồn PWA chuẩn (index.html, style.css, camera.js, app.js, manifest.json, sw.js)
-*/
-function PwaSourceCodePreview({ fileKey }) {
-	const [content, setContent] = (0, import_react.useState)("Đang tải mã nguồn...");
-	const [copied, setCopied] = (0, import_react.useState)(false);
-	(0, import_react.useEffect)(() => {
-		let cancelled = false;
-		setContent("Đang tải mã nguồn...");
-		fetch(`./${fileKey}`).then((res) => res.text()).then((txt) => {
-			if (!cancelled) setContent(txt);
-		}).catch(() => {
-			if (!cancelled) setContent(`// Không thể đọc trực tiếp ./${fileKey}`);
-		});
-		return () => {
-			cancelled = true;
-		};
-	}, [fileKey]);
-	const handleCopy = async () => {
-		try {
-			await navigator.clipboard.writeText(content);
-			setCopied(true);
-			setTimeout(() => setCopied(false), 1800);
-		} catch {}
-	};
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "space-y-3",
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-			className: "flex flex-wrap items-center justify-between gap-2 bg-slate-900 text-white px-4 py-3 rounded-2xl",
-			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "font-mono font-black text-sm text-sky-300",
-				children: ["📄 File cấu hình PWA độc lập: ./", fileKey]
-			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-				className: "flex items-center gap-2",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-					onClick: handleCopy,
-					className: "btn-3d btn-3d-blue px-3 py-1.5 rounded-xl text-xs font-black text-white",
-					children: copied ? "✓ Đã sao chép mã nguồn" : "Sao chép mã nguồn"
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
-					href: `./${fileKey}`,
-					download: fileKey,
-					className: "btn-3d btn-3d-emerald px-3 py-1.5 rounded-xl text-xs font-black text-white flex items-center gap-1",
-					children: [
-						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "w-3.5 h-3.5" }),
-						"Tải file ",
-						fileKey
-					]
-				})]
-			})]
-		}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("pre", {
-			className: "p-4 rounded-2xl bg-slate-950 text-emerald-300 font-mono text-xs overflow-x-auto max-h-[55vh] leading-relaxed border-2 border-slate-800 select-text",
-			children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: content })
-		})]
 	});
 }
 // src/main.tsx
