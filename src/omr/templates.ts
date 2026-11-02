@@ -445,14 +445,82 @@ export function parseQM2025QrPayload(
   templateId: TemplateId = 'qm_khtn_dia'
 ): AnswerKeyData[] {
   const cleaned = rawText.trim();
-  const parsed = JSON.parse(cleaned);
-  if (!Array.isArray(parsed)) {
-    throw new Error('Dữ liệu QR không phải mảng JSON hợp lệ.');
+  let parsed: any;
+  try {
+    parsed = JSON.parse(cleaned);
+  } catch (e) {
+    throw new Error('Dữ liệu QR không phải JSON hợp lệ.');
+  }
+
+  const tpl = TEMPLATES[templateId] || TEMPLATES.qm_khtn_dia;
+  const result: AnswerKeyData[] = [];
+
+  // 1. Trường hợp QR dạng Object dictionary (TNMaker / Azota {"101": "CCBAD...#ĐĐĐS_ĐĐSĐ_ĐĐSĐ_SĐĐĐ#2700_88.9...", ...})
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    for (const [codeKey, valStr] of Object.entries(parsed)) {
+      if (codeKey === 'success' || codeKey === 'type' || codeKey === 'examId' || codeKey === 'title') continue;
+      let examCode = String(codeKey).trim();
+      if (tpl.maDeDigits === 4 && examCode.length === 3) {
+        examCode = examCode.padStart(4, '0');
+      } else if (tpl.maDeDigits === 3 && examCode.length === 4 && examCode.startsWith('0')) {
+        examCode = examCode.slice(1);
+      }
+
+      const strVal = String(valStr);
+      const parts = strVal.split('#');
+
+      // Phần I (Trắc nghiệm A, B, C, D)
+      const p1Raw = (parts[0] || '').toUpperCase().trim();
+      const choices = ['A', 'B', 'C', 'D'];
+      const p1: string[] = [];
+      const p1TargetCount = Math.max(tpl.p1Count, p1Raw.length > 0 ? p1Raw.length : 18);
+      for (let i = 0; i < p1TargetCount; i++) {
+        const char = p1Raw[i];
+        p1.push(choices.includes(char) ? char : choices[i % 4]);
+      }
+
+      // Phần II (Đúng / Sai: P2 answers, ví dụ "ĐĐĐS_ĐĐSĐ_ĐĐSĐ_SĐĐĐ")
+      const p2Raw = (parts[1] || '').toUpperCase().trim();
+      let p2Tokens = p2Raw.includes('_') ? p2Raw.split('_') : p2Raw.split(',');
+      if (p2Tokens.length < 4 && p2Raw.length >= 16) {
+        p2Tokens = [];
+        for (let i = 0; i < p2Raw.length; i += 4) {
+          p2Tokens.push(p2Raw.slice(i, i + 4));
+        }
+      }
+
+      const p2: AnswerKeyData['p2'] = [];
+      const p2TargetCount = Math.max(tpl.p2Count, 4);
+      for (let q = 0; q < p2TargetCount; q++) {
+        const token = p2Tokens[q] || 'DDDD';
+        const normDS = (char: string): 'D' | 'S' => {
+          const s = String(char || 'D').toUpperCase().trim();
+          return s === 'Đ' || s === 'D' || s === 'TRUE' || s === '1' ? 'D' : 'S';
+        };
+        p2.push({
+          a: normDS(token[0] || 'D'),
+          b: normDS(token[1] || 'D'),
+          c: normDS(token[2] || 'D'),
+          d: normDS(token[3] || 'D'),
+        });
+      }
+
+      // Phần III (Trả lời ngắn: P3 answers, ví dụ "2700_88.9_299_16_28.1_20")
+      const p3Raw = (parts[2] || '').trim();
+      const p3Tokens = p3Raw.split(/[_,\s]+/);
+      const p3: (number | string)[] = [];
+      const p3TargetCount = Math.max(tpl.p3Count, 6);
+      for (let i = 0; i < p3TargetCount; i++) {
+        const token = p3Tokens[i] ?? p3Tokens[i % p3Tokens.length] ?? '16';
+        p3.push(token);
+      }
+
+      result.push({ examCode, p1, p2, p3 });
+    }
+    if (result.length > 0) return result;
   }
 
   const rows = Array.isArray(parsed[0]) ? parsed : [parsed];
-  const tpl = TEMPLATES[templateId] || TEMPLATES.qm_khtn_dia;
-  const result: AnswerKeyData[] = [];
 
   for (const row of rows) {
     if (!Array.isArray(row) || row.length < 2) continue;
