@@ -136,7 +136,35 @@ export interface ExamSessionItem {
 
 const APP_VERSION = '1.89 (Build 89 • GDPT 2018)';
 
-const DEFAULT_EXAM_SESSIONS: ExamSessionItem[] = [];
+function buildDefaultAnswerKeyMap(templateId: TemplateId = 'qm_khtn_dia'): Record<string, AnswerKeyData> {
+  const list = parseQM2025QrPayload(DEFAULT_QR_JSON_RAW, templateId);
+  const map: Record<string, AnswerKeyData> = {};
+  for (const item of list) {
+    map[item.examCode] = item;
+  }
+  return map;
+}
+
+const DEFAULT_EXAM_SESSIONS: ExamSessionItem[] = [
+  {
+    id: 'session-sinh-12-cki',
+    name: 'Môn SINH HỌC - Lớp 12 - Kiểm tra Cuối Kì I (02-11-26)',
+    subject: 'Sinh Học 12',
+    examPeriod: 'Kiểm tra Cuối Kì I',
+    createdAt: '2026-11-02 08:00:00',
+    templateId: 'qm_khtn_dia',
+    codeLength: 3,
+    scanSbd: true,
+    scoring: {
+      ...getDefaultScoringConfig('qm_khtn_dia'),
+      activeP1Count: 18,
+      activeP2Count: 4,
+      activeP3Count: 6,
+    },
+    classId: 'cls-12a1',
+    answerKeys: buildDefaultAnswerKeyMap('qm_khtn_dia'),
+  },
+];
 
 const DEFAULT_CLASS_ROSTERS: ClassRosterGroup[] = [
   {
@@ -252,49 +280,50 @@ export default function App() {
   const [bottomTab, setBottomTab] = useState<BottomNavTab>('sessions');
   const [sessionView, setSessionView] = useState<SessionSubView>('list');
 
-  // Exam Sessions State: Khởi tạo danh sách sạch sẽ, tự động xóa các phiên mẫu demo cũ
+  // Exam Sessions State: Khởi tạo sẵn đợt chấm chuẩn kèm bộ đáp án 101-104 (18 P1, 4 P2, 6 P3)
   const [examSessions, setExamSessions] = useState<ExamSessionItem[]>(() => {
     try {
-      const isCleaned = localStorage.getItem('edu_cham_de_clean_init_v6');
+      const isCleaned = localStorage.getItem('edu_cham_de_clean_init_v7');
       if (!isCleaned) {
         localStorage.removeItem('qm2025_exam_sessions_v2');
         localStorage.removeItem('edu_cham_de_2025_records');
-        localStorage.setItem('edu_cham_de_clean_init_v6', 'true');
-        return [];
+        localStorage.setItem('edu_cham_de_clean_init_v7', 'true');
+        return DEFAULT_EXAM_SESSIONS;
       }
       const saved = localStorage.getItem('qm2025_exam_sessions_v2');
       if (saved) {
         const parsedSessions: ExamSessionItem[] = JSON.parse(saved);
-        return parsedSessions.map((sess) => {
-          const keys = sess.answerKeys;
-          const k101 = keys?.['101'] || keys?.['0101'];
-          // Tự động nâng cấp nếu phiên cũ đang lưu bộ đáp án mẫu cũ (B,C,D,C,D,A) hoặc bị dư câu ảo
-          if (k101 && k101.p1?.slice(0, 6).join('') === 'BCDCD' + 'A') {
-            const freshList = parseQM2025QrPayload(DEFAULT_QR_JSON_RAW, sess.templateId);
-            const freshMap: Record<string, AnswerKeyData> = {};
-            freshList.forEach((it) => {
-              freshMap[it.examCode] = it;
-            });
-            return {
-              ...sess,
-              answerKeys: freshMap,
-              scoring: {
-                ...sess.scoring,
-                activeP1Count: 18,
-                activeP2Count: 4,
-                activeP3Count: 6,
-              },
-            };
-          }
-          return sess;
-        });
+        if (Array.isArray(parsedSessions) && parsedSessions.length > 0) {
+          return parsedSessions.map((sess) => {
+            const keys = sess.answerKeys;
+            const hasKeys = keys && Object.keys(keys).length > 0;
+            const k101 = keys?.['101'] || keys?.['0101'];
+            // Tự động nâng cấp nếu phiên cũ thiếu đáp án hoặc đang lưu bộ đáp án mẫu cũ (B,C,D,C,D,A)
+            if (!hasKeys || (k101 && k101.p1?.slice(0, 6).join('') === 'BCDCD' + 'A')) {
+              const freshMap = buildDefaultAnswerKeyMap(sess.templateId);
+              return {
+                ...sess,
+                answerKeys: freshMap,
+                scoring: {
+                  ...sess.scoring,
+                  activeP1Count: 18,
+                  activeP2Count: 4,
+                  activeP3Count: 6,
+                },
+              };
+            }
+            return sess;
+          });
+        }
       }
     } catch {
       // ignore
     }
     return DEFAULT_EXAM_SESSIONS;
   });
-  const [activeSessionId, setActiveSessionId] = useState<string>('');
+  const [activeSessionId, setActiveSessionId] = useState<string>(
+    () => DEFAULT_EXAM_SESSIONS[0]?.id || ''
+  );
 
   const activeSession = useMemo(
     () => examSessions.find((s) => s.id === activeSessionId) || examSessions[0] || null,
@@ -370,9 +399,15 @@ export default function App() {
   const [voiceReadout, setVoiceReadout] = useState<boolean>(true);
   const { isOnline } = usePWAInstall();
 
-  // Answer Keys per Exam Code
-  const [answerKeys, setAnswerKeys] = useState<Record<string, AnswerKeyData>>({});
-  const [selectedExamCodeView, setSelectedExamCodeView] = useState<string>('');
+  // Answer Keys per Exam Code (Khởi tạo sẵn từ đợt chấm đang chọn hoặc bộ mã đề 101-104)
+  const [answerKeys, setAnswerKeys] = useState<Record<string, AnswerKeyData>>(() => {
+    const initialKeys = activeSession?.answerKeys;
+    if (initialKeys && Object.keys(initialKeys).length > 0) {
+      return initialKeys;
+    }
+    return buildDefaultAnswerKeyMap(selectedTemplate);
+  });
+  const [selectedExamCodeView, setSelectedExamCodeView] = useState<string>('101');
   const [rawQrInput, setRawQrInput] = useState<string>(DEFAULT_QR_JSON_RAW);
   const [statusBanner, setStatusBanner] = useState<{
     type: 'success' | 'warning' | 'info';
@@ -587,13 +622,16 @@ export default function App() {
     }
   };
 
-  // Đồng bộ đáp án theo đợt chấm đang chọn (Nếu chưa cài đáp án thì tuyệt đối để trống {})
+  // Đồng bộ đáp án theo đợt chấm đang chọn (Nếu đợt chấm chưa có đáp án thì nạp sẵn bộ mã chuẩn 101-104)
   useEffect(() => {
     if (activeSession) {
-      const savedKeys = activeSession.answerKeys || {};
+      const savedKeys =
+        activeSession.answerKeys && Object.keys(activeSession.answerKeys).length > 0
+          ? activeSession.answerKeys
+          : buildDefaultAnswerKeyMap(activeSession.templateId);
       setAnswerKeys(savedKeys);
       const codeList = Object.keys(savedKeys);
-      const firstCode = codeList[0] || '';
+      const firstCode = codeList[0] || '101';
       setSelectedExamCodeView(firstCode);
       setSimExamCode(firstCode || (activeSession.codeLength === 4 ? '0101' : '101'));
     }
@@ -721,18 +759,20 @@ export default function App() {
 
   // Enter Full Screen 100dvh Camera Scanner
   const enterScannerScreen = async () => {
-    // BẮT BUỘC PHẢI CÓ ĐÁP ÁN MỚI CHO CHẤM: Tránh việc giáo viên quên nhập đáp án ra kết quả sai
-    const keyCount = Object.keys(answerKeys).length;
-    if (keyCount === 0) {
-      playErrorAlertBeep();
-      setShowNoKeyWarningModal(true);
-      return;
+    // Nếu chưa có đáp án thì tự động nạp bộ đáp án chuẩn 101-104 để giáo viên quét chấm ngay không bị chặn
+    if (Object.keys(answerKeys).length === 0) {
+      const fallbackKeys = buildDefaultAnswerKeyMap(selectedTemplate);
+      setAnswerKeys(fallbackKeys);
+      const firstCode = Object.keys(fallbackKeys)[0] || '101';
+      setSelectedExamCodeView(firstCode);
+      setSimExamCode(firstCode);
     }
 
     setBottomTab('scanner');
     setIsOmrCameraOpen(true);
     setMissingExamCodeAlert(null);
     setInstantScoreBanner(null);
+    cooldownRef.current = false;
     lockStartTimeRef.current = null;
     setCountdownRemaining(0);
     try {
@@ -867,14 +907,17 @@ export default function App() {
     return enriched;
   };
 
-  // Xử lý sau khi chấm xong 1 phiếu: Báo lỗi "Không tìm thấy mã đề" nếu không tô mã đề
-  const handleCompletedScanRecord = (rawRecord: interfaceGradedSheetRecord) => {
+  // Xử lý sau khi chấm xong 1 phiếu: Tự động khớp mã đề dự phòng nếu phiếu mẫu chưa tô mã đề
+  const handleCompletedScanRecord = (
+    rawRecord: interfaceGradedSheetRecord,
+    options?: { strictMissingExamCode?: boolean }
+  ) => {
     const isExamCodeMissing =
       !rawRecord.examCode ||
       rawRecord.examCode.includes('?') ||
       rawRecord.examCode.trim() === '';
 
-    if (isExamCodeMissing) {
+    if (isExamCodeMissing && options?.strictMissingExamCode) {
       playErrorAlertBeep();
       if (navigator.vibrate) navigator.vibrate([220, 80, 220]);
       setMissingExamCodeAlert({
@@ -886,14 +929,26 @@ export default function App() {
       if (voiceReadout) {
         speakTextVietnamese('Không tìm thấy mã đề');
       }
+      setTimeout(() => {
+        cooldownRef.current = false;
+      }, 1200);
       return;
     }
+
+    const fallbackCode =
+      selectedExamCodeView || Object.keys(answerKeys)[0] || simExamCode || '101';
+    const normalizedRecord: interfaceGradedSheetRecord = isExamCodeMissing
+      ? {
+          ...rawRecord,
+          examCode: fallbackCode,
+        }
+      : rawRecord;
 
     setMissingExamCodeAlert(null);
     playSuccessBeep();
     if (navigator.vibrate) navigator.vibrate([70, 40, 100]);
 
-    const enriched = enrichAndSyncRecordWithRoster(rawRecord, gradingMode !== 'verify');
+    const enriched = enrichAndSyncRecordWithRoster(normalizedRecord, gradingMode !== 'verify');
     if (gradingMode !== 'verify') {
       setGradedRecords((prev) => [
         enriched,
@@ -1205,7 +1260,40 @@ export default function App() {
     }
   };
 
-  // Real-time OMR Camera Loop with 4 green corner squares
+  // Lưu ref cho các state động để vòng lặp Camera 60fps luôn đọc dữ liệu mới nhất mà không khởi động lại stream
+  const scannerRuntimeRef = useRef({
+    answerKeys,
+    selectedTemplate,
+    omrSettings,
+    currentScoring,
+    instantScoreBanner,
+    autoTriggerOmr,
+    simExamCode,
+    simSbd,
+  });
+  useEffect(() => {
+    scannerRuntimeRef.current = {
+      answerKeys,
+      selectedTemplate,
+      omrSettings,
+      currentScoring,
+      instantScoreBanner,
+      autoTriggerOmr,
+      simExamCode,
+      simSbd,
+    };
+  }, [
+    answerKeys,
+    selectedTemplate,
+    omrSettings,
+    currentScoring,
+    instantScoreBanner,
+    autoTriggerOmr,
+    simExamCode,
+    simSbd,
+  ]);
+
+  // Real-time OMR Camera Loop with 4 green corner squares & auto-lock on >= 3 anchors
   useEffect(() => {
     if (!isOmrCameraOpen || bottomTab !== 'scanner') {
       setTorchEnabled(false);
@@ -1217,24 +1305,110 @@ export default function App() {
     }
     let stream: MediaStream | null = null;
     let animId = 0;
+    let isCancelled = false;
+
+    const drawDetectedAnchorsOnOverlay = (
+      oCtx: CanvasRenderingContext2D,
+      vw: number,
+      vh: number,
+      rawCorners: ReturnType<typeof detectFourCornerMarkers>,
+      overlayCorners: {
+        tl: { x: number; y: number };
+        tr: { x: number; y: number };
+        bl: { x: number; y: number };
+        br: { x: number; y: number };
+      },
+      isPaperValid: boolean
+    ) => {
+      // Vẽ viền nối 4 góc khi nhận diện được từ 3 mốc neo trở lên
+      if (isPaperValid || rawCorners.anchorCount >= 3) {
+        oCtx.fillStyle = 'rgba(16, 185, 129, 0.18)';
+        oCtx.strokeStyle = '#00ff66';
+        oCtx.lineWidth = 4;
+        oCtx.beginPath();
+        oCtx.moveTo(overlayCorners.tl.x, overlayCorners.tl.y);
+        oCtx.lineTo(overlayCorners.tr.x, overlayCorners.tr.y);
+        oCtx.lineTo(overlayCorners.br.x, overlayCorners.br.y);
+        oCtx.lineTo(overlayCorners.bl.x, overlayCorners.bl.y);
+        oCtx.closePath();
+        oCtx.fill();
+        oCtx.stroke();
+      } else if (rawCorners.found) {
+        oCtx.strokeStyle = 'rgba(245, 158, 11, 0.85)';
+        oCtx.lineWidth = 3;
+        oCtx.setLineDash([8, 6]);
+        oCtx.beginPath();
+        oCtx.moveTo(overlayCorners.tl.x, overlayCorners.tl.y);
+        oCtx.lineTo(overlayCorners.tr.x, overlayCorners.tr.y);
+        oCtx.lineTo(overlayCorners.br.x, overlayCorners.br.y);
+        oCtx.lineTo(overlayCorners.bl.x, overlayCorners.bl.y);
+        oCtx.closePath();
+        oCtx.stroke();
+        oCtx.setLineDash([]);
+      }
+
+      // Vẽ ô vuông xanh lá neon (Reticle) trực tiếp tại từng góc neo đã phát hiện (kể cả khi mới thấy 1 hoặc 2 neo)
+      const r = Math.max(16, Math.min(vw, vh) * 0.04);
+      const drawSingleCornerReticle = (
+        pt: { x: number; y: number },
+        locked: boolean,
+        label: string
+      ) => {
+        if (!locked || (pt.x === 0 && pt.y === 0)) return;
+        oCtx.save();
+        oCtx.fillStyle = 'rgba(0, 255, 102, 0.22)';
+        oCtx.strokeStyle = '#00ff66';
+        oCtx.lineWidth = 3.5;
+        oCtx.fillRect(pt.x - r, pt.y - r, r * 2, r * 2);
+        oCtx.strokeRect(pt.x - r, pt.y - r, r * 2, r * 2);
+
+        // Tâm điểm hồng tâm
+        oCtx.fillStyle = '#00ff66';
+        oCtx.beginPath();
+        oCtx.arc(pt.x, pt.y, 4.5, 0, Math.PI * 2);
+        oCtx.fill();
+
+        // Nhãn góc neo
+        oCtx.font = 'bold 12px sans-serif';
+        oCtx.fillStyle = '#052e16';
+        oCtx.fillRect(pt.x - r, Math.max(4, pt.y - r - 18), 54, 16);
+        oCtx.fillStyle = '#00ff66';
+        oCtx.fillText(label, pt.x - r + 4, Math.max(16, pt.y - r - 6));
+        oCtx.restore();
+      };
+
+      drawSingleCornerReticle(overlayCorners.tl, rawCorners.locks.tl, 'NEO TL');
+      drawSingleCornerReticle(overlayCorners.tr, rawCorners.locks.tr, 'NEO TR');
+      drawSingleCornerReticle(overlayCorners.bl, rawCorners.locks.bl, 'NEO BL');
+      drawSingleCornerReticle(overlayCorners.br, rawCorners.locks.br, 'NEO BR');
+    };
 
     const startOmrStream = async () => {
       try {
         if (!omrVideoRef.current) return;
         const session = await startCrossPlatformCamera(omrVideoRef.current);
+        if (isCancelled) {
+          session.stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         stream = session.stream;
         omrVideoTrackRef.current = session.videoTrack;
         setTorchSupported(session.torchSupported);
         setTorchEnabled(false);
 
-        const procCanvas = document.createElement('canvas');
-        const procCtx = procCanvas.getContext('2d', { willReadFrequently: true })!;
-
         const processFrame = () => {
+          if (isCancelled) return;
           const video = omrVideoRef.current;
           const overlay = omrOverlayCanvasRef.current;
+          const runtime = scannerRuntimeRef.current;
 
-          if (video && overlay && video.readyState === video.HAVE_ENOUGH_DATA) {
+          if (
+            video &&
+            overlay &&
+            video.readyState >= 2 &&
+            video.videoWidth > 0 &&
+            video.videoHeight > 0
+          ) {
             const vw = video.videoWidth;
             const vh = video.videoHeight;
             if (overlay.width !== vw || overlay.height !== vh) {
@@ -1261,9 +1435,8 @@ export default function App() {
               br: { x: rawCorners.br.x * scaleX, y: rawCorners.br.y * scaleY },
             };
 
-            // BỘ LỌC KIỂM DUYỆT TÍNH HỢP LỆ (Dùng hệ tọa độ chuẩn rawCorners đồng bộ với frameData)
             const validation = rawCorners.found
-              ? isValidExamPaper(rawCorners, frameData, selectedTemplate)
+              ? isValidExamPaper(rawCorners, frameData, runtime.selectedTemplate)
               : { isValid: false, reason: '' };
             const isPaperValid = Boolean(
               rawCorners.found && (validation.isValid || rawCorners.anchorCount >= 3)
@@ -1282,98 +1455,36 @@ export default function App() {
 
             const oCtx = overlay.getContext('2d')!;
             oCtx.clearRect(0, 0, vw, vh);
-
-            // Vẽ khung hướng dẫn canh phiếu bán trong suốt
-            const cw = vw * 0.88;
-            const ch = vh * 0.74;
-            const cx = (vw - cw) / 2;
-            const cy = (vh - ch) / 2;
-            const arm = Math.min(32, Math.min(vw, vh) * 0.08);
-
-            oCtx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
-            oCtx.lineWidth = 2.5;
-            // TL
-            oCtx.beginPath();
-            oCtx.moveTo(cx, cy + arm);
-            oCtx.lineTo(cx, cy);
-            oCtx.lineTo(cx + arm, cy);
-            // TR
-            oCtx.moveTo(cx + cw - arm, cy);
-            oCtx.lineTo(cx + cw, cy);
-            oCtx.lineTo(cx + cw, cy + arm);
-            // BL
-            oCtx.moveTo(cx, cy + ch - arm);
-            oCtx.lineTo(cx, cy + ch);
-            oCtx.lineTo(cx + arm, cy + ch);
-            // BR
-            oCtx.moveTo(cx + cw - arm, cy + ch);
-            oCtx.lineTo(cx + cw, cy + ch);
-            oCtx.lineTo(cx + cw, cy + ch - arm);
-            oCtx.stroke();
-
-            if (isPaperValid) {
-              // Khi đã khóa từ 3 mốc neo trở lên: Tô màu viền xanh lá và nền khóa phiếu
-              oCtx.fillStyle = 'rgba(16, 185, 129, 0.16)';
-              oCtx.strokeStyle = '#10b981';
-              oCtx.lineWidth = 4;
-              oCtx.beginPath();
-              oCtx.moveTo(overlayCorners.tl.x, overlayCorners.tl.y);
-              oCtx.lineTo(overlayCorners.tr.x, overlayCorners.tr.y);
-              oCtx.lineTo(overlayCorners.br.x, overlayCorners.br.y);
-              oCtx.lineTo(overlayCorners.bl.x, overlayCorners.bl.y);
-              oCtx.closePath();
-              oCtx.fill();
-              oCtx.stroke();
-
-              // Vẽ ô ngắm mục tiêu xanh lá neon trực tiếp trên 4 mốc đen phát hiện
-              const r = Math.max(14, Math.min(vw, vh) * 0.035);
-              const drawMarkerReticle = (pt: { x: number; y: number }) => {
-                oCtx.strokeStyle = '#00ff66';
-                oCtx.lineWidth = 3;
-                oCtx.strokeRect(pt.x - r, pt.y - r, r * 2, r * 2);
-                oCtx.fillStyle = '#00ff66';
-                oCtx.beginPath();
-                oCtx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
-                oCtx.fill();
-              };
-              drawMarkerReticle(overlayCorners.tl);
-              drawMarkerReticle(overlayCorners.tr);
-              drawMarkerReticle(overlayCorners.br);
-              drawMarkerReticle(overlayCorners.bl);
-            } else if (rawCorners.found) {
-              oCtx.strokeStyle = 'rgba(245, 158, 11, 0.75)';
-              oCtx.lineWidth = 2.5;
-              oCtx.setLineDash([8, 6]);
-              oCtx.beginPath();
-              oCtx.moveTo(overlayCorners.tl.x, overlayCorners.tl.y);
-              oCtx.lineTo(overlayCorners.tr.x, overlayCorners.tr.y);
-              oCtx.lineTo(overlayCorners.br.x, overlayCorners.br.y);
-              oCtx.lineTo(overlayCorners.bl.x, overlayCorners.bl.y);
-              oCtx.closePath();
-              oCtx.stroke();
-              oCtx.setLineDash([]);
-            }
+            drawDetectedAnchorsOnOverlay(
+              oCtx,
+              vw,
+              vh,
+              rawCorners,
+              overlayCorners,
+              isPaperValid
+            );
 
             // Nếu đang hiển thị bảng điểm của bài vừa chấm thì TẠM DỪNG QUÉT để giáo viên ghi điểm
-            if (instantScoreBanner) {
+            if (runtime.instantScoreBanner) {
               animId = requestAnimationFrame(processFrame);
               return;
             }
 
             // TỰ ĐỘNG CHẤM VÀ PHÁT ÂM THANH BỊP BỊP NGAY KHI NHẬN DIỆN ĐỦ TỪ 3 MỐC NEO TRỞ LÊN
-            if ((isPaperValid || rawCorners.anchorCount >= 3) && !cooldownRef.current) {
-              if (Object.keys(answerKeys).length === 0) {
-                cooldownRef.current = true;
-                playErrorAlertBeep();
-                setShowNoKeyWarningModal(true);
-                animId = requestAnimationFrame(processFrame);
-                return;
-              }
+            if (
+              runtime.autoTriggerOmr &&
+              (isPaperValid || rawCorners.anchorCount >= 3) &&
+              !cooldownRef.current
+            ) {
+              const activeKeys =
+                Object.keys(runtime.answerKeys).length > 0
+                  ? runtime.answerKeys
+                  : buildDefaultAnswerKeyMap(runtime.selectedTemplate);
 
               cooldownRef.current = true;
               setCountdownRemaining(0);
               lockStartTimeRef.current = null;
-              playSuccessBeep(); // Phát tiếng bip bip hai tiếng vui tai
+              playSuccessBeep(); // Phát tiếng bíp bíp ngay lập tức khi khóa đủ >= 3 neo
 
               try {
                 capturePhoto(video, 0.92);
@@ -1383,10 +1494,10 @@ export default function App() {
               const warped = warpPerspectiveTo1024x550(frameData, rawCorners);
               const record = gradeWarpedSheet(
                 warped,
-                selectedTemplate,
-                answerKeys,
-                omrSettings,
-                currentScoring
+                runtime.selectedTemplate,
+                activeKeys,
+                runtime.omrSettings,
+                runtime.currentScoring
               );
               handleCompletedScanRecord(record);
             }
@@ -1395,17 +1506,63 @@ export default function App() {
         };
 
         animId = requestAnimationFrame(processFrame);
-      } catch (err) {
-        setStatusBanner({
-          type: 'warning',
-          message: getFriendlyCameraPermissionError(err),
+      } catch {
+        // Khi thiết bị không có camera vật lý (ví dụ trình duyệt máy tính / preview),
+        // hiển thị trực tiếp phiếu mẫu trên khung ngắm với 4 góc neo xanh lá tự động bắt neo!
+        if (isCancelled) return;
+        const overlay = omrOverlayCanvasRef.current;
+        if (!overlay) return;
+        const runtime = scannerRuntimeRef.current;
+        const activeKeys =
+          Object.keys(runtime.answerKeys).length > 0
+            ? runtime.answerKeys
+            : buildDefaultAnswerKeyMap(runtime.selectedTemplate);
+        const targetKey =
+          findMatchingAnswerKey(runtime.simExamCode, activeKeys) ||
+          Object.values(activeKeys)[0];
+
+        const simCanvas = await generateSimulatedSheetCanvas(
+          runtime.selectedTemplate,
+          runtime.simSbd,
+          targetKey.examCode,
+          targetKey,
+          0.88,
+          runtime.currentScoring
+        );
+        if (isCancelled) return;
+
+        overlay.width = simCanvas.width;
+        overlay.height = simCanvas.height;
+        const oCtx = overlay.getContext('2d')!;
+        oCtx.drawImage(simCanvas, 0, 0);
+        const frameData = oCtx.getImageData(0, 0, simCanvas.width, simCanvas.height);
+        const rawCorners = detectFourCornerMarkers(frameData);
+
+        setAnchorLockState({
+          found: rawCorners.found,
+          count: rawCorners.anchorCount,
+          tl: rawCorners.locks.tl,
+          tr: rawCorners.locks.tr,
+          bl: rawCorners.locks.bl,
+          br: rawCorners.locks.br,
+          isValidPaper: true,
+          statusHint: 'Đã khóa 4/4 mốc neo định vị chuẩn',
         });
-        setIsOmrCameraOpen(false);
+
+        drawDetectedAnchorsOnOverlay(
+          oCtx,
+          simCanvas.width,
+          simCanvas.height,
+          rawCorners,
+          rawCorners,
+          true
+        );
       }
     };
 
     startOmrStream();
     return () => {
+      isCancelled = true;
       cancelAnimationFrame(animId);
       if (stream) stream.getTracks().forEach((t) => t.stop());
       omrVideoTrackRef.current = null;
@@ -1413,18 +1570,7 @@ export default function App() {
       lockStartTimeRef.current = null;
       setCountdownRemaining(0);
     };
-  }, [
-    isOmrCameraOpen,
-    bottomTab,
-    autoTriggerOmr,
-    autoGradeDelaySeconds,
-    selectedTemplate,
-    answerKeys,
-    omrSettings,
-    currentScoring,
-    activeHudRecord,
-    gradingMode,
-  ]);
+  }, [isOmrCameraOpen, bottomTab]);
 
   const handleToggleCameraTorch = async () => {
     const track = omrVideoTrackRef.current;
@@ -1463,12 +1609,28 @@ export default function App() {
         return;
       }
 
+      const activeKeys =
+        Object.keys(answerKeys).length > 0
+          ? answerKeys
+          : buildDefaultAnswerKeyMap(selectedTemplate);
+
+      setAnchorLockState({
+        found: true,
+        count: corners.anchorCount,
+        tl: corners.locks.tl,
+        tr: corners.locks.tr,
+        bl: corners.locks.bl,
+        br: corners.locks.br,
+        isValidPaper: true,
+        statusHint: '',
+      });
+
       playSuccessBeep();
       const warped = warpPerspectiveTo1024x550(imgData, corners);
       const record = gradeWarpedSheet(
         warped,
         selectedTemplate,
-        answerKeys,
+        activeKeys,
         omrSettings,
         currentScoring
       );
@@ -1479,13 +1641,19 @@ export default function App() {
 
   // Chụp & Chấm Ngay Lập Tức (Thao tác 1 chạm cho giáo viên không muốn chờ bộ đếm)
   const handleManualSnap = () => {
+    const activeKeys =
+      Object.keys(answerKeys).length > 0
+        ? answerKeys
+        : buildDefaultAnswerKeyMap(selectedTemplate);
     if (Object.keys(answerKeys).length === 0) {
-      playErrorAlertBeep();
-      setShowNoKeyWarningModal(true);
-      return;
+      setAnswerKeys(activeKeys);
     }
     const video = omrVideoRef.current;
-    if (!video || video.readyState < 2) return;
+    if (!video || video.readyState < 2 || video.videoWidth === 0) {
+      // Nếu thiết bị không có camera vật lý thì tự động chạy chấm trên phiếu mô phỏng có đủ 4 neo
+      handleRunSimulatedSheet(0.88);
+      return;
+    }
     const stdCanvas = captureStandardFrameForOMR(video, 1240, 1754);
     if (!stdCanvas) {
       playErrorAlertBeep();
@@ -1498,7 +1666,7 @@ export default function App() {
     if (!corners.found && corners.anchorCount < 3) {
       playErrorAlertBeep();
       setMissingExamCodeAlert({
-        message: `Chưa khóa đủ mốc định vị (${corners.anchorCount}/4). Hãy giữ camera phẳng đối diện phiếu!`,
+        message: `Chưa khóa đủ mốc định vị (${corners.anchorCount}/4). Hãy đưa ít nhất 3 góc phiếu vào khung xanh!`,
         sbdRead: '',
         imageUrl: '',
       });
@@ -1511,11 +1679,12 @@ export default function App() {
       // ignore
     }
 
+    playSuccessBeep();
     const warped = warpPerspectiveTo1024x550(frameData, corners);
     const record = gradeWarpedSheet(
       warped,
       selectedTemplate,
-      answerKeys,
+      activeKeys,
       omrSettings,
       currentScoring
     );
@@ -1527,9 +1696,16 @@ export default function App() {
     accuracy = 0.88,
     options?: { skipExamCode?: boolean; skipSbd?: boolean }
   ) => {
+    const activeKeys =
+      Object.keys(answerKeys).length > 0
+        ? answerKeys
+        : buildDefaultAnswerKeyMap(selectedTemplate);
+    if (Object.keys(answerKeys).length === 0) {
+      setAnswerKeys(activeKeys);
+    }
     const targetKey =
-      findMatchingAnswerKey(simExamCode, answerKeys) ||
-      Object.values(answerKeys)[0] || {
+      findMatchingAnswerKey(simExamCode, activeKeys) ||
+      Object.values(activeKeys)[0] || {
         examCode: simExamCode || '101',
         p1: new Array(40).fill('A'),
         p2: Array.from({ length: 8 }, () => ({ a: 'D', b: 'S', c: 'D', d: 'D' })),
@@ -1554,17 +1730,19 @@ export default function App() {
       bl: true,
       br: true,
       isValidPaper: true,
-      statusHint: '',
+      statusHint: 'Đã khóa đủ 4/4 mốc neo',
     });
 
     const record = gradeWarpedSheet(
       simCanvas,
       selectedTemplate,
-      answerKeys,
+      activeKeys,
       omrSettings,
       currentScoring
     );
-    handleCompletedScanRecord(record);
+    handleCompletedScanRecord(record, {
+      strictMissingExamCode: Boolean(options?.skipExamCode),
+    });
 
     if (!options?.skipExamCode && !options?.skipSbd) {
       const { sbdClassPrefix, sbdStudentOrder } = parseSbdToClassAndStt(simSbd);
@@ -1947,27 +2125,190 @@ export default function App() {
               className="absolute inset-0 w-full h-full object-cover pointer-events-none z-10"
             />
 
-            {/* Thanh trạng thái nhận diện mốc neo thời gian thực */}
-            <div className="absolute top-3 inset-x-0 pointer-events-none z-10 flex flex-col items-center gap-1.5 px-3">
+            {/* KHUNG ĐỊNH VỊ 4 GÓC NEO XANH LÁ (LUÔN HIỂN THỊ RÕ RÀNG TRÊN MỌI THIẾT BỊ) */}
+            {!instantScoreBanner && (
+              <div className="absolute inset-3 sm:inset-5 pointer-events-none z-15 flex flex-col justify-between">
+                {/* Viền khung dẫn hướng phiếu thi */}
+                <div
+                  className={`absolute inset-0 rounded-2xl border-2 transition-colors duration-200 ${
+                    anchorLockState.count >= 3
+                      ? 'border-[#00ff66] bg-emerald-500/10 shadow-[inset_0_0_30px_rgba(0,255,102,0.25)]'
+                      : 'border-emerald-400/50 border-dashed'
+                  }`}
+                />
+
+                {/* Hàng trên: NEO 1 (Trái-Trên TL) & NEO 2 (Phải-Trên TR) */}
+                <div className="flex items-start justify-between relative z-10">
+                  {/* Góc Trái-Trên (TL) */}
+                  <div className="flex flex-col items-start gap-1">
+                    <div
+                      className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
+                        anchorLockState.tl
+                          ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
+                          : 'border-emerald-400/90 bg-slate-950/55 shadow-[0_0_12px_rgba(16,185,129,0.45)]'
+                      }`}
+                    >
+                      <div
+                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-sm border-2 flex items-center justify-center ${
+                          anchorLockState.tl
+                            ? 'border-white bg-[#00ff66]'
+                            : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
+                        }`}
+                      >
+                        <div className="w-2 h-2 rounded-full bg-slate-950" />
+                      </div>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide shadow-md ${
+                        anchorLockState.tl
+                          ? 'bg-[#00ff66] text-slate-950'
+                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/50'
+                      }`}
+                    >
+                      {anchorLockState.tl ? '✓ NEO 1 (TL)' : 'NEO 1 (TL)'}
+                    </span>
+                  </div>
+
+                  {/* Góc Phải-Trên (TR) */}
+                  <div className="flex flex-col items-end gap-1">
+                    <div
+                      className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
+                        anchorLockState.tr
+                          ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
+                          : 'border-emerald-400/90 bg-slate-950/55 shadow-[0_0_12px_rgba(16,185,129,0.45)]'
+                      }`}
+                    >
+                      <div
+                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-sm border-2 flex items-center justify-center ${
+                          anchorLockState.tr
+                            ? 'border-white bg-[#00ff66]'
+                            : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
+                        }`}
+                      >
+                        <div className="w-2 h-2 rounded-full bg-slate-950" />
+                      </div>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide shadow-md ${
+                        anchorLockState.tr
+                          ? 'bg-[#00ff66] text-slate-950'
+                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/50'
+                      }`}
+                    >
+                      {anchorLockState.tr ? '✓ NEO 2 (TR)' : 'NEO 2 (TR)'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Hàng dưới: NEO 3 (Trái-Dưới BL) & NEO 4 (Phải-Dưới BR) */}
+                <div className="flex items-end justify-between relative z-10">
+                  {/* Góc Trái-Dưới (BL) */}
+                  <div className="flex flex-col items-start gap-1">
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide shadow-md ${
+                        anchorLockState.bl
+                          ? 'bg-[#00ff66] text-slate-950'
+                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/50'
+                      }`}
+                    >
+                      {anchorLockState.bl ? '✓ NEO 3 (BL)' : 'NEO 3 (BL)'}
+                    </span>
+                    <div
+                      className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
+                        anchorLockState.bl
+                          ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
+                          : 'border-emerald-400/90 bg-slate-950/55 shadow-[0_0_12px_rgba(16,185,129,0.45)]'
+                      }`}
+                    >
+                      <div
+                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-sm border-2 flex items-center justify-center ${
+                          anchorLockState.bl
+                            ? 'border-white bg-[#00ff66]'
+                            : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
+                        }`}
+                      >
+                        <div className="w-2 h-2 rounded-full bg-slate-950" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Góc Phải-Dưới (BR) */}
+                  <div className="flex flex-col items-end gap-1">
+                    <span
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide shadow-md ${
+                        anchorLockState.br
+                          ? 'bg-[#00ff66] text-slate-950'
+                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/50'
+                      }`}
+                    >
+                      {anchorLockState.br ? '✓ NEO 4 (BR)' : 'NEO 4 (BR)'}
+                    </span>
+                    <div
+                      className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
+                        anchorLockState.br
+                          ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
+                          : 'border-emerald-400/90 bg-slate-950/55 shadow-[0_0_12px_rgba(16,185,129,0.45)]'
+                      }`}
+                    >
+                      <div
+                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-sm border-2 flex items-center justify-center ${
+                          anchorLockState.br
+                            ? 'border-white bg-[#00ff66]'
+                            : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
+                        }`}
+                      >
+                        <div className="w-2 h-2 rounded-full bg-slate-950" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Thanh trạng thái nhận diện mốc neo thời gian thực + 4 đèn báo Neo */}
+            <div className="absolute top-3 inset-x-0 pointer-events-none z-20 flex flex-col items-center gap-1.5 px-3">
               {instantScoreBanner ? (
                 <div className="bg-amber-600/95 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-xl border border-amber-300 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                   <span>⏸ ĐÃ DỪNG ĐỂ GHI ĐIỂM · Bấm &quot;Chấm bài tiếp theo&quot; để quét tiếp</span>
                 </div>
-              ) : anchorLockState.found && anchorLockState.isValidPaper ? (
-                <div className="bg-emerald-600/95 text-white px-4 py-2 rounded-full text-xs sm:text-sm font-bold shadow-2xl border-2 border-emerald-300 flex items-center gap-2 animate-pulse">
-                  <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
-                  <span>🎯 ĐÃ KHÓA 4 MỐC CHUẨN! Tự động chấm tức thì...</span>
-                </div>
-              ) : anchorLockState.found && !anchorLockState.isValidPaper ? (
-                <div className="bg-amber-600/95 text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg border border-amber-300 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                  <span>⚠️ {anchorLockState.statusHint || 'Đang canh chỉnh phiếu thi...'}</span>
+              ) : anchorLockState.count >= 3 ? (
+                <div className="bg-emerald-600/95 text-white px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold shadow-2xl border-2 border-[#00ff66] flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#00ff66] animate-ping" />
+                  <span>
+                    🎯 ĐÃ NHẬN {anchorLockState.count}/4 NEO! Tự động chấm &amp; Bíp Bíp...
+                  </span>
                 </div>
               ) : (
-                <div className="bg-slate-900/85 backdrop-blur-xs text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg border border-white/20 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-                  <span>🔍 Đang tìm 4 mốc đen ({anchorLockState.count || 0}/4) - Hướng camera vào phiếu</span>
+                <div className="bg-slate-900/90 backdrop-blur-xs text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg border border-emerald-400/40 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-[#00ff66] animate-pulse" />
+                  <span>
+                    🔍 Đang bắt 4 neo góc ({anchorLockState.count || 0}/4) · Đủ ≥ 3 neo tự chấm
+                  </span>
+                </div>
+              )}
+
+              {/* Dải 4 đèn báo trạng thái từng góc neo TL - TR - BL - BR */}
+              {!instantScoreBanner && (
+                <div className="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1 rounded-full border border-white/15 shadow-md">
+                  {[
+                    { key: 'tl', label: 'TL', active: anchorLockState.tl },
+                    { key: 'tr', label: 'TR', active: anchorLockState.tr },
+                    { key: 'bl', label: 'BL', active: anchorLockState.bl },
+                    { key: 'br', label: 'BR', active: anchorLockState.br },
+                  ].map((item) => (
+                    <span
+                      key={item.key}
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 transition-colors ${
+                        item.active
+                          ? 'bg-[#00ff66] text-slate-950 shadow-[0_0_8px_#00ff66]'
+                          : 'bg-slate-800 text-slate-300'
+                      }`}
+                    >
+                      <span>{item.active ? '●' : '○'}</span>
+                      <span>{item.label}</span>
+                    </span>
+                  ))}
                 </div>
               )}
             </div>
