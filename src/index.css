@@ -5,7 +5,7 @@
   html, body {
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-    background: linear-gradient(145deg, #e8f3ff 0%, #f4f8fc 48%, #e8fbf2 100%);
+    background: linear-gradient(145deg, #0a1033 0%, #12174d 50%, #240e4f 100%);
     color: #0f172a;
     /* Vô hiệu hóa hiệu ứng nảy cuộn trang (rubber-band bounce) trên iOS Safari & Android */
     overscroll-behavior-y: none;
@@ -350,5 +350,86 @@ button, a, label, input, select {
 
 .animate-bottom-sheet {
   animation: slideUpSheet 240ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* 3D Distinct Vibrant Function Buttons (Mỗi chức năng 1 màu sắc khác nhau) */
+.btn-3d-cyan {
+  background: linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%);
+  border: 1px solid #0369a1;
+  box-shadow: inset 0 2px 0 0 rgba(255, 255, 255, 0.45), 0 5px 0 0 #075985, 0 12px 24px -4px rgba(14, 165, 233, 0.45);
+}
+.btn-3d-cyan:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow: inset 0 2px 0 0 rgba(255, 255, 255, 0.55), 0 6px 0 0 #075985, 0 16px 28px -4px rgba(14, 165, 233, 0.5);
+}
+.btn-3d-cyan:active:not(:disabled) {
+  transform: translateY(3.5px);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3), 0 1.5px 0 0 #075985, 0 3px 8px -2px rgba(14, 165, 233, 0.35);
+}
+
+.btn-3d-scanner {
+  background: linear-gradient(135deg, #0284c7 0%, #2563eb 50%, #4f46e5 100%);
+  border: 1.5px solid #93c5fd;
+  box-shadow: inset 0 2px 0 0 rgba(255, 255, 255, 0.6), 0 6px 0 0 #1e3a8a, 0 14px 28px -4px rgba(37, 99, 235, 0.55);
+}
+.btn-3d-scanner:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: inset 0 2px 0 0 rgba(255, 255, 255, 0.7), 0 7px 0 0 #1e3a8a, 0 18px 32px -4px rgba(37, 99, 235, 0.65);
+}
+.btn-3d-scanner:active:not(:disabled) {
+  transform: translateY(3.5px);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3), 0 2px 0 0 #1e3a8a, 0 4px 10px -2px rgba(37, 99, 235, 0.4);
+}
+
+.btn-3d-gold {
+  background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+  border: 1px solid #b45309;
+  box-shadow: inset 0 2px 0 0 rgba(255, 255, 255, 0.45), 0 5px 0 0 #78350f, 0 12px 24px -4px rgba(245, 158, 11, 0.45);
+}
+.btn-3d-gold:active:not(:disabled) {
+  transform: translateY(3.5px);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3), 0 1.5px 0 0 #78350f, 0 3px 8px -2px rgba(245, 158, 11, 0.35);
+}
+
+.btn-3d-fuchsia {
+  background: linear-gradient(180deg, #d946ef 0%, #c026d3 100%);
+  border: 1px solid #a21caf;
+  box-shadow: inset 0 2px 0 0 rgba(255, 255, 255, 0.45), 0 5px 0 0 #701a75, 0 12px 24px -4px rgba(217, 70, 239, 0.45);
+}
+.btn-3d-fuchsia:active:not(:disabled) {
+  transform: translateY(3.5px);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3), 0 1.5px 0 0 #701a75, 0 3px 8px -2px rgba(217, 70, 239, 0.35);
+}
+
+.btn-3d-teal {
+  background: linear-gradient(180deg, #14b8a6 0%, #0d9488 100%);
+  border: 1px solid #0f766e;
+  box-shadow: inset 0 2px 0 0 rgba(255, 255, 255, 0.45), 0 5px 0 0 #115e59, 0 12px 24px -4px rgba(20, 184, 166, 0.45);
+}
+.btn-3d-teal:active:not(:disabled) {
+  transform: translateY(3.5px);
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.3), 0 1.5px 0 0 #115e59, 0 3px 8px -2px rgba(20, 184, 166, 0.35);
+}
+
+/* Pulsing Glowing Logo Ring Effect */
+@keyframes pulseGlowRing {
+  0%, 100% {
+    box-shadow: 0 0 18px rgba(56, 189, 248, 0.75), 0 0 35px rgba(168, 85, 247, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.7);
+    filter: drop-shadow(0 4px 10px rgba(56, 189, 248, 0.4));
+  }
+  50% {
+    box-shadow: 0 0 28px rgba(56, 189, 248, 0.95), 0 0 55px rgba(168, 85, 247, 0.75), inset 0 2px 6px rgba(255, 255, 255, 0.9);
+    filter: drop-shadow(0 6px 16px rgba(168, 85, 247, 0.6));
+  }
+}
+
+.glow-pulse-logo {
+  animation: pulseGlowRing 2.2s ease-in-out infinite;
+}
+
+.bg-edu-gradient {
+  background: radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.22) 0%, transparent 45%),
+              radial-gradient(circle at 85% 85%, rgba(168, 85, 247, 0.25) 0%, transparent 50%),
+              linear-gradient(145deg, #0a1033 0%, #12174d 50%, #240e4f 100%);
 }
 

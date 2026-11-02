@@ -79,7 +79,6 @@ import {
   startCrossPlatformCamera,
 } from './omr/camera';
 import { usePWAInstall } from './pwa/usePWAInstall';
-import { generateStandaloneSingleFileHtml } from './standaloneHtmlBuilder';
 
 type BottomNavTab = 'sessions' | 'scanner' | 'classes' | 'settings';
 type SessionSubView =
@@ -152,7 +151,7 @@ const DEFAULT_EXAM_SESSIONS: ExamSessionItem[] = [
   },
   {
     id: 'session-2',
-    name: 'Sinh 12 - Cuối kì I (Chuẩn QM 2025)',
+    name: 'Sinh 12 - Cuối kì I (Chuẩn GDPT 2018)',
     subject: 'Sinh Học',
     examPeriod: 'Kiểm tra Cuối kì I',
     createdAt: '2026-11-02 10:45:40',
@@ -1456,23 +1455,6 @@ export default function App() {
     setShowExportActionSheet(false);
   };
 
-  // Download Single-File Standalone HTML (for GitHub Pages / Offline Single File)
-  const handleDownloadStandaloneHtmlFile = () => {
-    const html = generateStandaloneSingleFileHtml();
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'index.html';
-    a.click();
-    URL.revokeObjectURL(url);
-    setStatusBanner({
-      type: 'success',
-      message:
-        'Đã tải xuống trọn vẹn 1 file index.html duy nhất (tích hợp SHEET_DATABASE 14 mẫu & OMR) — Sẵn sàng đẩy lên GitHub!',
-    });
-  };
-
   // Class Roster Management Helpers
   const handleAddNewClassGroup = () => {
     const cleanName = newClassName.trim().toUpperCase();
@@ -1820,75 +1802,123 @@ export default function App() {
         {/* ================================================================= */}
         {bottomTab === 'sessions' && (
           <>
-            {/* 1A. MÀN HÌNH MENU CHÀO MỪNG QM 2025 (ẢNH 1) */}
+            {/* 1A. MÀN HÌNH MENU CHÀO MỪNG EDU CHẤM ĐỀ (MÀU XANH - TÍM 3D) */}
             {sessionView === 'welcome' && (
-              <div className="flex-1 flex flex-col justify-between p-5 bg-[#d6d0c4] min-h-[85vh] rounded-b-3xl">
-                <div className="pt-6 text-center space-y-2">
-                  <h1 className="text-2xl font-bold text-[#2b90d9] tracking-tight">
-                    Chấm thi QM 2025
-                  </h1>
-                  <div className="h-[1px] bg-white/70 w-full my-2" />
-                  <p className="text-base font-medium text-slate-900 pb-3">
-                    Chấm đề cấu trúc 3 phần
-                  </p>
+              <div className="flex-1 flex flex-col justify-between p-5 bg-gradient-to-br from-[#0c1445] via-[#161a52] to-[#2b0e5e] min-h-[85vh] rounded-b-3xl border-b border-indigo-500/30 shadow-2xl">
+                <div className="pt-4 text-center space-y-3">
+                  {/* LOGO ĐẶC TRƯNG NHẤP NHÁY */}
+                  <div className="flex items-center justify-center">
+                    <div className="relative group">
+                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500 via-sky-400 to-fuchsia-500 flex items-center justify-center text-white shadow-lg glow-pulse-logo border-2 border-white/70">
+                        <GraduationCap className="w-9 h-9 drop-shadow" />
+                      </div>
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-400 rounded-full border-2 border-slate-900 animate-ping" />
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-400 rounded-full border-2 border-slate-900" />
+                    </div>
+                  </div>
 
+                  <div>
+                    <h1 className="text-3xl font-black bg-gradient-to-r from-cyan-300 via-sky-200 to-fuchsia-300 bg-clip-text text-transparent tracking-tight">
+                      Edu Chấm Đề
+                    </h1>
+                    <p className="text-sm font-semibold text-cyan-200/90 pt-1">
+                      Chấm đề cấu trúc 3 phần (GDPT 2018)
+                    </p>
+                  </div>
+                  <div className="h-[1px] bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent w-full my-2" />
+
+                  {/* 5 NÚT CHỨC NĂNG 3D MÀU SẮC NỔI BẬT KHÁC NHAU */}
                   <div className="space-y-3 text-left pt-2">
-                    {[
-                      {
-                        label: 'Danh sách chấm',
-                        icon: <Folder className="w-6 h-6 text-[#2b90d9]" />,
-                        onClick: () => setSessionView('list'),
-                      },
-                      {
-                        label: 'Tải phiếu trả lời (14 mẫu chuẩn)',
-                        icon: <FileText className="w-6 h-6 text-[#2b90d9]" />,
-                        onClick: () => setShowSheetSelectorBottomSheet(true),
-                      },
-                      {
-                        label: 'Cài đặt',
-                        icon: <Settings className="w-6 h-6 text-[#2b90d9]" />,
-                        onClick: () => setBottomTab('settings'),
-                      },
-                      {
-                        label: 'Tài khoản',
-                        icon: <User className="w-6 h-6 text-[#2b90d9]" />,
-                        onClick: () => setShowAccountModal(true),
-                      },
-                      {
-                        label: 'Lớp học',
-                        icon: <Users className="w-6 h-6 text-[#2b90d9]" />,
-                        onClick: () => setBottomTab('classes'),
-                      },
-                    ].map((item, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={item.onClick}
-                        className="w-full bg-white rounded-2xl px-4 py-4 flex items-center justify-between shadow-xs active:scale-[0.99] transition cursor-pointer"
-                      >
-                        <div className="flex items-center gap-4">
-                          {item.icon}
-                          <span className="text-base font-medium text-[#7c6246]">
-                            {item.label}
-                          </span>
+                    <button
+                      type="button"
+                      onClick={() => setSessionView('list')}
+                      className="w-full btn-3d btn-3d-cyan rounded-2xl px-4 py-3.5 flex items-center justify-between text-white cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shadow-inner">
+                          <Folder className="w-5 h-5 text-white" />
                         </div>
-                        <ChevronRight className="w-5 h-5 text-slate-400" />
-                      </button>
-                    ))}
+                        <span className="text-base font-extrabold tracking-wide">
+                          Danh sách chấm
+                        </span>
+                      </div>
+                      <ChevronRight className="w-6 h-6 text-cyan-100" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowSheetSelectorBottomSheet(true)}
+                      className="w-full btn-3d btn-3d-violet rounded-2xl px-4 py-3.5 flex items-center justify-between text-white cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shadow-inner">
+                          <FileText className="w-5 h-5 text-white" />
+                        </div>
+                        <span className="text-base font-extrabold tracking-wide">
+                          Tải phiếu trả lời (14 mẫu chuẩn)
+                        </span>
+                      </div>
+                      <ChevronRight className="w-6 h-6 text-purple-100" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setBottomTab('settings')}
+                      className="w-full btn-3d btn-3d-slate rounded-2xl px-4 py-3.5 flex items-center justify-between text-white cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shadow-inner">
+                          <Settings className="w-5 h-5 text-white" />
+                        </div>
+                        <span className="text-base font-extrabold tracking-wide">
+                          Cài đặt hệ thống
+                        </span>
+                      </div>
+                      <ChevronRight className="w-6 h-6 text-slate-300" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowAccountModal(true)}
+                      className="w-full btn-3d btn-3d-gold rounded-2xl px-4 py-3.5 flex items-center justify-between text-slate-950 cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-xl bg-black/10 flex items-center justify-center shadow-inner">
+                          <User className="w-5 h-5 text-slate-950" />
+                        </div>
+                        <span className="text-base font-black tracking-wide">
+                          Bản quyền & Tác giả
+                        </span>
+                      </div>
+                      <ChevronRight className="w-6 h-6 text-amber-900" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setBottomTab('classes')}
+                      className="w-full btn-3d btn-3d-fuchsia rounded-2xl px-4 py-3.5 flex items-center justify-between text-white cursor-pointer"
+                    >
+                      <div className="flex items-center gap-3.5">
+                        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shadow-inner">
+                          <Users className="w-5 h-5 text-white" />
+                        </div>
+                        <span className="text-base font-extrabold tracking-wide">
+                          Lớp học & Danh sách SBD
+                        </span>
+                      </div>
+                      <ChevronRight className="w-6 h-6 text-pink-100" />
+                    </button>
                   </div>
                 </div>
 
-                <div className="text-center pt-8 pb-4 space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowAccountModal(true)}
-                    className="inline-block bg-white border-2 border-amber-400 text-amber-500 font-black px-5 py-1 rounded-lg text-lg shadow-xs"
-                  >
-                    PRO
-                  </button>
-                  <div className="h-[1px] bg-white/70 w-4/5 mx-auto" />
-                  <div className="text-xs text-[#2b90d9] font-semibold">
-                    Tác giả: Thầy Hồ Tấn Khải — THPT Mang Thít, Vĩnh Long
+                <div className="text-center pt-6 pb-2 space-y-2">
+                  <div className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500/20 via-yellow-400/30 to-amber-500/20 border-2 border-amber-400/80 text-amber-300 font-extrabold px-4 py-1.5 rounded-full text-xs shadow-md glow-pulse-logo">
+                    <Sparkles className="w-4 h-4 text-amber-300" />
+                    <span>BẢN QUYỀN CHÍNH THỨC</span>
+                  </div>
+                  <div className="h-[1px] bg-white/20 w-4/5 mx-auto" />
+                  <div className="text-xs text-cyan-200 font-bold">
+                    Tác giả: Thầy Hồ Tấn Khải — Trường THPT Mang Thít, Tỉnh Vĩnh Long
                   </div>
                 </div>
               </div>
@@ -2037,96 +2067,141 @@ export default function App() {
                   </button>
                 </header>
 
-                <div className="p-3.5 space-y-2.5">
-                  {/* 6 nút menu lớn chuẩn QM 2025 */}
+                <div className="p-3.5 space-y-3">
+                  {/* 6 nút menu lớn dạng khối 3D màu sắc nổi bật bắt mắt - mỗi chức năng 1 màu */}
+                  {/* 1. Đáp án: Xanh ngọc Emerald 3D */}
                   <button
                     type="button"
                     onClick={() => setSessionView('keys')}
-                    className="w-full bg-white rounded-2xl px-4 py-4 flex items-center justify-between shadow-2xs active:bg-slate-50 transition cursor-pointer"
+                    className="w-full btn-3d btn-3d-emerald rounded-2xl px-4 py-4 flex items-center justify-between text-white cursor-pointer"
                   >
                     <div className="flex items-center gap-3.5">
-                      <Key className="w-5 h-5 text-emerald-500" />
-                      <span className="text-base font-medium text-slate-900">
-                        Đáp án ({Object.keys(answerKeys).length} mã đề)
-                      </span>
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={enterScannerScreen}
-                    className="w-full bg-white rounded-2xl px-4 py-4 flex items-center justify-between shadow-2xs active:bg-slate-50 transition cursor-pointer border-l-4 border-emerald-500"
-                  >
-                    <div className="flex items-center gap-3.5">
-                      <Play className="w-5 h-5 text-emerald-600 fill-emerald-500" />
+                      <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shadow-inner">
+                        <Key className="w-5 h-5 text-white" />
+                      </div>
                       <div className="text-left">
-                        <div className="text-base font-bold text-slate-900">Chấm bài</div>
-                        <div className="text-xs text-emerald-700 font-medium">
-                          Mở Camera Full Màn Hình 4 góc định vị
+                        <div className="text-base font-extrabold tracking-wide">Đáp án</div>
+                        <div className="text-xs text-emerald-100 font-semibold">
+                          Đã nạp {Object.keys(answerKeys).length} mã đề thi
                         </div>
                       </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
+                    <ChevronRight className="w-6 h-6 text-emerald-200" />
                   </button>
 
+                  {/* 2. Chấm bài: Xanh Sapphire 3D phát sáng nhấp nháy đặc biệt */}
+                  <button
+                    type="button"
+                    onClick={enterScannerScreen}
+                    className="w-full btn-3d btn-3d-scanner rounded-2xl px-4 py-4 flex items-center justify-between text-white cursor-pointer glow-pulse-logo"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-11 h-11 rounded-xl bg-white/25 flex items-center justify-center shadow-inner">
+                        <Play className="w-6 h-6 text-white fill-white" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-lg font-black tracking-wide flex items-center gap-2">
+                          <span>Chấm bài</span>
+                          <span className="text-[11px] bg-white text-blue-900 font-extrabold px-2 py-0.5 rounded-full shadow-xs">
+                            CAMERA OMR
+                          </span>
+                        </div>
+                        <div className="text-xs text-sky-100 font-semibold">
+                          Tự động nhận diện 4 góc mốc định vị đen
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-6 h-6 text-sky-200" />
+                  </button>
+
+                  {/* 3. Bài đã chấm: Tím mộng mơ / Fuchsia 3D */}
                   <button
                     type="button"
                     onClick={() => {
                       setGalleryIndex(0);
                       setSessionView('graded');
                     }}
-                    className="w-full bg-white rounded-2xl px-4 py-4 flex items-center justify-between shadow-2xs active:bg-slate-50 transition cursor-pointer"
+                    className="w-full btn-3d btn-3d-fuchsia rounded-2xl px-4 py-4 flex items-center justify-between text-white cursor-pointer"
                   >
                     <div className="flex items-center gap-3.5">
-                      <ImageIcon className="w-5 h-5 text-teal-600" />
-                      <span className="text-base font-medium text-slate-900">
-                        Bài đã chấm ({gradedRecords.length} bài)
-                      </span>
+                      <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shadow-inner">
+                        <ImageIcon className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-base font-extrabold tracking-wide">Bài đã chấm</div>
+                        <div className="text-xs text-pink-100 font-semibold">
+                          {gradedRecords.length} bài thi đã lưu minh chứng
+                        </div>
+                      </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
+                    <ChevronRight className="w-6 h-6 text-pink-200" />
                   </button>
 
+                  {/* 4. Xuất kết quả: Cam Hổ Phách 3D */}
                   <button
                     type="button"
                     onClick={() => setShowExportActionSheet(true)}
-                    className="w-full bg-white rounded-2xl px-4 py-4 flex items-center justify-between shadow-2xs active:bg-slate-50 transition cursor-pointer"
+                    className="w-full btn-3d btn-3d-amber rounded-2xl px-4 py-4 flex items-center justify-between text-white cursor-pointer"
                   >
                     <div className="flex items-center gap-3.5">
-                      <Share2 className="w-5 h-5 text-teal-600" />
-                      <span className="text-base font-medium text-slate-900">Xuất kết quả</span>
+                      <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shadow-inner">
+                        <Share2 className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-base font-extrabold tracking-wide">Xuất kết quả</div>
+                        <div className="text-xs text-amber-100 font-semibold">
+                          Xuất bảng điểm Excel (.xlsx) chuẩn Bộ GD
+                        </div>
+                      </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
+                    <ChevronRight className="w-6 h-6 text-amber-200" />
                   </button>
 
+                  {/* 5. Thống kê: Hồng Sen Rose 3D */}
                   <button
                     type="button"
                     onClick={() => setSessionView('stats')}
-                    className="w-full bg-white rounded-2xl px-4 py-4 flex items-center justify-between shadow-2xs active:bg-slate-50 transition cursor-pointer"
+                    className="w-full btn-3d btn-3d-rose rounded-2xl px-4 py-4 flex items-center justify-between text-white cursor-pointer"
                   >
                     <div className="flex items-center gap-3.5">
-                      <BarChart3 className="w-5 h-5 text-teal-600" />
-                      <span className="text-base font-medium text-slate-900">Thống kê</span>
+                      <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shadow-inner">
+                        <BarChart3 className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-base font-extrabold tracking-wide">Thống kê</div>
+                        <div className="text-xs text-rose-100 font-semibold">
+                          Phổ điểm, tỷ lệ đậu, phân tích câu hỏi
+                        </div>
+                      </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
+                    <ChevronRight className="w-6 h-6 text-rose-200" />
                   </button>
 
+                  {/* 6. Chọn lớp học: Xanh Teal 3D */}
                   <button
                     type="button"
                     onClick={() => setSessionView('selectClass')}
-                    className="w-full bg-white rounded-2xl px-4 py-4 flex items-center justify-between shadow-2xs active:bg-slate-50 transition cursor-pointer"
+                    className="w-full btn-3d btn-3d-teal rounded-2xl px-4 py-4 flex items-center justify-between text-white cursor-pointer"
                   >
                     <div className="flex items-center gap-3.5">
-                      <Users className="w-5 h-5 text-teal-600" />
-                      <span className="text-base font-medium text-slate-900">
-                        Chọn lớp học ({activeClassGroup?.className || '12A1'})
-                      </span>
+                      <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shadow-inner">
+                        <Users className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-base font-extrabold tracking-wide">
+                          Chọn lớp học ({activeClassGroup?.className || '12A1'})
+                        </div>
+                        <div className="text-xs text-teal-100 font-semibold">
+                          {activeClassGroup?.students?.length || 0} học sinh • Tiền tố SBD:{' '}
+                          {activeClassGroup?.sbdPrefix || '01'}
+                        </div>
+                      </div>
                     </div>
-                    <ChevronRight className="w-5 h-5 text-slate-400" />
+                    <ChevronRight className="w-6 h-6 text-teal-200" />
                   </button>
 
-                  {/* Card Tóm tắt trạng thái đợt chấm (Giống hệt ảnh 5 & 9) */}
-                  <div className="bg-white rounded-2xl p-4 space-y-2.5 shadow-2xs mt-3 text-[15px] text-slate-900">
+                  {/* Card Tóm tắt trạng thái đợt chấm */}
+                  <div className="bg-white/95 backdrop-blur rounded-2xl p-4 space-y-2.5 shadow-[0_6px_0_#cbd5e1] border-2 border-indigo-200/90 mt-4 text-[15px] text-slate-900">
                     <div className="flex items-center gap-2.5">
                       <span className="w-5 h-5 rounded bg-emerald-500 text-white flex items-center justify-center text-xs font-bold">
                         ✓
@@ -3192,53 +3267,39 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Các nút chức năng hệ thống */}
-              <div className="space-y-2.5 pt-2">
+              {/* Các nút chức năng hệ thống dạng 3D */}
+              <div className="space-y-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setShowAccountModal(true)}
-                  className="w-full bg-white rounded-2xl px-4 py-3.5 flex items-center justify-between shadow-2xs cursor-pointer"
+                  className="w-full btn-3d btn-3d-gold rounded-2xl px-4 py-3.5 flex items-center justify-between text-slate-950 cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
-                    <User className="w-5 h-5 text-blue-600" />
-                    <span className="text-base text-slate-900">
-                      Tài khoản PRO (khaibcmt@gmail.com)
-                    </span>
+                    <Award className="w-5 h-5 text-amber-950" />
+                    <div className="text-left">
+                      <div className="text-sm font-black text-slate-950">
+                        Bản quyền tác giả: Thầy Hồ Tấn Khải
+                      </div>
+                      <div className="text-[11px] text-amber-950 font-bold">
+                        Trường THPT Mang Thít, Tỉnh Vĩnh Long
+                      </div>
+                    </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-400" />
+                  <ChevronRight className="w-5 h-5 text-amber-900" />
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setShowGuideModal(true)}
-                  className="w-full bg-white rounded-2xl px-4 py-3.5 flex items-center justify-between shadow-2xs cursor-pointer"
+                  className="w-full btn-3d btn-3d-cyan rounded-2xl px-4 py-3.5 flex items-center justify-between text-white cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
-                    <HelpCircle className="w-5 h-5 text-amber-600" />
-                    <span className="text-base text-slate-900">
+                    <HelpCircle className="w-5 h-5 text-white" />
+                    <span className="text-sm font-extrabold text-white">
                       Hướng dẫn sử dụng & Tạo phím tắt màn hình
                     </span>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-400" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleDownloadStandaloneHtmlFile}
-                  className="w-full bg-blue-600 text-white rounded-2xl px-4 py-3.5 flex items-center justify-between shadow-md cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <FileCode className="w-5 h-5" />
-                    <div className="text-left">
-                      <div className="text-sm font-bold">
-                        Tải File HTML Độc Lập (1 File Duy Nhất)
-                      </div>
-                      <div className="text-[11px] text-blue-100">
-                        Tích hợp sẵn Tailwind CDN + 14 mẫu phiếu + OMR để Up GitHub
-                      </div>
-                    </div>
-                  </div>
-                  <Download className="w-5 h-5" />
+                  <ChevronRight className="w-5 h-5 text-cyan-100" />
                 </button>
 
                 <button
@@ -3250,13 +3311,13 @@ export default function App() {
                       message: 'Đã xóa bộ nhớ tạm lịch sử quét.',
                     });
                   }}
-                  className="w-full bg-white rounded-2xl px-4 py-3.5 flex items-center justify-between shadow-2xs cursor-pointer"
+                  className="w-full btn-3d btn-3d-rose rounded-2xl px-4 py-3.5 flex items-center justify-between text-white cursor-pointer"
                 >
                   <div className="flex items-center gap-3">
-                    <Trash2 className="w-5 h-5 text-teal-600" />
-                    <span className="text-base text-slate-900">Xóa bộ nhớ tạm</span>
+                    <Trash2 className="w-5 h-5 text-white" />
+                    <span className="text-sm font-extrabold text-white">Xóa bộ nhớ tạm</span>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-slate-400" />
+                  <ChevronRight className="w-5 h-5 text-rose-100" />
                 </button>
               </div>
 
@@ -3585,9 +3646,9 @@ export default function App() {
                   handleLoadBuiltInSampleQrImage();
                   setShowKeyActionSheet(false);
                 }}
-                className="w-full py-3.5 text-emerald-600 text-base font-semibold active:bg-slate-100 cursor-pointer"
+                className="w-full py-3.5 text-emerald-600 text-base font-bold active:bg-slate-100 cursor-pointer"
               >
-                ⚡ Nạp Đáp Án Mẫu Chuẩn QM 2025
+                ⚡ Nạp Đáp Án Mẫu Chuẩn GDPT 2018
               </button>
             </div>
 
@@ -3654,67 +3715,75 @@ export default function App() {
       )}
 
       {/* ===================================================================== */}
-      {/* MODAL TÀI KHOẢN PRO (GIỐNG HỆT ẢNH 10)                                */}
+      {/* MODAL THÔNG TIN BẢN QUYỀN & TÁC GIẢ (EDU CHẤM ĐỀ)                     */}
       {/* ===================================================================== */}
       {showAccountModal && (
-        <div className="fixed inset-0 z-50 bg-[#d6d0c4] flex flex-col">
-          <header className="px-4 py-3 flex items-center justify-between safe-area-header">
+        <div className="fixed inset-0 z-50 bg-gradient-to-br from-[#0c1445] via-[#161a52] to-[#2b0e5e] text-white flex flex-col">
+          <header className="px-4 py-3 flex items-center justify-between safe-area-header border-b border-indigo-500/30">
             <button
               type="button"
               onClick={() => setShowAccountModal(false)}
-              className="text-[#007aff] font-medium text-base flex items-center gap-0.5 touch-target-44 cursor-pointer"
+              className="text-cyan-300 font-bold text-base flex items-center gap-0.5 touch-target-44 cursor-pointer"
             >
               <ChevronLeft className="w-6 h-6 -ml-1.5" />
               <span>Quay lại</span>
             </button>
-            <h1 className="text-base font-bold text-slate-900">Tài khoản</h1>
+            <h1 className="text-base font-extrabold text-white">Bản Quyền & Tác Giả</h1>
             <div className="w-16" />
           </header>
 
-          <div className="p-5 space-y-4 max-w-md mx-auto w-full flex-1">
-            <div>
-              <label className="text-sm font-medium text-slate-800 block mb-1">Tài khoản:</label>
-              <div className="bg-white rounded-xl py-2.5 px-4 text-center font-medium text-slate-900">
-                khaibcmt@gmail.com
+          <div className="p-5 space-y-4 max-w-md mx-auto w-full flex-1 overflow-y-auto">
+            {/* LOGO NHẤP NHÁY PHÁT SÁNG */}
+            <div className="text-center pt-2 pb-1 space-y-2">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-400 via-sky-500 to-fuchsia-500 text-white shadow-xl glow-pulse-logo border-2 border-white/80">
+                <GraduationCap className="w-9 h-9" />
               </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-800 block mb-1">
-                Loại tài khoản:
-              </label>
-              <div className="bg-white rounded-xl py-2.5 px-4 text-center font-semibold text-slate-900">
-                PRO
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-800 block mb-1">
-                Ngày khởi tạo:
-              </label>
-              <div className="bg-white rounded-xl py-2.5 px-4 text-center font-medium text-slate-900">
-                08/10/2025
-              </div>
-            </div>
-            <div>
-              <label className="text-sm font-medium text-slate-800 block mb-1">
-                Ngày hết hạn:
-              </label>
-              <div className="bg-white rounded-xl py-2.5 px-4 text-center font-medium text-slate-900">
-                15/10/2027
+              <h2 className="text-2xl font-black bg-gradient-to-r from-cyan-300 via-sky-200 to-fuchsia-300 bg-clip-text text-transparent">
+                Edu Chấm Đề
+              </h2>
+              <div className="inline-block px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-bold text-xs">
+                ✓ BẢN QUYỀN CHÍNH THỨC GDPT 2018
               </div>
             </div>
 
-            <div className="pt-4 space-y-3 flex flex-col items-center">
+            <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/15 space-y-3.5 shadow-lg">
+              <div>
+                <label className="text-xs font-semibold text-cyan-200 block mb-0.5">Tác giả phần mềm:</label>
+                <div className="bg-white/95 rounded-xl py-2.5 px-4 text-center font-black text-slate-900 text-base shadow-inner">
+                  Thầy Hồ Tấn Khải
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-cyan-200 block mb-0.5">
+                  Đơn vị công tác:
+                </label>
+                <div className="bg-white/95 rounded-xl py-2.5 px-4 text-center font-bold text-slate-900 text-sm shadow-inner">
+                  Trường THPT Mang Thít, Tỉnh Vĩnh Long
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-cyan-200 block mb-0.5">
+                  Tiêu chuẩn kỹ thuật OMR:
+                </label>
+                <div className="bg-white/95 rounded-xl py-2.5 px-4 text-center font-semibold text-slate-900 text-xs shadow-inner">
+                  Chuẩn Bộ GD&ĐT (Nắn 4 mốc định vị đen sub-pixel 1024×550)
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-cyan-200 block mb-0.5">
+                  Trạng thái kích hoạt:
+                </label>
+                <div className="bg-emerald-50 border border-emerald-300 rounded-xl py-2.5 px-4 text-center font-black text-emerald-800 text-sm shadow-inner">
+                  Bản quyền chính thức vĩnh viễn
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2 space-y-3 flex flex-col items-center">
               <button
                 type="button"
                 onClick={() => setShowAccountModal(false)}
-                className="w-64 py-3.5 rounded-full bg-blue-600 text-white font-bold text-base shadow"
-              >
-                Gia hạn / Nâng cấp
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowAccountModal(false)}
-                className="w-64 py-3.5 rounded-full border border-blue-600 text-blue-600 font-medium text-base"
+                className="w-full py-3.5 btn-3d btn-3d-cyan rounded-2xl text-white font-black text-base shadow-lg cursor-pointer"
               >
                 Đóng
               </button>
@@ -3846,13 +3915,13 @@ export default function App() {
             onClick={(e) => e.stopPropagation()}
             className="bg-white rounded-3xl max-w-lg w-full max-h-[88vh] flex flex-col overflow-hidden shadow-2xl"
           >
-            <div className="px-5 py-4 bg-gradient-to-r from-blue-600 to-emerald-600 text-white flex items-center justify-between">
+            <div className="px-5 py-4 bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-600 text-white flex items-center justify-between">
               <div>
-                <h3 className="font-bold text-base">
-                  Hướng Dẫn Sử Dụng & Cài Phím Tắt — QM 2025
+                <h3 className="font-extrabold text-base">
+                  Hướng Dẫn Sử Dụng & Cài Phím Tắt — Edu Chấm Đề
                 </h3>
-                <p className="text-xs text-white/90">
-                  Tác giả: Thầy Hồ Tấn Khải — THPT Mang Thít, Vĩnh Long
+                <p className="text-xs text-cyan-100 font-semibold">
+                  Tác giả: Thầy Hồ Tấn Khải — Trường THPT Mang Thít, Tỉnh Vĩnh Long
                 </p>
               </div>
               <button
@@ -3865,19 +3934,19 @@ export default function App() {
             </div>
 
             <div className="p-4 overflow-y-auto space-y-3 text-xs sm:text-sm text-slate-700 leading-relaxed">
-              <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 space-y-1">
+              <div className="p-3.5 rounded-2xl bg-blue-50 border border-blue-200 space-y-1 shadow-sm">
                 <div className="font-bold text-blue-900">
                   1. Cơ sở dữ liệu 14 mẫu phiếu chuẩn GDPT 2018 & CV 1239
                 </div>
                 <p>
                   Tích hợp đầy đủ 3 nhóm phiếu: <strong>Khổ ngang (2 bài/A4)</strong>,{' '}
-                  <strong>Khổ dọc A4 Chuẩn</strong> (QM 2025, Bộ GD, CV 1239 mã đề 4 số) và{' '}
+                  <strong>Khổ dọc A4 Chuẩn</strong> (Edu 2025, Bộ GD, CV 1239 mã đề 4 số) và{' '}
                   <strong>Azota / TNmaker</strong>. Khi chọn mẫu phiếu từ khay trượt đáy, hệ thống
                   tự động điền số câu P1, P2, P3 và gạt đúng mã đề 3 số / 4 số.
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-1">
+              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-1 shadow-sm">
                 <div className="font-bold text-emerald-900">
                   2. Bảo toàn 100% tọa độ OMR & Quét 4 góc định vị
                 </div>
@@ -3888,7 +3957,7 @@ export default function App() {
                 </p>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 space-y-1">
+              <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 space-y-1 shadow-sm">
                 <div className="font-bold text-amber-900">
                   3. Hướng dẫn tạo phím tắt màn hình chính (iPhone & Android)
                 </div>
@@ -3900,15 +3969,6 @@ export default function App() {
                   <strong>&ldquo;Thêm vào màn hình chính&rdquo;</strong>.
                 </p>
               </div>
-
-              <button
-                type="button"
-                onClick={handleDownloadStandaloneHtmlFile}
-                className="w-full py-3 rounded-2xl bg-blue-600 text-white font-bold text-sm flex items-center justify-center gap-2 shadow"
-              >
-                <Download className="w-4 h-4" />
-                Tải File index.html Độc Lập (1 File Duy Nhất - Up GitHub)
-              </button>
             </div>
           </div>
         </div>

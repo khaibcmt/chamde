@@ -48,7 +48,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
   // --- NHÓM 1: PHIẾU KHỔ NGANG TIẾT KIỆM GIẤY (IN 2 BÀI / TỜ A4) ---
   {
     id: 'qm_toan',
-    name: 'QM 2025 - Toán',
+    name: 'Edu 2025 - Toán',
     group: 'Khổ ngang (2 bài/A4)',
     codeLength: 3,
     hasSBD: true,
@@ -64,7 +64,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
   },
   {
     id: 'qm_khtn_dia',
-    name: 'QM 2025 - Lý, Hoá, Sinh, Địa',
+    name: 'Edu 2025 - Lý, Hoá, Sinh, Địa',
     group: 'Khổ ngang (2 bài/A4)',
     codeLength: 3,
     hasSBD: true,
@@ -80,7 +80,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
   },
   {
     id: 'qm_khxh_tin_cn',
-    name: 'QM 2025 - Sử, Tin, CN, GDPL',
+    name: 'Edu 2025 - Sử, Tin, CN, GDPL',
     group: 'Khổ ngang (2 bài/A4)',
     codeLength: 3,
     hasSBD: true,
@@ -96,7 +96,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
   },
   {
     id: 'qm_ngoai_ngu',
-    name: 'QM 2025 - Ngoại ngữ',
+    name: 'Edu 2025 - Ngoại ngữ',
     group: 'Khổ ngang (2 bài/A4)',
     codeLength: 3,
     hasSBD: true,
@@ -112,7 +112,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
   },
   {
     id: 'qm_on_tap_tl_ngan',
-    name: 'QM 2025 - Ôn tập - TL Ngắn',
+    name: 'Edu 2025 - Ôn tập - TL Ngắn',
     group: 'Khổ ngang (2 bài/A4)',
     codeLength: 3,
     hasSBD: false,
@@ -130,7 +130,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
   // --- NHÓM 2: PHIẾU KHỔ DỌC A4 CHUẨN BỘ GD & CV 1239 ---
   {
     id: 'qm_2025_a4',
-    name: 'QM 2025 - A4',
+    name: 'Edu 2025 - A4',
     group: 'Khổ dọc A4 Chuẩn',
     codeLength: 3,
     hasSBD: true,
@@ -146,7 +146,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
   },
   {
     id: 'qm_cv1239',
-    name: 'QM 2025 - CV 1239',
+    name: 'Edu 2025 - CV 1239',
     group: 'Khổ dọc A4 Chuẩn',
     codeLength: 4, // Mã đề 4 chữ số
     hasSBD: true,
