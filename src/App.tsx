@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import jsQR from 'jsqr';
 import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 import {
   AlertTriangle,
   Award,
@@ -11,8 +12,10 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Clock,
   Download,
   Eye,
+  FileArchive,
   FileCode,
   FileSpreadsheet,
   FileText,
@@ -322,6 +325,15 @@ export default function App() {
 
   // Settings
   const [autoGradeDelaySeconds, setAutoGradeDelaySeconds] = useState<number>(1.5);
+  // Cài đặt đếm ngược tự chuyển bài khi dừng màn hình: 0 (Tắt / Thủ công), 3s, 5s, 7s
+  const [autoNextDelaySeconds, setAutoNextDelaySeconds] = useState<number>(() => {
+    try {
+      const s = localStorage.getItem('edu_cham_de_auto_next_delay');
+      return s !== null ? Number(s) : 3;
+    } catch {
+      return 3;
+    }
+  });
   const [countdownRemaining, setCountdownRemaining] = useState<number>(0);
   const lockStartTimeRef = useRef<number | null>(null);
   const [gradingMode, setGradingMode] = useState<GradingMode>('review');
@@ -434,6 +446,116 @@ export default function App() {
       // ignore
     }
   }, [classRosters]);
+
+  // Hàm chuyển bài an toàn (Dùng cho cả Bấm nút, Phím Space/Enter và Tự động hết giờ)
+  const proceedToNextScan = () => {
+    setInstantScoreBanner(null);
+    setActiveHudRecord(null);
+    setCountdownRemaining(0);
+    lockStartTimeRef.current = null;
+    cooldownRef.current = true;
+    setTimeout(() => {
+      cooldownRef.current = false;
+    }, 400);
+  };
+
+  // Đếm ngược tự động chuyển bài khi đang dừng hiển thị điểm (Freeze Frame Review Screen)
+  useEffect(() => {
+    if (!instantScoreBanner) {
+      setCountdownRemaining(0);
+      return;
+    }
+
+    if (autoNextDelaySeconds <= 0) {
+      setCountdownRemaining(0);
+      return;
+    }
+
+    setCountdownRemaining(autoNextDelaySeconds);
+    const interval = setInterval(() => {
+      setCountdownRemaining((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          proceedToNextScan();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [instantScoreBanner, autoNextDelaySeconds]);
+
+  // Phím tắt Space hoặc Enter để giáo viên chuyển bài nhanh bằng một tay / bàn phím
+  useEffect(() => {
+    if (!instantScoreBanner) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        proceedToNextScan();
+      }
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [instantScoreBanner]);
+
+  // Nén và tải toàn bộ ảnh bài làm minh chứng đã chấm thành 1 file ZIP (bằng JSZip)
+  const handleExportZipAllEvidenceImages = async () => {
+    if (gradedRecords.length === 0) {
+      setStatusBanner({
+        type: 'warning',
+        message: 'Chưa có bài thi nào được chấm để xuất file ZIP.',
+      });
+      return;
+    }
+
+    try {
+      setStatusBanner({
+        type: 'info',
+        message: `Đang nén ${gradedRecords.length} ảnh minh chứng bài thi vào file ZIP...`,
+      });
+
+      const zip = new JSZip();
+      const folderName = `MinhChung_${(activeSession?.name || 'BaiThi').replace(/\s+/g, '_')}`;
+      const folder = zip.folder(folderName) || zip;
+
+      for (let i = 0; i < gradedRecords.length; i++) {
+        const rec = gradedRecords[i];
+        if (!rec.annotatedImageDataUrl) continue;
+        const parts = rec.annotatedImageDataUrl.split(',');
+        if (parts.length > 1) {
+          const sbdClean = (rec.sbd || 'NOSBD').replace(/[^a-zA-Z0-9]/g, '_');
+          const codeClean = (rec.examCode || 'NOCode').replace(/[^a-zA-Z0-9]/g, '_');
+          const scoreClean = rec.totalScore.toFixed(2).replace('.', '_');
+          const sttClean = String(i + 1).padStart(3, '0');
+          const fileName = `${sttClean}_SBD_${sbdClean}_MaDe_${codeClean}_Diem_${scoreClean}.jpg`;
+          folder.file(fileName, parts[1], { base64: true });
+        }
+      }
+
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const downloadUrl = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      a.download = `Bo_Anh_Minh_Chung_${(activeSession?.name || 'ChamThi').replace(/\s+/g, '_')}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(downloadUrl);
+
+      setStatusBanner({
+        type: 'success',
+        message: `Đã nén và tải về thành công file ZIP chứa ${gradedRecords.length} ảnh bài thi có đóng dấu điểm!`,
+      });
+    } catch (err) {
+      setStatusBanner({
+        type: 'warning',
+        message: `Lỗi nén file ZIP: ${err instanceof Error ? err.message : 'Thất bại'}`,
+      });
+    }
+  };
 
   // Đồng bộ đáp án theo đợt chấm đang chọn (Nếu chưa cài đáp án thì tuyệt đối để trống {})
   useEffect(() => {
@@ -1688,6 +1810,33 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-1.5">
+              {/* Cài đặt thanh hẹn giờ ở thanh điều khiển trên màn hình camera */}
+              <div className="scanner-top-bar">
+                <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <label htmlFor="autoNextSelect" className="font-semibold text-xs ml-1 hidden sm:inline text-slate-200">
+                  Tự chuyển bài sau:
+                </label>
+                <select
+                  id="autoNextSelect"
+                  value={autoNextDelaySeconds}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    setAutoNextDelaySeconds(val);
+                    try {
+                      localStorage.setItem('edu_cham_de_auto_next_delay', String(val));
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                  className="cursor-pointer"
+                >
+                  <option value={0}>Tắt (Bấm thủ công)</option>
+                  <option value={3}>3 giây</option>
+                  <option value={5}>5 giây</option>
+                  <option value={7}>7 giây</option>
+                </select>
+              </div>
+
               {torchSupported && (
                 <button
                   type="button"
@@ -1762,67 +1911,73 @@ export default function App() {
               )}
             </div>
 
-            {/* HỘP KẾT QUẢ NỔI (DỪNG LẠI ĐỂ GIÁO VIÊN GHI ĐIỂM) */}
+            {/* 2. DỪNG MÀN HÌNH ĐỂ GIÁO VIÊN GHI ĐIỂM (FREEZE FRAME REVIEW SCREEN) */}
             {instantScoreBanner && (
-              <div className="relative z-20 my-auto bg-white/95 backdrop-blur-xs shadow-2xl border-2 border-emerald-500 animate-bottom-sheet rounded-2xl mx-2 overflow-hidden flex flex-col max-h-[82vh]">
-                {/* Header kết quả: Tên học sinh + Điểm số to */}
-                <div className="px-3.5 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white flex items-center justify-between shrink-0">
-                  <div className="truncate pr-2">
-                    <div className="text-[10px] font-bold uppercase text-emerald-200 tracking-wider">
-                      ✓ ĐÃ CHẤM XONG (DỪNG ĐỂ GHI ĐIỂM)
-                    </div>
-                    <div className="font-black text-sm sm:text-base truncate">
-                      {instantScoreBanner.studentName} ({instantScoreBanner.className})
+              <div id="reviewScreen" className="review-screen">
+                <div className="review-header safe-area-header">
+                  <div>
+                    <div className="review-title">ĐÃ CHẤM XONG - GHI ĐIỂM VÀO BÀI LÀM</div>
+                    <div className="text-xs text-slate-300 font-bold mt-0.5">
+                      SBD: <strong className="text-amber-300 font-mono text-sm">{instantScoreBanner.sbd}</strong> | Mã đề: <strong className="text-sky-300 font-mono text-sm">{instantScoreBanner.examCode}</strong> {instantScoreBanner.studentName ? `• ${instantScoreBanner.studentName}` : ''}
                     </div>
                   </div>
-                  <div className="bg-white text-emerald-800 px-3 py-1 rounded-xl text-center shadow-md border-2 border-emerald-300 shrink-0">
-                    <div className="text-[9px] font-black uppercase text-emerald-600">Tổng điểm</div>
-                    <div className="text-2xl font-black leading-none text-emerald-800">{instantScoreBanner.totalScore.toFixed(2)}</div>
+
+                  <div className="flex items-center gap-2">
+                    {autoNextDelaySeconds > 0 ? (
+                      <div id="countdownTimer" className="countdown-badge">
+                        <Clock className="w-3.5 h-3.5 animate-spin" />
+                        <span>Tự chuyển sau: {countdownRemaining}s</span>
+                      </div>
+                    ) : (
+                      <div className="text-xs font-bold bg-slate-800 text-slate-300 px-3 py-1.5 rounded-full border border-slate-700">
+                        Thủ công (Nhấn Chấm tiếp / Phím Space)
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Dòng chi tiết điểm các phần P1, P2, P3 */}
-                <div className="px-3 py-1.5 bg-slate-50 text-[#e11d48] font-mono font-bold text-xs leading-tight border-b border-slate-200 shrink-0">
-                  <div>
-                    P1: {instantScoreBanner.p1CorrectCount}/{instantScoreBanner.p1TotalCount} = {instantScoreBanner.p1Score.toFixed(2)}đ | P2: {instantScoreBanner.p2Details.map((q) => `${q.correctSubCount}/4`).join('; ') || '0/4'} = {instantScoreBanner.p2Score.toFixed(2)}đ
+                {/* Dòng tóm tắt điểm đỏ nổi bật */}
+                <div className="bg-slate-800/95 border-b border-slate-700 px-4 py-2 flex items-center justify-between text-xs sm:text-sm text-white">
+                  <div className="flex items-center gap-2.5 font-mono flex-wrap">
+                    <span>P1: <strong className="text-emerald-400">{instantScoreBanner.p1CorrectCount}/{instantScoreBanner.p1TotalCount} ({instantScoreBanner.p1Score.toFixed(2)}đ)</strong></span>
+                    <span>|</span>
+                    <span>P2: <strong className="text-teal-400">{instantScoreBanner.p2Score.toFixed(2)}đ</strong></span>
+                    <span>|</span>
+                    <span>P3: <strong className="text-purple-400">{instantScoreBanner.p3Score.toFixed(2)}đ</strong></span>
                   </div>
-                  <div>
-                    P3: {instantScoreBanner.p3CorrectCount}/{instantScoreBanner.p3TotalCount} = {instantScoreBanner.p3Score.toFixed(2)}đ | SBD: {instantScoreBanner.sbd} | Mã đề: {instantScoreBanner.examCode}
+                  <div className="flex items-center gap-1.5 bg-rose-600 text-white px-3 py-1 rounded-xl font-black text-base shadow-md">
+                    <span className="text-[11px] uppercase tracking-wider text-rose-200">TỔNG ĐIỂM:</span>
+                    <span className="text-2xl leading-none">{instantScoreBanner.totalScore.toFixed(2)}</span>
                   </div>
                 </div>
 
-                {/* Ảnh minh chứng bài chấm */}
-                <div className="relative bg-slate-900 overflow-auto flex-1 min-h-[140px] max-h-[36dvh]">
+                {/* Vùng bài thi: Hiển thị chính bức ảnh bài thi đã đóng con dấu điểm đỏ */}
+                <div className="review-body">
                   <img
+                    id="evidenceImageDisplay"
                     src={instantScoreBanner.annotatedImageDataUrl}
-                    alt="Kết quả chấm trực tiếp"
-                    className="w-full h-full object-contain mx-auto"
+                    alt="Bài làm minh chứng"
                   />
                 </div>
 
-                {/* Thanh điều khiển: Lưu ảnh & NÚT CHẤM TIẾP BÀI SAU */}
-                <div className="p-3 bg-slate-900 text-white flex items-center gap-2 shrink-0">
+                {/* Thanh footer: Nút to CHẤM TIẾP (Phím Space) + Lưu ảnh */}
+                <div className="review-footer safe-area-bottom-nav">
                   <button
                     type="button"
                     onClick={() => handleSaveEvidenceSheet(instantScoreBanner, false)}
-                    className="px-3 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs shrink-0 cursor-pointer"
+                    className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
                   >
-                    Lưu ảnh
+                    <Download className="w-4 h-4" />
+                    <span className="hidden sm:inline">Lưu ảnh</span>
                   </button>
                   <button
+                    id="btnContinueScan"
                     type="button"
-                    onClick={() => {
-                      setInstantScoreBanner(null);
-                      setActiveHudRecord(null);
-                      lockStartTimeRef.current = null;
-                      setTimeout(() => {
-                        cooldownRef.current = false;
-                      }, 350);
-                    }}
-                    className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-600 hover:to-teal-600 text-white font-black text-sm shadow-[0_4px_0_#065f46] active:translate-y-0.5 active:shadow-[0_1px_0_#065f46] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    onClick={proceedToNextScan}
+                    className="btn-continue"
                   >
-                    <Play className="w-4 h-4 fill-white" />
-                    <span>CHẤM BÀI TIẾP THEO →</span>
+                    <Play className="w-5 h-5 fill-white" />
+                    <span>CHẤM TIẾP (Phím Space)</span>
                   </button>
                 </div>
               </div>
@@ -3120,10 +3275,20 @@ export default function App() {
                       );
                     })()}
 
-                    {/* Thanh điều hướng dưới đáy < 1 / 36 > + Nút Share/Download (Giống hệt ảnh 7) */}
-                    <div className="px-6 py-4 flex items-center justify-between safe-area-bottom-nav">
-                      <div className="w-10" />
-                      <div className="flex items-center gap-8">
+                    {/* Thanh điều hướng dưới đáy < 1 / 36 > + Nút Tải ZIP + Nút Share/Download */}
+                    <div className="px-4 py-3 bg-slate-900 border-t border-slate-800 flex items-center justify-between safe-area-bottom-nav">
+                      <button
+                        type="button"
+                        onClick={handleExportZipAllEvidenceImages}
+                        title="Tải toàn bộ ảnh minh chứng dạng ZIP"
+                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-sm"
+                      >
+                        <FileArchive className="w-4 h-4" />
+                        <span className="hidden sm:inline">Tải toàn bộ bài (.ZIP)</span>
+                        <span className="sm:hidden">ZIP ({gradedRecords.length})</span>
+                      </button>
+
+                      <div className="flex items-center gap-6">
                         <button
                           type="button"
                           disabled={galleryIndex <= 0}
@@ -3132,7 +3297,7 @@ export default function App() {
                         >
                           <ChevronLeft className="w-7 h-7" />
                         </button>
-                        <span className="font-mono text-lg font-medium">
+                        <span className="font-mono text-base font-bold">
                           {galleryIndex + 1} / {gradedRecords.length}
                         </span>
                         <button
@@ -3146,16 +3311,31 @@ export default function App() {
                           <ChevronRight className="w-7 h-7" />
                         </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const rec = gradedRecords[galleryIndex];
-                          if (rec) handleSaveEvidenceSheet(rec, true);
-                        }}
-                        className="p-2 text-white hover:text-blue-400 cursor-pointer"
-                      >
-                        <Share2 className="w-6 h-6" />
-                      </button>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const rec = gradedRecords[galleryIndex];
+                            if (rec) handleSaveEvidenceSheet(rec, false);
+                          }}
+                          title="Lưu ảnh hiện tại"
+                          className="p-2 text-white hover:text-blue-400 cursor-pointer bg-slate-800 rounded-xl"
+                        >
+                          <Download className="w-5 h-5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const rec = gradedRecords[galleryIndex];
+                            if (rec) handleSaveEvidenceSheet(rec, true);
+                          }}
+                          title="Chia sẻ"
+                          className="p-2 text-white hover:text-blue-400 cursor-pointer bg-slate-800 rounded-xl"
+                        >
+                          <Share2 className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
                   </>
                 )}
@@ -3957,6 +4137,18 @@ export default function App() {
                 className="w-full py-3.5 text-[#007aff] text-lg font-normal active:bg-slate-100 cursor-pointer"
               >
                 Xuất kết quả đúng sai
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowExportActionSheet(false);
+                  handleExportZipAllEvidenceImages();
+                }}
+                className="w-full py-3.5 text-emerald-600 text-lg font-bold active:bg-slate-100 cursor-pointer flex items-center justify-center gap-2"
+              >
+                <FileArchive className="w-5 h-5 text-emerald-600" />
+                <span>Tải toàn bộ ảnh minh chứng (.ZIP)</span>
               </button>
             </div>
 

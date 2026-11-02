@@ -433,3 +433,107 @@ button, a, label, input, select {
               linear-gradient(145deg, #0a1033 0%, #12174d 50%, #240e4f 100%);
 }
 
+/* Review Screen & Freeze Frame Styling (Chuẩn quy trình giáo viên chấm thi) */
+.scanner-top-bar {
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(8px);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+}
+.scanner-top-bar select {
+  margin-left: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: #1e293b;
+  color: #fde047;
+  font-weight: 700;
+  border: 1px solid rgba(253, 224, 71, 0.4);
+}
+
+.review-screen {
+  position: fixed;
+  inset: 0;
+  background: #0f172a;
+  display: flex;
+  flex-direction: column;
+  z-index: 9999;
+}
+.review-header {
+  padding: 12px 18px;
+  background: #1e293b;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+.review-title {
+  font-size: 17px;
+  font-weight: 900;
+  color: #22c55e;
+  letter-spacing: 0.02em;
+}
+.countdown-badge {
+  background: #eab308;
+  color: #000;
+  font-weight: 800;
+  padding: 5px 14px;
+  border-radius: 20px;
+  box-shadow: 0 2px 8px rgba(234, 179, 8, 0.4);
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.review-body {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 10px;
+  overflow: hidden;
+  position: relative;
+}
+.review-body img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.7);
+  background: #ffffff;
+}
+.review-footer {
+  padding: 12px 18px;
+  background: #1e293b;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.btn-continue {
+  padding: 14px 44px;
+  font-size: 18px;
+  font-weight: 900;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(37, 99, 235, 0.45);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.15s ease;
+}
+.btn-continue:active {
+  background: #1d4ed8;
+  transform: scale(0.98);
+}
+
+

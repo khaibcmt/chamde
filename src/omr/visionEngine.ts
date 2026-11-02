@@ -1127,6 +1127,16 @@ export function gradeWarpedSheet(
   const p3Score = p3CorrectCount * cfg.p3PointsPerQ;
   const totalScore = Math.round((p1Score + p2Score + p3Score) * 100) / 100;
 
+  // 1. Tạo ảnh minh chứng có vẽ con dấu khung điểm màu đỏ ở góc trên (chuẩn giáo viên)
+  const evidenceImageUrl = generateEvidenceImage(outCanvas, {
+    studentId: sbd,
+    examCode,
+    totalScore,
+    p1: p1Score,
+    p2: p2Score,
+    p3: p3Score,
+  });
+
   return {
     id: `OMR-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     timestamp: new Date().toLocaleTimeString('vi-VN', {
@@ -1152,8 +1162,93 @@ export function gradeWarpedSheet(
     p2Details,
     p3Details,
     warnings,
-    annotatedImageDataUrl: outCanvas.toDataURL('image/jpeg', 0.88),
+    annotatedImageDataUrl: evidenceImageUrl,
   };
+}
+
+/**
+ * Vẽ khung điểm và chú thích đúng sai lên ảnh bài làm làm minh chứng
+ * @param paperCanvas Canvas ảnh bài làm đã được nắn thẳng
+ * @param result Dữ liệu điểm {studentId, examCode, totalScore, p1, p2, p3, studentName}
+ * @returns DataURL ảnh bài làm hoàn chỉnh
+ */
+export function generateEvidenceImage(
+  paperCanvas: HTMLCanvasElement,
+  result: {
+    studentId?: string;
+    examCode?: string;
+    totalScore: number;
+    p1?: number;
+    p2?: number;
+    p3?: number;
+    studentName?: string;
+    className?: string;
+  }
+): string {
+  const ctx = paperCanvas.getContext('2d');
+  if (!ctx) return paperCanvas.toDataURL('image/jpeg', 0.92);
+
+  const w = paperCanvas.width;
+  const h = paperCanvas.height;
+
+  // Khung con dấu điểm đỏ ở góc trên bài làm (tương thích mọi khổ giấy)
+  const boxW = Math.min(330, Math.round(w * 0.35));
+  const boxH = Math.min(136, Math.round(h * 0.28));
+  const boxX = w > 600 ? w - boxW - 20 : 20;
+  const boxY = 16;
+
+  ctx.save();
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
+  ctx.strokeStyle = '#dc2626'; // Đỏ tươi son dấu
+  ctx.lineWidth = 3.5;
+  ctx.fillRect(boxX, boxY, boxW, boxH);
+  ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+  // Đường kẻ chia đôi con dấu: Trái là điểm từng phần, Phải là TỔNG ĐIỂM
+  const midX = boxX + Math.round(boxW * 0.54);
+  ctx.strokeStyle = '#fca5a5';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(midX, boxY + 8);
+  ctx.lineTo(midX, boxY + boxH - 8);
+  ctx.stroke();
+
+  // Cột 1: Thông tin học sinh & Điểm các phần
+  ctx.fillStyle = '#1e293b';
+  ctx.font = 'bold 13px Arial, sans-serif';
+  ctx.fillText(
+    `SBD: ${result.studentId || '---'} | Mã: ${result.examCode || '---'}`,
+    boxX + 12,
+    boxY + 26
+  );
+
+  ctx.fillStyle = '#334155';
+  ctx.font = 'bold 12px Arial, sans-serif';
+  ctx.fillText(`Phần I: ${Number(result.p1 || 0).toFixed(2)} đ`, boxX + 12, boxY + 50);
+  ctx.fillText(`Phần II: ${Number(result.p2 || 0).toFixed(2)} đ`, boxX + 12, boxY + 74);
+  ctx.fillText(`Phần III: ${Number(result.p3 || 0).toFixed(2)} đ`, boxX + 12, boxY + 98);
+
+  if (result.studentName) {
+    ctx.font = 'bold 11px Arial, sans-serif';
+    ctx.fillStyle = '#2563eb';
+    ctx.fillText(`${result.studentName}`, boxX + 12, boxY + 120);
+  }
+
+  // Cột 2: Con dấu TỔNG ĐIỂM cực to màu đỏ son
+  ctx.fillStyle = '#dc2626';
+  ctx.font = '900 12px Arial, sans-serif';
+  ctx.fillText('TỔNG ĐIỂM:', midX + 12, boxY + 28);
+
+  ctx.font = '900 42px Arial, sans-serif';
+  ctx.fillText(Number(result.totalScore).toFixed(2), midX + 12, boxY + 76);
+
+  ctx.font = 'bold 11px Arial, sans-serif';
+  ctx.fillStyle = '#b91c1c';
+  ctx.fillText('THANG ĐIỂM 10', midX + 12, boxY + 104);
+
+  ctx.restore();
+
+  return paperCanvas.toDataURL('image/jpeg', 0.92);
 }
 
 /**
