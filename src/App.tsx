@@ -1907,7 +1907,7 @@ export default function App() {
 
       {/* MAIN WORKSPACE */}
       {/* MAIN WORKSPACE: 2 MÀN HÌNH RIÊNG BIỆT (MÀN HÌNH 1: CẤU HÌNH & SỔ ĐIỂM | MÀN HÌNH 2: CHẤM BÀI) */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-4 py-4 space-y-4 safe-area-main">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-4 py-4 space-y-4 safe-area-main pb-24">
         {/* THANH ĐIỀU HƯỚNG 2 MÀN HÌNH RIÊNG BIỆT */}
         <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <button
@@ -1963,10 +1963,10 @@ export default function App() {
 
               <button
                 onClick={enterScannerScreen}
-                className="btn-3d btn-3d-emerald py-3.5 px-6 rounded-2xl text-white font-black text-sm sm:text-base flex items-center gap-2.5 shrink-0 shadow-xl animate-pulse"
+                className="btn-3d btn-3d-emerald py-3.5 px-6 rounded-2xl text-white font-black text-sm sm:text-base flex items-center justify-center gap-2.5 shrink-0 shadow-xl animate-pulse cursor-pointer"
               >
                 <Camera className="w-5 h-5" />
-                <span>CHUYỂN SANG MÀN HÌNH CHẤM BÀI (MÀN HÌNH 2) →</span>
+                <span>SẴN SÀNG CHẤM BÀI (MÀN HÌNH 2) →</span>
               </button>
             </div>
 
@@ -2564,7 +2564,7 @@ export default function App() {
 
         {/* 5. KHUNG NẠP ĐÁP ÁN & BẢNG ĐÁP ÁN CHI TIẾT */}
         <div className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
               {/* Cột trái: Quét mã QR & Nhập Excel */}
               <div className="lg:col-span-5 panel-3d-emerald rounded-2xl p-4 sm:p-5 space-y-3.5">
                 <div className="flex items-center justify-between border-b-2 border-emerald-200 pb-2.5">
@@ -2724,7 +2724,7 @@ export default function App() {
                 </div>
 
                 {currentKeyView ? (
-                  <div className="space-y-3.5 max-h-[460px] overflow-y-auto pr-1">
+                  <div className="space-y-3.5 max-h-[380px] sm:max-h-[420px] overflow-y-auto pr-1">
                     {/* Phần I */}
                     {currentScoring.activeP1Count > 0 && (
                       <div className="bg-white rounded-xl p-3.5 border-2 border-blue-200 shadow-2xs">
@@ -2872,16 +2872,30 @@ export default function App() {
                   </div>
                 )}
 
-                <div className="pt-3 border-t-2 border-sky-200 flex items-center justify-between flex-wrap gap-3">
-                  <span className="text-sm font-bold text-slate-700">
-                    Sẵn sàng chấm phiếu <strong className="text-blue-700">{currentTpl.shortName}</strong> cho lớp <strong className="text-emerald-700">{activeClassGroup?.className}</strong>
-                  </span>
+                {/* KHUNG DOCK SẴN SÀNG CHẤM BÀI — RÕ RÀNG, NỔI BẬT, KHÔNG BỊ CẮT TRÊN MỌI THIẾT BỊ */}
+                <div className="mt-4 pt-3.5 border-t-2 border-sky-300 bg-gradient-to-r from-sky-50 via-emerald-50 to-blue-50 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 p-4 rounded-b-2xl border-b-2 border-sky-300 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 shadow-inner">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black shadow-xs shrink-0">
+                      <Camera className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-black uppercase tracking-wider text-emerald-800 flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                        Đã Cấu Hình Xong — Sẵn Sàng Chấm
+                      </div>
+                      <div className="text-xs sm:text-sm font-extrabold text-slate-800">
+                        Phiếu: <strong className="text-blue-700">{currentTpl.shortName}</strong> ({currentTpl.maDeDigits} số) • Lớp: <strong className="text-emerald-700">{activeClassGroup?.className}</strong>
+                      </div>
+                    </div>
+                  </div>
+
                   <button
+                    type="button"
                     onClick={enterScannerScreen}
-                    className="btn-3d btn-3d-emerald px-5 py-3 rounded-xl text-white font-black text-sm flex items-center gap-2"
+                    className="btn-3d btn-3d-emerald py-3.5 px-6 rounded-xl text-white font-black text-sm sm:text-base flex items-center justify-center gap-2.5 shadow-lg shrink-0 cursor-pointer animate-pulse"
                   >
-                    <Camera className="w-5 h-5" />
-                    Chuyển Sang Màn Hình Chấm Bài (Màn Hình 2) →
+                    <Camera className="w-5 h-5 shrink-0" />
+                    <span>SẴN SÀNG CHẤM BÀI (MÀN HÌNH 2) →</span>
                   </button>
                 </div>
               </div>
@@ -2907,11 +2921,12 @@ export default function App() {
             {/* NÚT CHUYỂN SANG MÀN HÌNH 2 Ở ĐÁY MÀN HÌNH 1 */}
             <div className="pt-2">
               <button
+                type="button"
                 onClick={enterScannerScreen}
-                className="w-full btn-3d btn-3d-emerald py-4 px-6 rounded-2xl text-base sm:text-lg font-black text-white flex items-center justify-center gap-3 shadow-xl animate-pulse"
+                className="w-full btn-3d btn-3d-emerald py-4 px-6 rounded-2xl text-base sm:text-lg font-black text-white flex items-center justify-center gap-3 shadow-xl animate-pulse cursor-pointer"
               >
                 <Camera className="w-6 h-6" />
-                <span>👉 ĐÃ HOÀN TẤT CẤU HÌNH — CHUYỂN SANG MÀN HÌNH CHẤM BÀI (MÀN HÌNH 2) 📸</span>
+                <span>👉 ĐÃ HOÀN TẤT CẤU HÌNH — SẴN SÀNG CHẤM BÀI (MÀN HÌNH 2) 📸</span>
               </button>
             </div>
           </div>
