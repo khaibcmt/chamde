@@ -178,17 +178,20 @@ function playSuccessBeep() {
     if (ctx.state === 'suspended') {
       ctx.resume();
     }
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(1400, ctx.currentTime + 0.12);
-    gain.gain.setValueAtTime(0.35, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.23);
+    const playBeep = (delay: number, freq: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
+      gain.gain.setValueAtTime(0.35, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.1);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.11);
+    };
+    playBeep(0, 880);
+    playBeep(0.12, 1320); // Bip bip
   } catch {
     // Ignore audio errors
   }
@@ -1298,8 +1301,8 @@ export default function App() {
               return;
             }
 
-            // CHỈ TỰ ĐỘNG CHẤM KHI VƯỢT QUA ĐỦ 5 ĐIỀU KIỆN KIỂM DUYỆT (isPaperValid === true)
-            if (isPaperValid && !cooldownRef.current) {
+            // TỰ ĐỘNG CHẤM VÀ PHÁT ÂM THANH BỊP BỊP NGAY KHI NHẬN DIỆN ĐỦ TỪ 3 MỐC NEO TRỞ LÊN
+            if ((isPaperValid || corners.anchorCount >= 3) && !cooldownRef.current) {
               if (Object.keys(answerKeys).length === 0) {
                 cooldownRef.current = true;
                 playErrorAlertBeep();
@@ -1311,6 +1314,7 @@ export default function App() {
               cooldownRef.current = true;
               setCountdownRemaining(0);
               lockStartTimeRef.current = null;
+              playSuccessBeep(); // Phát tiếng bip bip hai tiếng vui tai
 
               try {
                 capturePhoto(video, 0.92);
