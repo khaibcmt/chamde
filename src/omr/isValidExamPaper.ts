@@ -279,19 +279,15 @@ export function isValidExamPaper(
     markerDarkness.push(Math.round(avgMarkerDarkness));
     markerFillRatios.push(Number(fillRatio.toFixed(2)));
 
-    // Điều kiện mốc neo chuẩn:
-    // 1. Độ sáng trung bình của ô vuông đen phải tối (thường < 115)
-    // 2. Tỷ lệ pixel đen (luma < 125) phải đạt tối thiểu 45%
-    // 3. Độ tương phản so với nền giấy trắng: (paperBrightness - avgMarkerDarkness) >= 25
+    // Điều kiện mốc neo chuẩn (linh hoạt hơn cho camera điện thoại):
     const contrast = paperBrightness - avgMarkerDarkness;
-
-    if ((avgMarkerDarkness < 118 || fillRatio >= 0.45) && contrast >= 25) {
+    if ((avgMarkerDarkness < 135 || fillRatio >= 0.32) && contrast >= 15) {
       validMarkersCount++;
     }
   }
 
-  // Bắt buộc cả 4 mốc định vị phải là khối vuông đen thực sự (hoặc tối thiểu 4/4)
-  if (validMarkersCount < 4) {
+  // Cho phép 3/4 mốc định vị rõ ràng là đủ điều kiện chấm (đề phòng 1 góc bị khuất ngón tay hoặc bóng mờ nhẹ)
+  if (validMarkersCount < 3) {
     return {
       isValid: false,
       aspectRatio,
@@ -302,7 +298,7 @@ export function isValidExamPaper(
       markerFillRatios,
       areaRatio,
       failedCheck: 'fiducial_markers',
-      reason: `Chưa xác nhận đủ 4 ô vuông đen định vị góc (${validMarkersCount}/4)`,
+      reason: `Chưa xác nhận đủ mốc đen định vị góc (${validMarkersCount}/4)`,
     };
   }
 

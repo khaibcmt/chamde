@@ -53419,14 +53419,14 @@ function isValidExamPaper(corners, frameData, templateConfig = null) {
 		const avgMarkerDarkness = markerLumaSum / Math.max(1, totalSampled);
 		const fillRatio = darkPixelCount / Math.max(1, totalSampled);
 		const contrast = paperBrightness - avgMarkerDarkness;
-		if ((avgMarkerDarkness < 118 || fillRatio >= .45) && contrast >= 25) validMarkersCount++;
+		if ((avgMarkerDarkness < 135 || fillRatio >= .32) && contrast >= 15) validMarkersCount++;
 	}
-	if (validMarkersCount < 4) return {
+	if (validMarkersCount < 3) return {
 		isValid: false,
 		aspectRatio,
 		areaRatio,
 		failedCheck: "fiducial_markers",
-		reason: `Chưa có đủ 4 ô vuông đen định vị góc (${validMarkersCount}/4)`
+		reason: `Chưa có đủ mốc đen định vị góc (${validMarkersCount}/4)`
 	};
 	return {
 		isValid: true,
