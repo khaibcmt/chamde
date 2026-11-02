@@ -40,14 +40,23 @@
     />
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased selection:bg-blue-500/20 selection:text-blue-900">
+    <script>
+      // Ngăn chặn các thông báo lỗi WebSocket / HMR do môi trường proxy iframe
+      window.addEventListener('error', function(e) {
+        if (e && e.message && (e.message.includes('send') || e.message.includes('WebSocket') || e.message.includes('vite'))) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          return true;
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function(e) {
+        if (e && e.reason && String(e.reason).includes('send')) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
+    </script>
     <div id="root"></div>
     <script type="module" src="./src/main.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js').catch(() => {});
-        });
-      }
-    </script>
   </body>
 </html>

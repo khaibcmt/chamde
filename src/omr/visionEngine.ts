@@ -1365,3 +1365,5 @@ export async function generateSimulatedSheetCanvas(
 
   return sheetCanvas;
 }
+
+export * from './isValidExamPaper';

@@ -68,6 +68,7 @@ import {
   generateSimulatedSheetCanvas,
   gradeWarpedSheet,
   interfaceGradedSheetRecord,
+  isValidExamPaper,
   OMRSettings,
   parseSbdToClassAndStt,
   warpPerspectiveTo1024x550,
@@ -364,6 +365,8 @@ export default function App() {
     tr: boolean;
     bl: boolean;
     br: boolean;
+    isValidPaper?: boolean;
+    statusHint?: string;
   }>({
     found: false,
     count: 0,
@@ -371,6 +374,8 @@ export default function App() {
     tr: false,
     bl: false,
     br: false,
+    isValidPaper: false,
+    statusHint: '',
   });
   const [missingExamCodeAlert, setMissingExamCodeAlert] = useState<{
     message: string;
@@ -1058,6 +1063,13 @@ export default function App() {
 
             const frameData = procCtx.getImageData(0, 0, vw, vh);
             const corners = detectFourCornerMarkers(frameData);
+
+            // BỘ LỌC KIỂM DUYỆT TÍNH HỢP LỆ (VALIDATION GATE - NGĂN CHẶN CHẤM BỪA BÃI)
+            const validation = corners.found
+              ? isValidExamPaper(corners, frameData, selectedTemplate)
+              : { isValid: false, reason: '' };
+            const isPaperValid = Boolean(corners.found && validation.isValid);
+
             setAnchorLockState({
               found: corners.found,
               count: corners.anchorCount,
@@ -1065,6 +1077,8 @@ export default function App() {
               tr: corners.locks.tr,
               bl: corners.locks.bl,
               br: corners.locks.br,
+              isValidPaper: isPaperValid,
+              statusHint: validation.reason || '',
             });
 
             const oCtx = overlay.getContext('2d')!;
@@ -1098,10 +1112,9 @@ export default function App() {
             oCtx.lineTo(cx + cw, cy + ch - arm);
             oCtx.stroke();
 
-            const isAllLocked = corners.found;
-            if (isAllLocked) {
-              // Tô màu viền và nền vùng phiếu đã khóa
-              oCtx.fillStyle = 'rgba(16, 185, 129, 0.15)';
+            if (isPaperValid) {
+              // Khi vượt qua đủ 5 điều kiện kiểm duyệt: Tô màu viền xanh lá và nền khóa phiếu
+              oCtx.fillStyle = 'rgba(16, 185, 129, 0.16)';
               oCtx.strokeStyle = '#10b981';
               oCtx.lineWidth = 4;
               oCtx.beginPath();
@@ -1128,6 +1141,19 @@ export default function App() {
               drawMarkerReticle(corners.tr);
               drawMarkerReticle(corners.br);
               drawMarkerReticle(corners.bl);
+            } else if (corners.found) {
+              // Thấy 4 mốc nhưng chưa đạt chuẩn phiếu (nét đứt vàng hổ phách, không tự ý chấm)
+              oCtx.strokeStyle = 'rgba(245, 158, 11, 0.75)';
+              oCtx.lineWidth = 2.5;
+              oCtx.setLineDash([8, 6]);
+              oCtx.beginPath();
+              oCtx.moveTo(corners.tl.x, corners.tl.y);
+              oCtx.lineTo(corners.tr.x, corners.tr.y);
+              oCtx.lineTo(corners.br.x, corners.br.y);
+              oCtx.lineTo(corners.bl.x, corners.bl.y);
+              oCtx.closePath();
+              oCtx.stroke();
+              oCtx.setLineDash([]);
             }
 
             // Nếu đang hiển thị bảng điểm của bài vừa chấm thì TẠM DỪNG QUÉT để giáo viên ghi điểm
@@ -1136,8 +1162,16 @@ export default function App() {
               return;
             }
 
-            // Khi hiện đủ 4 mốc định vị: TỰ ĐỘNG CHẤM NGAY TỨC THÌ (không cần đợi)
-            if (isAllLocked && !cooldownRef.current) {
+            // CHỈ TỰ ĐỘNG CHẤM KHI VƯỢT QUA ĐỦ 5 ĐIỀU KIỆN KIỂM DUYỆT (isPaperValid === true)
+            if (isPaperValid && !cooldownRef.current) {
+              if (Object.keys(answerKeys).length === 0) {
+                cooldownRef.current = true;
+                playErrorAlertBeep();
+                setShowNoKeyWarningModal(true);
+                animId = requestAnimationFrame(processFrame);
+                return;
+              }
+
               cooldownRef.current = true;
               setCountdownRemaining(0);
               lockStartTimeRef.current = null;
@@ -1224,6 +1258,17 @@ export default function App() {
         return;
       }
 
+      const uploadValidation = isValidExamPaper(corners, imgData, selectedTemplate);
+      if (!uploadValidation.isValid) {
+        playErrorAlertBeep();
+        setMissingExamCodeAlert({
+          message: uploadValidation.reason || 'Hình ảnh tải lên không đúng chuẩn phiếu thi GDPT 2018 hợp lệ',
+          sbdRead: '',
+          imageUrl: '',
+        });
+        return;
+      }
+
       const warped = warpPerspectiveTo1024x550(imgData, corners);
       const record = gradeWarpedSheet(
         warped,
@@ -1260,6 +1305,17 @@ export default function App() {
       playErrorAlertBeep();
       setMissingExamCodeAlert({
         message: `Chưa khóa đủ 4 mốc định vị (${corners.anchorCount}/4). Hãy giữ camera phẳng đối diện phiếu!`,
+        sbdRead: '',
+        imageUrl: '',
+      });
+      return;
+    }
+
+    const manualValidation = isValidExamPaper(corners, frameData, selectedTemplate);
+    if (!manualValidation.isValid) {
+      playErrorAlertBeep();
+      setMissingExamCodeAlert({
+        message: manualValidation.reason || 'Khung hình chưa khớp chuẩn phiếu thi GDPT 2018 (kiểm tra góc nghiêng, mốc đen hoặc độ sáng)',
         sbdRead: '',
         imageUrl: '',
       });
@@ -1314,6 +1370,8 @@ export default function App() {
       tr: true,
       bl: true,
       br: true,
+      isValidPaper: true,
+      statusHint: '',
     });
 
     const record = gradeWarpedSheet(
@@ -1686,10 +1744,15 @@ export default function App() {
                   <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
                   <span>⏸ ĐÃ DỪNG ĐỂ GHI ĐIỂM · Bấm &quot;Chấm bài tiếp theo&quot; để quét tiếp</span>
                 </div>
-              ) : anchorLockState.found ? (
+              ) : anchorLockState.found && anchorLockState.isValidPaper ? (
                 <div className="bg-emerald-600/95 text-white px-4 py-2 rounded-full text-xs sm:text-sm font-bold shadow-2xl border-2 border-emerald-300 flex items-center gap-2 animate-pulse">
                   <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
-                  <span>🎯 ĐÃ KHÓA 4 MỐC! Tự động chấm tức thì...</span>
+                  <span>🎯 ĐÃ KHÓA 4 MỐC CHUẨN! Tự động chấm tức thì...</span>
+                </div>
+              ) : anchorLockState.found && !anchorLockState.isValidPaper ? (
+                <div className="bg-amber-600/95 text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg border border-amber-300 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                  <span>⚠️ {anchorLockState.statusHint || 'Đang canh chỉnh phiếu thi...'}</span>
                 </div>
               ) : (
                 <div className="bg-slate-900/85 backdrop-blur-xs text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg border border-white/20 flex items-center gap-2">

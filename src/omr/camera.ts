@@ -4,10 +4,14 @@
  * Tác giả: Hồ Tấn Khải - Trường THPT Mang Thít, Tỉnh Vĩnh Long
  */
 
+import { WebcamManager } from './WebcamManager';
+export { WebcamManager };
+
 export interface CameraSessionResult {
   stream: MediaStream;
   videoTrack: MediaStreamTrack | null;
   torchSupported: boolean;
+  manager?: WebcamManager;
 }
 
 /**
@@ -26,46 +30,19 @@ export function detectMobilePlatform(): { isIOS: boolean; isAndroid: boolean } {
 }
 
 /**
- * Khởi tạo Camera sau chuẩn đa nền tảng:
- * - Gắn đầy đủ autoplay, muted, playsinline="true" (bắt buộc cho iOS Safari để không bật fullscreen player)
- * - Kích hoạt Camera sau với facingMode: { ideal: "environment" }
- * - Tự động kiểm tra tính năng Đèn Flash (torch) trên Android qua MediaTrackCapabilities / ImageCapture
+ * Khởi tạo Camera sau chuẩn đa nền tảng sử dụng WebcamManager
  */
 export async function startCrossPlatformCamera(
   videoElement: HTMLVideoElement
 ): Promise<CameraSessionResult> {
-  // Bắt buộc cấu hình thuộc tính trực tiếp trên DOM node cho Safari iOS
-  videoElement.setAttribute('autoplay', '');
-  videoElement.setAttribute('muted', '');
-  videoElement.setAttribute('playsinline', 'true');
-  videoElement.setAttribute('webkit-playsinline', 'true');
-  videoElement.muted = true;
-  videoElement.playsInline = true;
-
-  let stream: MediaStream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: {
-        facingMode: { ideal: 'environment' },
-        width: { ideal: 1920 },
-        height: { ideal: 1080 }
-      }
-    });
-  } catch (err) {
-    throw new Error(getFriendlyCameraPermissionError(err));
-  }
-
-  videoElement.srcObject = stream;
-  await videoElement.play();
-
-  const videoTrack = stream.getVideoTracks()[0] || null;
-  const torchSupported = await checkTrackTorchSupport(videoTrack);
+  const manager = new WebcamManager(videoElement);
+  await manager.startCamera();
 
   return {
-    stream,
-    videoTrack,
-    torchSupported
+    stream: manager.stream!,
+    videoTrack: manager.getVideoTrack(),
+    torchSupported: manager.torchSupported,
+    manager,
   };
 }
 

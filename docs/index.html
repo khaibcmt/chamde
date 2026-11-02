@@ -38,17 +38,26 @@
       href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="./assets/index-DKpI88AH.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-CfEgUFiK.css">
+    <script type="module" crossorigin src="./assets/index-B5b2AW8L.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-Dd07lBWq.css">
   <link rel="manifest" href="./manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="./registerSW.js"></script></head>
   <body class="bg-slate-50 text-slate-900 antialiased selection:bg-blue-500/20 selection:text-blue-900">
-    <div id="root"></div>
     <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('./sw.js').catch(() => {});
-        });
-      }
+      // Ngăn chặn các thông báo lỗi WebSocket / HMR do môi trường proxy iframe
+      window.addEventListener('error', function(e) {
+        if (e && e.message && (e.message.includes('send') || e.message.includes('WebSocket') || e.message.includes('vite'))) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          return true;
+        }
+      }, true);
+      window.addEventListener('unhandledrejection', function(e) {
+        if (e && e.reason && String(e.reason).includes('send')) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+        }
+      }, true);
     </script>
+    <div id="root"></div>
   </body>
 </html>
