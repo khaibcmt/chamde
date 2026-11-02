@@ -1582,7 +1582,7 @@ export default function App() {
     SHEET_DATABASE.find((s) => s.id === selectedTemplate) || SHEET_DATABASE[1];
 
   return (
-    <div className="min-h-screen bg-[#eceef3] text-slate-900 flex flex-col select-none">
+    <div className="min-h-screen bg-gradient-to-b from-[#e8f2fc] via-[#edf4fb] to-[#e4eef8] text-slate-900 flex flex-col select-none">
       {/* ===================================================================== */}
       {/* MÀN HÌNH D: CAMERA QUÉT CHẤM BÀI (FULL SCREEN 100dvh - ẨN HEADER & NAV) */}
       {/* ===================================================================== */}
@@ -1927,7 +1927,7 @@ export default function App() {
             {/* 1B. MÀN HÌNH DANH SÁCH BÀI THI (HOME SCREEN - ẢNH 2) */}
             {sessionView === 'list' && (
               <div className="flex-1 flex flex-col">
-                <header className="sticky top-0 z-20 bg-[#f2f3f7]/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between safe-area-header">
+                <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-blue-200/70 px-4 py-3 flex items-center justify-between safe-area-header shadow-xs">
                   <button
                     type="button"
                     onClick={() => setSessionView('welcome')}
@@ -1961,7 +1961,7 @@ export default function App() {
                   </div>
                 </header>
 
-                <div className="p-3.5 space-y-3">
+                <div className="p-3.5 space-y-3.5">
                   {examSessions.map((session) => {
                     const sh =
                       SHEET_DATABASE.find(
@@ -1977,19 +1977,19 @@ export default function App() {
                           setActiveSessionId(session.id);
                           setSessionView('hub');
                         }}
-                        className="bg-white rounded-[16px] p-4 shadow-xs border border-slate-200/80 active:scale-[0.99] transition cursor-pointer space-y-1.5"
+                        className="bg-white rounded-2xl p-4 shadow-sm border-2 border-b-4 border-slate-200 border-b-slate-300 hover:border-blue-400 hover:border-b-blue-500 active:translate-y-0.5 transition cursor-pointer space-y-3"
                       >
-                        {/* Dòng 1: Tên đợt thi + Badge trạng thái điểm + Nút sửa */}
+                        {/* Dòng 1: Tên đợt thi + Badge điểm 3D + Nút tùy chọn */}
                         <div className="flex items-start justify-between gap-2">
-                          <h2 className="text-base font-bold text-slate-900 leading-snug">
+                          <h2 className="text-base font-extrabold text-slate-900 leading-snug">
                             {session.name}
                           </h2>
                           <div className="flex items-center gap-1.5 shrink-0">
                             <span
-                              className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
+                              className={`text-xs font-black px-2.5 py-1 rounded-xl border-b-2 shadow-2xs ${
                                 isTenPoints
-                                  ? 'bg-emerald-100 text-emerald-800'
-                                  : 'bg-amber-100 text-amber-800'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-300 border-b-emerald-500'
+                                  : 'bg-amber-50 text-amber-800 border-amber-300 border-b-amber-500'
                               }`}
                             >
                               {totalPts} điểm
@@ -2000,38 +2000,64 @@ export default function App() {
                                 e.stopPropagation();
                                 handleOpenCreateSession(session);
                               }}
-                              className="p-1 text-slate-400 hover:text-slate-700"
+                              className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 cursor-pointer"
                             >
                               <MoreHorizontal className="w-5 h-5" />
                             </button>
                           </div>
                         </div>
 
-                        {/* Dòng 2: Cấu trúc câu + Loại phiếu tương ứng */}
-                        <div className="text-sm text-slate-700 space-y-0.5">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-semibold text-slate-900">
-                              Số câu: {session.scoring.activeP1Count};{' '}
-                              {session.scoring.activeP2Count}; {session.scoring.activeP3Count}
-                            </span>
-                            <span className="text-slate-300">•</span>
-                            <span className="text-xs font-semibold text-blue-700">
-                              Mã đề {sh.codeLength} số
-                            </span>
+                        {/* Dòng 2: 3 Khối 3D màu sắc khác nhau cho 3 Phần trắc nghiệm */}
+                        <div className="grid grid-cols-3 gap-2">
+                          {/* Phần 1: Màu xanh dương 3D */}
+                          <div className="bg-gradient-to-b from-blue-50 to-blue-100/90 border border-blue-200 border-b-2 border-b-blue-400 rounded-xl px-2 py-1.5 text-center shadow-2xs">
+                            <div className="text-[10px] font-black text-blue-700 uppercase tracking-tight">
+                              Phần I (TN)
+                            </div>
+                            <div className="text-sm font-black text-blue-900">
+                              {session.scoring.activeP1Count} <span className="text-[11px] font-bold">câu</span>
+                            </div>
                           </div>
-                          <div className="text-xs sm:text-sm text-slate-700">
-                            Phiếu: <strong className="font-semibold">{sh.name}</strong>
+
+                          {/* Phần 2: Màu xanh lá Emerald 3D */}
+                          <div className="bg-gradient-to-b from-emerald-50 to-emerald-100/90 border border-emerald-200 border-b-2 border-b-emerald-400 rounded-xl px-2 py-1.5 text-center shadow-2xs">
+                            <div className="text-[10px] font-black text-emerald-700 uppercase tracking-tight">
+                              Phần II (Đ/S)
+                            </div>
+                            <div className="text-sm font-black text-emerald-900">
+                              {session.scoring.activeP2Count} <span className="text-[11px] font-bold">câu</span>
+                            </div>
+                          </div>
+
+                          {/* Phần 3: Màu tím Purple 3D */}
+                          <div className="bg-gradient-to-b from-purple-50 to-purple-100/90 border border-purple-200 border-b-2 border-b-purple-400 rounded-xl px-2 py-1.5 text-center shadow-2xs">
+                            <div className="text-[10px] font-black text-purple-700 uppercase tracking-tight">
+                              Phần III (Điền)
+                            </div>
+                            <div className="text-sm font-black text-purple-900">
+                              {session.scoring.activeP3Count} <span className="text-[11px] font-bold">câu</span>
+                            </div>
                           </div>
                         </div>
 
-                        {/* Dòng 3: Thời gian tạo + Quét SBD + Chi tiết -> */}
-                        <div className="pt-1 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100">
-                          <span>
-                            Ngày: {session.createdAt}{' '}
-                            {session.scanSbd ? '• Quét SBD' : ''}
+                        {/* Dòng 3: Phiếu thi và thông tin định dạng */}
+                        <div className="flex items-center justify-between text-xs text-slate-700 bg-slate-50/90 px-3 py-2 rounded-xl border border-slate-200">
+                          <div className="flex items-center gap-1.5 truncate">
+                            <FileText className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                            <span className="font-bold truncate text-slate-800">{sh.name}</span>
+                          </div>
+                          <span className="font-black text-blue-700 shrink-0 bg-blue-100/80 px-2 py-0.5 rounded-md text-[11px] border border-blue-200">
+                            Mã đề {sh.codeLength} số
                           </span>
-                          <span className="text-[#007aff] font-bold flex items-center gap-0.5">
-                            Chi tiết →
+                        </div>
+
+                        {/* Dòng 4: Chân card - Ngày tạo & nút thao tác nhanh 3D */}
+                        <div className="pt-1.5 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100">
+                          <span className="text-[11px] font-medium">
+                            {session.createdAt} {session.scanSbd ? '• Có quét SBD' : ''}
+                          </span>
+                          <span className="text-[#007aff] font-black flex items-center gap-0.5 text-xs">
+                            Chấm & Chi tiết →
                           </span>
                         </div>
                       </div>
@@ -2044,7 +2070,7 @@ export default function App() {
             {/* 1C. MÀN HÌNH HUB CHỨC NĂNG 6 NÚT LỚN (ẢNH 5 & 9) */}
             {sessionView === 'hub' && activeSession && (
               <div className="flex-1 flex flex-col">
-                <header className="sticky top-0 z-20 bg-[#f2f3f7]/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between safe-area-header">
+                <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-blue-200/70 px-4 py-3 flex items-center justify-between safe-area-header shadow-xs">
                   <button
                     type="button"
                     onClick={() => setSessionView('list')}
@@ -2247,59 +2273,75 @@ export default function App() {
 
             {/* 1D. MÀN HÌNH TẠO MỚI / CHỈNH SỬA BÀI THI (KHAY TRƯỢT ĐÁY & CARD 3 CỘT - ẢNH 3, 4, 15) */}
             {sessionView === 'create' && (
-              <div className="flex-1 flex flex-col pb-28">
-                <header className="sticky top-0 z-20 bg-[#f2f3f7]/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between safe-area-header">
+              <div className="flex-1 flex flex-col pb-32">
+                <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-blue-200/70 px-4 py-3 flex items-center justify-between safe-area-header shadow-xs">
                   <button
                     type="button"
                     onClick={() => setSessionView(editingSessionId ? 'hub' : 'list')}
-                    className="text-[#007aff] font-medium text-base flex items-center gap-0.5 touch-target-44 cursor-pointer"
+                    className="text-[#007aff] font-bold text-base flex items-center gap-0.5 touch-target-44 cursor-pointer"
                   >
                     <ChevronLeft className="w-6 h-6 -ml-1.5" />
                     <span>Danh sách chấm</span>
                   </button>
 
-                  <h1 className="text-base font-bold text-slate-900">
+                  <h1 className="text-base font-black text-slate-900">
                     {editingSessionId ? 'Sửa đợt chấm' : 'Tạo mới'}
                   </h1>
 
                   <button
                     type="button"
                     onClick={handleSaveDraftSession}
-                    className="text-[#007aff] font-bold text-base touch-target-44 flex items-center justify-end cursor-pointer"
+                    className="text-[#007aff] font-black text-base touch-target-44 flex items-center justify-end cursor-pointer"
                   >
                     Lưu
                   </button>
                 </header>
 
-                <div className="p-4 space-y-5">
-                  {/* 1. Tên bài kiểm tra */}
-                  <div className="flex items-center gap-3">
-                    <label className="font-bold text-base text-slate-900 shrink-0">
-                      1. Tên bài
-                    </label>
+                <div className="p-4 space-y-4">
+                  {/* =================================================================== */}
+                  {/* PHẦN 1 (MÀU XANH DƯƠNG / SKY 3D): 1. TÊN BÀI KIỂM TRA               */}
+                  {/* =================================================================== */}
+                  <div className="bg-white rounded-2xl p-4 border-2 border-sky-300 border-b-4 border-b-sky-500 shadow-sm space-y-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-7 h-7 rounded-xl bg-gradient-to-tr from-sky-600 to-blue-500 text-white font-black text-sm flex items-center justify-center shadow-xs">
+                        1
+                      </span>
+                      <label className="font-black text-base text-sky-950">
+                        Tên bài kiểm tra
+                      </label>
+                    </div>
                     <input
                       type="text"
                       value={draftName}
                       onChange={(e) => setDraftName(e.target.value)}
                       placeholder="Nhập tên bài (VD: Toán 12 - GKI)"
-                      className="flex-1 bg-white rounded-xl px-3.5 py-2.5 text-base text-slate-900 placeholder:text-slate-400 border border-slate-200 focus:outline-none focus:border-blue-500"
+                      className="w-full bg-sky-50/60 rounded-xl px-4 py-3 text-base font-bold text-slate-900 placeholder:text-slate-400 border-2 border-sky-200 focus:outline-none focus:border-sky-500 shadow-inner"
                     />
                   </div>
 
-                  {/* 2. Chọn phiếu có mã đề [ 3 số ] / [ 4 số ] + Ô mở Khay trượt đáy */}
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <label className="font-bold text-base text-slate-900">
-                        2. Chọn phiếu có mã đề:
-                      </label>
-                      <div className="inline-flex bg-slate-200/90 p-1 rounded-xl">
+                  {/* =================================================================== */}
+                  {/* PHẦN 2 (MÀU TÍM INDIGO 3D): 2. CHỌN PHIẾU CÓ MÃ ĐỀ 3 SỐ / 4 SỐ       */}
+                  {/* =================================================================== */}
+                  <div className="bg-white rounded-2xl p-4 border-2 border-indigo-300 border-b-4 border-b-indigo-500 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-7 h-7 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 text-white font-black text-sm flex items-center justify-center shadow-xs">
+                          2
+                        </span>
+                        <label className="font-black text-base text-indigo-950">
+                          Chọn phiếu có mã đề:
+                        </label>
+                      </div>
+
+                      {/* Gạt 3 số / 4 số dạng 3D */}
+                      <div className="inline-flex bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-inner">
                         <button
                           type="button"
                           onClick={() => handleToggleDraftCodeLength(3)}
-                          className={`px-4 py-1.5 rounded-lg text-sm font-bold transition cursor-pointer ${
+                          className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
                             draftCodeLength === 3
-                              ? 'bg-[#4263eb] text-white shadow-xs'
-                              : 'text-[#007aff]'
+                              ? 'btn-3d btn-3d-blue text-white shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
                           }`}
                         >
                           3 số
@@ -2307,10 +2349,10 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => handleToggleDraftCodeLength(4)}
-                          className={`px-4 py-1.5 rounded-lg text-sm font-bold transition cursor-pointer ${
+                          className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition cursor-pointer ${
                             draftCodeLength === 4
-                              ? 'bg-[#4263eb] text-white shadow-xs'
-                              : 'text-[#007aff]'
+                              ? 'btn-3d btn-3d-blue text-white shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
                           }`}
                         >
                           4 số
@@ -2325,73 +2367,95 @@ export default function App() {
                           setSheetGroupTab(draftDbSheet.group);
                           setShowSheetSelectorBottomSheet(true);
                         }}
-                        className="flex-1 bg-white rounded-xl px-4 py-3 border border-slate-200 flex items-center justify-between text-left shadow-2xs active:bg-slate-50 cursor-pointer"
+                        className="flex-1 bg-gradient-to-r from-indigo-50/70 to-purple-50/70 rounded-xl px-4 py-3 border-2 border-indigo-200 hover:border-indigo-400 flex items-center justify-between text-left shadow-2xs active:bg-indigo-100/70 cursor-pointer"
                       >
-                        <div>
-                          <div className="text-base font-medium text-slate-900">
+                        <div className="truncate pr-2">
+                          <div className="text-base font-extrabold text-indigo-950 truncate">
                             {draftDbSheet.name}
                           </div>
-                          <div className="text-xs text-slate-500 mt-0.5">
-                            {draftDbSheet.group} • Tối đa: {draftDbSheet.p1} P1, {draftDbSheet.p2}{' '}
-                            P2, {draftDbSheet.p3} P3
+                          <div className="text-xs text-indigo-700 font-semibold mt-0.5 truncate">
+                            {draftDbSheet.group} • Tối đa: {draftDbSheet.p1} P1, {draftDbSheet.p2} P2, {draftDbSheet.p3} P3
                           </div>
                         </div>
-                        <ChevronRight className="w-5 h-5 text-[#007aff] shrink-0" />
+                        <ChevronRight className="w-5 h-5 text-indigo-600 shrink-0" />
                       </button>
 
                       <button
                         type="button"
                         onClick={() => setPreviewSheetModalItem(draftDbSheet)}
-                        title="Xem ảnh mẫu phiếu chuẩn"
-                        className="w-12 h-12 rounded-xl bg-slate-200/80 text-[#007aff] flex items-center justify-center shrink-0 cursor-pointer"
+                        title="Xem ảnh phóng to mẫu phiếu chuẩn"
+                        className="w-12 h-12 rounded-xl btn-3d btn-3d-white text-indigo-600 flex items-center justify-center shrink-0 cursor-pointer"
                       >
-                        <Search className="w-6 h-6" />
+                        <Search className="w-5 h-5 stroke-[2.5]" />
                       </button>
                     </div>
                   </div>
 
-                  {/* 3. Quét số báo danh */}
-                  <div className="flex items-center justify-between">
-                    <label className="font-bold text-base text-slate-900">
-                      3. Quét số báo danh
-                    </label>
+                  {/* =================================================================== */}
+                  {/* PHẦN 3 (MÀU XANH TEAL / NGỌC 3D): 3. QUÉT SỐ BÁO DANH                */}
+                  {/* =================================================================== */}
+                  <div className="bg-white rounded-2xl p-4 border-2 border-teal-300 border-b-4 border-b-teal-500 shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-7 h-7 rounded-xl bg-gradient-to-tr from-teal-600 to-emerald-500 text-white font-black text-sm flex items-center justify-center shadow-xs">
+                        3
+                      </span>
+                      <div>
+                        <label className="font-black text-base text-teal-950 block">
+                          Quét số báo danh
+                        </label>
+                        <span className="text-xs text-teal-700 font-bold">
+                          {draftScanSbd ? 'Đang bật quét SBD & tự đối chiếu học sinh' : 'Tắt quét SBD'}
+                        </span>
+                      </div>
+                    </div>
                     <button
                       type="button"
                       onClick={() => setDraftScanSbd((v) => !v)}
-                      className={`w-14 h-8 rounded-full p-1 transition-colors cursor-pointer ${
-                        draftScanSbd ? 'bg-[#4263eb]' : 'bg-slate-300'
+                      className={`w-14 h-8 rounded-full p-1 transition-colors cursor-pointer shadow-inner ${
+                        draftScanSbd ? 'bg-teal-500' : 'bg-slate-300'
                       }`}
                     >
                       <div
-                        className={`w-6 h-6 rounded-full bg-white shadow transition-transform ${
+                        className={`w-6 h-6 rounded-full bg-white shadow-md transition-transform ${
                           draftScanSbd ? 'translate-x-6' : 'translate-x-0'
                         }`}
                       />
                     </button>
                   </div>
 
-                  {/* 4. Cấu trúc đề — Gom gọn 3 Phần thành lưới 3 cột ngang (3-Column Grid) */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="font-bold text-base text-slate-900">
-                        4. Cấu trúc đề (3 Phần)
-                      </label>
+                  {/* =================================================================== */}
+                  {/* PHẦN 4 (MÀU TÍM PURPLE 3D): 4. CẤU TRÚC ĐỀ (3 PHẦN RIÊNG BIỆT 3D)  */}
+                  {/* =================================================================== */}
+                  <div className="bg-white rounded-2xl p-4 border-2 border-purple-300 border-b-4 border-purple-500 shadow-sm space-y-3.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-7 h-7 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-500 text-white font-black text-sm flex items-center justify-center shadow-xs">
+                          4
+                        </span>
+                        <label className="font-black text-base text-purple-950">
+                          Cấu trúc đề (3 Phần)
+                        </label>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setShowAdvancedP2Points((v) => !v)}
-                        className="text-xs font-bold text-[#007aff] underline cursor-pointer"
+                        className="text-xs font-black text-purple-700 bg-purple-100 hover:bg-purple-200 px-3 py-1.5 rounded-xl border border-purple-300 cursor-pointer shadow-2xs"
                       >
                         {showAdvancedP2Points ? 'Ẩn chi tiết điểm' : 'Tùy chỉnh điểm mỗi câu'}
                       </button>
                     </div>
 
+                    {/* 3 KHỐI 3D VỚI 3 MÀU SẮC RỰC RỠ VÀ CỠ CHỮ LỚN RÕ RÀNG */}
                     <div className="grid grid-cols-3 gap-2.5">
-                      {/* Cột 1: Phần I (TN) */}
-                      <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-2xs flex flex-col justify-between">
-                        <div className="text-xs font-bold text-slate-800">Phần I (TN)</div>
-                        <div className="text-[11px] text-slate-400 mb-1.5">
+                      {/* KHỐI 1: PHẦN I (TN 4 LỰA CHỌN) - MÀU XANH DƯƠNG 3D */}
+                      <div className="bg-gradient-to-b from-blue-50 to-blue-100/90 rounded-2xl p-3 border-2 border-blue-300 border-b-4 border-b-blue-500 shadow-xs flex flex-col justify-between text-center">
+                        <div className="text-xs font-black text-blue-900 uppercase tracking-tight">
+                          Phần I (TN)
+                        </div>
+                        <div className="text-[11px] text-blue-600 font-bold mb-1">
                           Tối đa {draftDbSheet.p1} câu
                         </div>
+                        {/* CỠ CHỮ SỐ CÂU TĂNG LỚN (TEXT-3XL) */}
                         <input
                           type="number"
                           min={0}
@@ -2407,19 +2471,25 @@ export default function App() {
                             }))
                           }
                           placeholder="Số câu"
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-2 text-center font-bold text-lg text-slate-900 focus:outline-none focus:border-blue-500"
+                          className="w-full bg-white border-2 border-blue-300 focus:border-blue-500 rounded-xl py-2 px-1 text-center font-black text-3xl text-blue-700 shadow-inner focus:outline-none"
                         />
-                        <div className="text-[11px] text-slate-500 mt-1.5 text-center font-medium">
-                          {draftScoring.p1PointsPerQ}đ / câu
+                        {/* CỠ CHỮ SỐ ĐIỂM TĂNG LỚN */}
+                        <div className="mt-2 bg-blue-200/80 border border-blue-300 rounded-lg py-1 px-1">
+                          <div className="text-xs font-black text-blue-950">
+                            {draftScoring.p1PointsPerQ}đ / câu
+                          </div>
                         </div>
                       </div>
 
-                      {/* Cột 2: Phần II (Đ/S) */}
-                      <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-2xs flex flex-col justify-between">
-                        <div className="text-xs font-bold text-slate-800">Phần II (Đ/S)</div>
-                        <div className="text-[11px] text-slate-400 mb-1.5">
+                      {/* KHỐI 2: PHẦN II (ĐÚNG/SAI) - MÀU XANH LÁ EMERALD 3D */}
+                      <div className="bg-gradient-to-b from-emerald-50 to-emerald-100/90 rounded-2xl p-3 border-2 border-emerald-300 border-b-4 border-b-emerald-500 shadow-xs flex flex-col justify-between text-center">
+                        <div className="text-xs font-black text-emerald-900 uppercase tracking-tight">
+                          Phần II (Đ/S)
+                        </div>
+                        <div className="text-[11px] text-emerald-600 font-bold mb-1">
                           Tối đa {draftDbSheet.p2} câu
                         </div>
+                        {/* CỠ CHỮ SỐ CÂU TĂNG LỚN (TEXT-3XL) */}
                         <input
                           type="number"
                           min={0}
@@ -2435,19 +2505,25 @@ export default function App() {
                             }))
                           }
                           placeholder="Số câu"
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-2 text-center font-bold text-lg text-slate-900 focus:outline-none focus:border-blue-500"
+                          className="w-full bg-white border-2 border-emerald-300 focus:border-emerald-500 rounded-xl py-2 px-1 text-center font-black text-3xl text-emerald-700 shadow-inner focus:outline-none"
                         />
-                        <div className="text-[11px] text-emerald-700 mt-1.5 text-center font-semibold">
-                          Lũy tiến Bộ GD
+                        {/* CỠ CHỮ SỐ ĐIỂM TĂNG LỚN */}
+                        <div className="mt-2 bg-emerald-200/80 border border-emerald-300 rounded-lg py-1 px-1">
+                          <div className="text-xs font-black text-emerald-950">
+                            Lũy tiến Bộ GD
+                          </div>
                         </div>
                       </div>
 
-                      {/* Cột 3: Phần III (Điền số) */}
-                      <div className="bg-white rounded-2xl p-3 border border-slate-200 shadow-2xs flex flex-col justify-between">
-                        <div className="text-xs font-bold text-slate-800">Phần III (Điền số)</div>
-                        <div className="text-[11px] text-slate-400 mb-1.5">
+                      {/* KHỐI 3: PHẦN III (ĐIỀN SỐ) - MÀU TÍM VIOLET 3D */}
+                      <div className="bg-gradient-to-b from-purple-50 to-purple-100/90 rounded-2xl p-3 border-2 border-purple-300 border-b-4 border-b-purple-500 shadow-xs flex flex-col justify-between text-center">
+                        <div className="text-xs font-black text-purple-900 uppercase tracking-tight">
+                          Phần III (Điền)
+                        </div>
+                        <div className="text-[11px] text-purple-600 font-bold mb-1">
                           Tối đa {draftDbSheet.p3} câu
                         </div>
+                        {/* CỠ CHỮ SỐ CÂU TĂNG LỚN (TEXT-3XL) */}
                         <input
                           type="number"
                           min={0}
@@ -2463,20 +2539,23 @@ export default function App() {
                             }))
                           }
                           placeholder="Số câu"
-                          className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-2 text-center font-bold text-lg text-slate-900 focus:outline-none focus:border-blue-500"
+                          className="w-full bg-white border-2 border-purple-300 focus:border-purple-500 rounded-xl py-2 px-1 text-center font-black text-3xl text-purple-700 shadow-inner focus:outline-none"
                         />
-                        <div className="text-[11px] text-slate-500 mt-1.5 text-center font-medium">
-                          {draftScoring.p3PointsPerQ}đ / câu
+                        {/* CỠ CHỮ SỐ ĐIỂM TĂNG LỚN */}
+                        <div className="mt-2 bg-purple-200/80 border border-purple-300 rounded-lg py-1 px-1">
+                          <div className="text-xs font-black text-purple-950">
+                            {draftScoring.p3PointsPerQ}đ / câu
+                          </div>
                         </div>
                       </div>
                     </div>
 
                     {/* Khung mở rộng tùy chỉnh chi tiết điểm từng câu / bậc thang nếu giáo viên cần */}
                     {showAdvancedP2Points && (
-                      <div className="bg-white rounded-2xl p-4 border border-slate-200 space-y-3 text-xs">
+                      <div className="bg-slate-50/90 rounded-2xl p-4 border-2 border-purple-200 space-y-3.5 text-xs shadow-inner">
                         <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-slate-500 font-semibold block mb-1">
+                          <div className="bg-white p-3 rounded-xl border border-blue-200 shadow-2xs">
+                            <label className="text-blue-900 font-black block mb-1">
                               Điểm mỗi câu Phần 1
                             </label>
                             <input
@@ -2489,11 +2568,11 @@ export default function App() {
                                   p1PointsPerQ: Number(e.target.value) || 0,
                                 }))
                               }
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold text-sm"
+                              className="w-full bg-blue-50 border-2 border-blue-300 rounded-xl px-3 py-2 font-black text-lg text-blue-700 text-center"
                             />
                           </div>
-                          <div>
-                            <label className="text-slate-500 font-semibold block mb-1">
+                          <div className="bg-white p-3 rounded-xl border border-purple-200 shadow-2xs">
+                            <label className="text-purple-900 font-black block mb-1">
                               Điểm mỗi câu Phần 3
                             </label>
                             <input
@@ -2506,19 +2585,19 @@ export default function App() {
                                   p3PointsPerQ: Number(e.target.value) || 0,
                                 }))
                               }
-                              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold text-sm"
+                              className="w-full bg-purple-50 border-2 border-purple-300 rounded-xl px-3 py-2 font-black text-lg text-purple-700 text-center"
                             />
                           </div>
                         </div>
 
                         <div>
-                          <label className="text-slate-500 font-semibold block mb-1.5">
+                          <label className="text-emerald-950 font-black block mb-1.5 text-xs">
                             Điểm bậc thang Phần 2 (Đúng 1 ý - 2 ý - 3 ý - 4 ý)
                           </label>
                           <div className="grid grid-cols-4 gap-2">
                             {[0, 1, 2, 3].map((idx) => (
-                              <div key={idx}>
-                                <span className="text-[11px] text-slate-400 block mb-0.5">
+                              <div key={idx} className="bg-white p-2.5 rounded-xl border border-emerald-200 shadow-2xs text-center">
+                                <span className="text-[11px] text-emerald-800 font-black block mb-1">
                                   Đúng {idx + 1} ý
                                 </span>
                                 <input
@@ -2535,7 +2614,7 @@ export default function App() {
                                     nextMap[idx] = Number(e.target.value) || 0;
                                     setDraftScoring((prev) => ({ ...prev, p2PointsMap: nextMap }));
                                   }}
-                                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1.5 font-bold text-center"
+                                  className="w-full bg-emerald-50 border border-emerald-300 rounded-lg py-1.5 font-black text-center text-emerald-800 text-base"
                                 />
                               </div>
                             ))}
@@ -2546,33 +2625,39 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Thanh chân trang ghim cố định: Vòng tròn điểm (10.0 / 10) bên trái & nút to LƯU BÀI KIỂM TRA bên phải */}
-                <div className="fixed bottom-16 left-0 right-0 max-w-lg mx-auto bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-3 flex items-center justify-between gap-3 z-20 shadow-lg">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className={`w-12 h-12 rounded-full border-4 flex items-center justify-center font-black text-xs shrink-0 ${
-                        Math.abs(draftTotalScore - 10) < 0.05
-                          ? 'border-emerald-500 text-emerald-700 bg-emerald-50'
-                          : 'border-amber-500 text-amber-700 bg-amber-50'
-                      }`}
-                    >
-                      {draftTotalScore}/10
-                    </div>
-                    <div className="text-xs">
-                      <div className="font-bold text-slate-800">Tổng điểm</div>
-                      <div className="text-slate-500">
-                        {draftScoring.activeP1Count};{draftScoring.activeP2Count};
-                        {draftScoring.activeP3Count} câu
+                {/* =================================================================== */}
+                {/* THANH CHÂN TRANG: TĂNG NÚT SỐ ĐIỂM LÊN & NÚT LƯU BÀI KIỂM TRA NHỎ LẠI */}
+                {/* =================================================================== */}
+                <div className="fixed bottom-16 left-0 right-0 max-w-lg mx-auto bg-white/95 backdrop-blur-md border-t-2 border-blue-200 px-4 py-3 flex items-center justify-between gap-3 z-20 shadow-2xl">
+                  {/* NÚT TỔNG ĐIỂM ĐƯỢC TĂNG LỚN NỔI BẬT KHỐI 3D */}
+                  <div
+                    className={`flex-1 rounded-2xl px-4 py-2.5 flex items-center justify-between border-2 border-b-4 shadow-md transition-all ${
+                      Math.abs(draftTotalScore - 10) < 0.05
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-600 border-emerald-400 border-b-emerald-700 text-white'
+                        : 'bg-gradient-to-r from-amber-500 to-orange-600 border-amber-400 border-b-amber-700 text-white'
+                    }`}
+                  >
+                    <div>
+                      <div className="text-[10px] font-black uppercase tracking-wider opacity-90">
+                        {Math.abs(draftTotalScore - 10) < 0.05 ? 'Tổng điểm chuẩn' : 'Tổng điểm đề'}
                       </div>
+                      <div className="text-xs font-bold opacity-95">
+                        {draftScoring.activeP1Count} + {draftScoring.activeP2Count} + {draftScoring.activeP3Count} câu
+                      </div>
+                    </div>
+                    <div className="text-2xl sm:text-3xl font-black tracking-tight tabular-nums drop-shadow-xs">
+                      {draftTotalScore.toFixed(1)} <span className="text-sm font-bold opacity-90">/ 10đ</span>
                     </div>
                   </div>
 
+                  {/* NÚT LƯU BÀI KIỂM TRA NHỎ GỌN LẠI DẠNG 3D */}
                   <button
                     type="button"
                     onClick={handleSaveDraftSession}
-                    className="flex-1 bg-[#007aff] hover:bg-blue-600 text-white font-bold py-3.5 px-5 rounded-2xl text-sm sm:text-base shadow-md active:scale-[0.99] transition touch-target-44 cursor-pointer"
+                    className="btn-3d btn-3d-blue py-3 px-5 rounded-2xl text-sm sm:text-base font-black text-white shrink-0 shadow-md flex items-center gap-1.5 touch-target-44 cursor-pointer"
                   >
-                    LƯU BÀI KIỂM TRA
+                    <Check className="w-5 h-5 stroke-[2.5]" />
+                    <span>Lưu bài</span>
                   </button>
                 </div>
               </div>
@@ -2581,7 +2666,7 @@ export default function App() {
             {/* 1E. MÀN HÌNH ĐÁP ÁN & ACTION SHEET THÊM ĐÁP ÁN (ẢNH 6) */}
             {sessionView === 'keys' && (
               <div className="flex-1 flex flex-col">
-                <header className="sticky top-0 z-20 bg-[#f2f3f7]/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between safe-area-header">
+                <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-blue-200/70 px-4 py-3 flex items-center justify-between safe-area-header shadow-xs">
                   <button
                     type="button"
                     onClick={() => setSessionView('hub')}
@@ -3078,7 +3163,7 @@ export default function App() {
         {/* ================================================================= */}
         {bottomTab === 'classes' && (
           <div className="flex-1 flex flex-col">
-            <header className="sticky top-0 z-20 bg-[#f2f3f7]/95 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between safe-area-header">
+            <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-blue-200/70 px-4 py-3 flex items-center justify-between safe-area-header shadow-xs">
               <span className="text-base sm:text-lg font-bold text-slate-900">
                 Danh sách lớp ({activeClassGroup?.className})
               </span>
@@ -3183,8 +3268,8 @@ export default function App() {
         {/* TAB 4: CÀI ĐẶT (TỐC ĐỘ CHẤM, XEM KẾT QUẢ, TÀI KHOẢN PRO & TẢI HTML) */}
         {/* ================================================================= */}
         {bottomTab === 'settings' && (
-          <div className="flex-1 flex flex-col bg-[#d6d0c4] min-h-[88vh]">
-            <header className="sticky top-0 z-20 bg-[#d6d0c4]/95 backdrop-blur-md px-4 py-3 flex items-center justify-between safe-area-header">
+          <div className="flex-1 flex flex-col bg-gradient-to-b from-[#e8f2fc] via-[#edf4fb] to-[#e4eef8] min-h-[88vh]">
+            <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-blue-200/70 px-4 py-3 flex items-center justify-between safe-area-header shadow-xs">
               <button
                 type="button"
                 onClick={() => setBottomTab('sessions')}
