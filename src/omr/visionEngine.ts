@@ -290,16 +290,16 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
   const pool = largeCandidates.length >= 4 ? largeCandidates : candidates;
 
   const tlCand = pool
-    .filter((c) => c.cx < width * 0.42 && c.cy < height * 0.42)
+    .filter((c) => c.cx < width * 0.38 && c.cy < height * 0.40)
     .sort((a, b) => a.cx + a.cy - (b.cx + b.cy))[0];
   const trCand = pool
-    .filter((c) => c.cx > width * 0.58 && c.cy < height * 0.42)
+    .filter((c) => c.cx > width * 0.62 && c.cy < height * 0.40)
     .sort((a, b) => b.cx - b.cy - (a.cx - a.cy))[0];
   const blCand = pool
-    .filter((c) => c.cx < width * 0.42 && c.cy > height * 0.58)
+    .filter((c) => c.cx < width * 0.38 && c.cy > height * 0.60)
     .sort((a, b) => b.cy - b.cx - (a.cy - a.cx))[0];
   const brCand = pool
-    .filter((c) => c.cx > width * 0.58 && c.cy > height * 0.58)
+    .filter((c) => c.cx > width * 0.62 && c.cy > height * 0.60)
     .sort((a, b) => b.cx + b.cy - (a.cx + a.cy))[0];
 
   const locks = {
