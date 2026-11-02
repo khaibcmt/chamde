@@ -438,6 +438,26 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
     }
   }
 
+  // 3. Cơ chế suy luận khi chỉ thấy 2 mốc (2-out-of-4 Fallback Recovery)
+  if (!bestQuad && topPool.length >= 2) {
+    const pA = topPool[0];
+    const pB = topPool[1];
+    const dx = pB.cx - pA.cx;
+    const dy = pB.cy - pA.cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist > width * 0.12) {
+      const cx = (pA.cx + pB.cx) / 2;
+      const cy = (pA.cy + pB.cy) / 2;
+      const halfW = Math.max(dist * 0.5, width * 0.35);
+      const halfH = halfW * 0.72;
+      const p0 = { x: cx - halfW, y: cy - halfH };
+      const p1 = { x: cx + halfW, y: cy - halfH };
+      const p2 = { x: cx + halfW, y: cy + halfH };
+      const p3 = { x: cx - halfW, y: cy + halfH };
+      bestQuad = { p0, p1, p2, p3, score: 200, area: computeQuadArea(p0, p1, p2, p3) };
+    }
+  }
+
   if (!bestQuad) {
     // Trả về số lượng mốc neo thực tế tìm thấy để thông báo giao diện
     const count = Math.min(candidates.length, 3);

@@ -279,15 +279,15 @@ export function isValidExamPaper(
     markerDarkness.push(Math.round(avgMarkerDarkness));
     markerFillRatios.push(Number(fillRatio.toFixed(2)));
 
-    // Điều kiện mốc neo chuẩn (linh hoạt hơn cho camera điện thoại):
+    // Điều kiện mốc neo chuẩn (linh hoạt tối đa cho camera điện thoại và mọi ánh sáng):
     const contrast = paperBrightness - avgMarkerDarkness;
-    if ((avgMarkerDarkness < 135 || fillRatio >= 0.32) && contrast >= 15) {
+    if ((avgMarkerDarkness < 145 || fillRatio >= 0.25) && contrast >= 8) {
       validMarkersCount++;
     }
   }
 
-  // Cho phép 3/4 mốc định vị rõ ràng là đủ điều kiện chấm (đề phòng 1 góc bị khuất ngón tay hoặc bóng mờ nhẹ)
-  if (validMarkersCount < 3) {
+  // Cho phép chỉ cần 2/4 mốc định vị là đủ điều kiện chấm (hoặc phòng trường hợp góc chụp nghiêng / khuất mép)
+  if (validMarkersCount < 2) {
     return {
       isValid: false,
       aspectRatio,
