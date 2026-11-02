@@ -125,6 +125,7 @@ export interface ExamSessionItem {
   scanSbd: boolean;
   scoring: CustomScoringConfig;
   classId: string;
+  answerKeys?: Record<string, AnswerKeyData>;
 }
 
 const APP_VERSION = '1.89 (Build 89 • GDPT 2018)';
@@ -148,6 +149,7 @@ const DEFAULT_EXAM_SESSIONS: ExamSessionItem[] = [
       p3PointsPerQ: 0.5,
     },
     classId: 'cls-12a1',
+    answerKeys: {},
   },
   {
     id: 'session-2',
@@ -167,6 +169,7 @@ const DEFAULT_EXAM_SESSIONS: ExamSessionItem[] = [
       p3PointsPerQ: 0.25,
     },
     classId: 'cls-12a1',
+    answerKeys: {},
   },
   {
     id: 'session-3',
@@ -186,6 +189,7 @@ const DEFAULT_EXAM_SESSIONS: ExamSessionItem[] = [
       p3PointsPerQ: 0.5,
     },
     classId: 'cls-12a1',
+    answerKeys: {},
   },
   {
     id: 'session-4',
@@ -205,6 +209,7 @@ const DEFAULT_EXAM_SESSIONS: ExamSessionItem[] = [
       p3PointsPerQ: 0.5,
     },
     classId: 'cls-12a2',
+    answerKeys: {},
   },
 ];
 
@@ -246,17 +251,20 @@ function playSuccessBeep() {
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const ctx = new AudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = 'sine';
     osc.frequency.setValueAtTime(880, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.14);
-    gain.gain.setValueAtTime(0.18, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+    osc.frequency.exponentialRampToValueAtTime(1400, ctx.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.35, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
     osc.connect(gain);
     gain.connect(ctx.destination);
     osc.start();
-    osc.stop(ctx.currentTime + 0.19);
+    osc.stop(ctx.currentTime + 0.23);
   } catch {
     // Ignore audio errors
   }
@@ -394,6 +402,7 @@ export default function App() {
     type: 'success' | 'warning' | 'info';
     message: string;
   } | null>(null);
+  const [showNoKeyWarningModal, setShowNoKeyWarningModal] = useState<boolean>(false);
 
   // QR Camera State
   const [isQrCameraOpen, setIsQrCameraOpen] = useState(false);
@@ -488,24 +497,32 @@ export default function App() {
     }
   }, [classRosters]);
 
-  // Parse default QR Answer Keys whenever selectedTemplate changes
+  // Đồng bộ đáp án theo đợt chấm đang chọn (Nếu chưa cài đáp án thì tuyệt đối để trống {})
   useEffect(() => {
-    try {
-      const parsedList = parseQM2025QrPayload(rawQrInput, selectedTemplate);
-      const mapObj: Record<string, AnswerKeyData> = {};
-      parsedList.forEach((k) => {
-        mapObj[k.examCode] = k;
-      });
-      setAnswerKeys(mapObj);
-      const firstCode = parsedList[0]?.examCode || '';
+    if (activeSession) {
+      const savedKeys = activeSession.answerKeys || {};
+      setAnswerKeys(savedKeys);
+      const codeList = Object.keys(savedKeys);
+      const firstCode = codeList[0] || '';
       setSelectedExamCodeView(firstCode);
-      setSimExamCode(
-        firstCode || (TEMPLATES[selectedTemplate]?.maDeDigits === 4 ? '0101' : '101')
-      );
-    } catch {
-      // ignore
+      setSimExamCode(firstCode || (activeSession.codeLength === 4 ? '0101' : '101'));
     }
-  }, [selectedTemplate]);
+  }, [activeSessionId]);
+
+  // Tự động lưu đáp án vào phiên chấm đang hoạt động để khi mở lại vẫn giữ nguyên
+  useEffect(() => {
+    if (!activeSessionId) return;
+    setExamSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== activeSessionId) return s;
+        if (JSON.stringify(s.answerKeys || {}) === JSON.stringify(answerKeys)) return s;
+        return {
+          ...s,
+          answerKeys,
+        };
+      })
+    );
+  }, [answerKeys, activeSessionId]);
 
   const activeClassGroup = useMemo(
     () => classRosters.find((c) => c.id === activeClassId) || classRosters[0],
@@ -614,6 +631,14 @@ export default function App() {
 
   // Enter Full Screen 100dvh Camera Scanner
   const enterScannerScreen = async () => {
+    // BẮT BUỘC PHẢI CÓ ĐÁP ÁN MỚI CHO CHẤM: Tránh việc giáo viên quên nhập đáp án ra kết quả sai
+    const keyCount = Object.keys(answerKeys).length;
+    if (keyCount === 0) {
+      playErrorAlertBeep();
+      setShowNoKeyWarningModal(true);
+      return;
+    }
+
     setBottomTab('scanner');
     setIsOmrCameraOpen(true);
     setMissingExamCodeAlert(null);
@@ -1172,44 +1197,32 @@ export default function App() {
               drawMarkerReticle(corners.bl);
             }
 
-            const now = Date.now();
-            if (
-              isAllLocked &&
-              !cooldownRef.current &&
-              (!activeHudRecord || gradingMode === 'continuous')
-            ) {
-              if (lockStartTimeRef.current === null) {
-                lockStartTimeRef.current = now;
-              }
-              const elapsedSec = (now - lockStartTimeRef.current) / 1000;
-              const remainingSec = Math.max(0, autoGradeDelaySeconds - elapsedSec);
-              setCountdownRemaining(Math.round(remainingSec * 10) / 10);
+            // Nếu đang hiển thị bảng điểm của bài vừa chấm thì TẠM DỪNG QUÉT để giáo viên ghi điểm
+            if (instantScoreBanner) {
+              animId = requestAnimationFrame(processFrame);
+              return;
+            }
 
-              if (autoTriggerOmr && elapsedSec >= autoGradeDelaySeconds) {
-                lockStartTimeRef.current = null;
-                cooldownRef.current = true;
-                setCountdownRemaining(0);
-                try {
-                  capturePhoto(video, 0.92);
-                } catch {
-                  // ignore
-                }
-                const warped = warpPerspectiveTo1024x550(frameData, corners);
-                const record = gradeWarpedSheet(
-                  warped,
-                  selectedTemplate,
-                  answerKeys,
-                  omrSettings,
-                  currentScoring
-                );
-                handleCompletedScanRecord(record);
-                setTimeout(() => {
-                  cooldownRef.current = false;
-                }, 1600);
-              }
-            } else {
-              lockStartTimeRef.current = null;
+            // Khi hiện đủ 4 mốc định vị: TỰ ĐỘNG CHẤM NGAY TỨC THÌ (không cần đợi)
+            if (isAllLocked && !cooldownRef.current) {
+              cooldownRef.current = true;
               setCountdownRemaining(0);
+              lockStartTimeRef.current = null;
+
+              try {
+                capturePhoto(video, 0.92);
+              } catch {
+                // ignore
+              }
+              const warped = warpPerspectiveTo1024x550(frameData, corners);
+              const record = gradeWarpedSheet(
+                warped,
+                selectedTemplate,
+                answerKeys,
+                omrSettings,
+                currentScoring
+              );
+              handleCompletedScanRecord(record);
             }
           }
           animId = requestAnimationFrame(processFrame);
@@ -1293,6 +1306,11 @@ export default function App() {
 
   // Chụp & Chấm Ngay Lập Tức (Thao tác 1 chạm cho giáo viên không muốn chờ bộ đếm)
   const handleManualSnap = () => {
+    if (Object.keys(answerKeys).length === 0) {
+      playErrorAlertBeep();
+      setShowNoKeyWarningModal(true);
+      return;
+    }
     const video = omrVideoRef.current;
     if (!video || video.readyState < 2) return;
     const proc = document.createElement('canvas');
@@ -1730,10 +1748,15 @@ export default function App() {
 
             {/* Thanh trạng thái nhận diện mốc neo thời gian thực */}
             <div className="absolute top-3 inset-x-0 pointer-events-none z-10 flex flex-col items-center gap-1.5 px-3">
-              {anchorLockState.found ? (
+              {instantScoreBanner ? (
+                <div className="bg-amber-600/95 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-xl border border-amber-300 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                  <span>⏸ ĐÃ DỪNG ĐỂ GHI ĐIỂM · Bấm &quot;Chấm bài tiếp theo&quot; để quét tiếp</span>
+                </div>
+              ) : anchorLockState.found ? (
                 <div className="bg-emerald-600/95 text-white px-4 py-2 rounded-full text-xs sm:text-sm font-bold shadow-2xl border-2 border-emerald-300 flex items-center gap-2 animate-pulse">
                   <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
-                  <span>🎯 ĐÃ KHÓA 4 MỐC! Tự động chấm: {countdownRemaining > 0 ? `${countdownRemaining.toFixed(1)}s` : 'Đang xử lý...'}</span>
+                  <span>🎯 ĐÃ KHÓA 4 MỐC! Tự động chấm tức thì...</span>
                 </div>
               ) : (
                 <div className="bg-slate-900/85 backdrop-blur-xs text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg border border-white/20 flex items-center gap-2">
@@ -1743,51 +1766,68 @@ export default function App() {
               )}
             </div>
 
-            {/* HỘP KẾT QUẢ NỔI BÁN TRONG SUỐT (HUD OVERLAY CHUẨN ẢNH 24 & 25) */}
+            {/* HỘP KẾT QUẢ NỔI (DỪNG LẠI ĐỂ GIÁO VIÊN GHI ĐIỂM) */}
             {instantScoreBanner && (
-              <div className="relative z-20 my-auto bg-white/95 backdrop-blur-xs shadow-2xl border-y-2 border-emerald-500 animate-bottom-sheet">
-                <div className="px-3 py-1.5 bg-white text-[#e11d48] font-mono font-bold text-xs sm:text-sm leading-tight border-b border-slate-200">
-                  <div>
-                    P1: {instantScoreBanner.p1CorrectCount}/{instantScoreBanner.p1TotalCount} ={' '}
-                    {instantScoreBanner.p1Score.toFixed(2)} | P2:{' '}
-                    {instantScoreBanner.p2Details.map((q) => `${q.correctSubCount}/4`).join('; ') ||
-                      '0/4'}{' '}
-                    = {instantScoreBanner.p2Score.toFixed(2)}
+              <div className="relative z-20 my-auto bg-white/95 backdrop-blur-xs shadow-2xl border-2 border-emerald-500 animate-bottom-sheet rounded-2xl mx-2 overflow-hidden flex flex-col max-h-[82vh]">
+                {/* Header kết quả: Tên học sinh + Điểm số to */}
+                <div className="px-3.5 py-2.5 bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white flex items-center justify-between shrink-0">
+                  <div className="truncate pr-2">
+                    <div className="text-[10px] font-bold uppercase text-emerald-200 tracking-wider">
+                      ✓ ĐÃ CHẤM XONG (DỪNG ĐỂ GHI ĐIỂM)
+                    </div>
+                    <div className="font-black text-sm sm:text-base truncate">
+                      {instantScoreBanner.studentName} ({instantScoreBanner.className})
+                    </div>
                   </div>
-                  <div>
-                    P3: {instantScoreBanner.p3CorrectCount}/{instantScoreBanner.p3TotalCount} ={' '}
-                    {instantScoreBanner.p3Score.toFixed(2)} | Tổng:{' '}
-                    <strong>{instantScoreBanner.totalScore.toFixed(2)} điểm</strong> | SBD:{' '}
-                    {instantScoreBanner.sbd} | Mã đề: {instantScoreBanner.examCode}
+                  <div className="bg-white text-emerald-800 px-3 py-1 rounded-xl text-center shadow-md border-2 border-emerald-300 shrink-0">
+                    <div className="text-[9px] font-black uppercase text-emerald-600">Tổng điểm</div>
+                    <div className="text-2xl font-black leading-none text-emerald-800">{instantScoreBanner.totalScore.toFixed(2)}</div>
                   </div>
                 </div>
-                <div className="relative bg-slate-900">
+
+                {/* Dòng chi tiết điểm các phần P1, P2, P3 */}
+                <div className="px-3 py-1.5 bg-slate-50 text-[#e11d48] font-mono font-bold text-xs leading-tight border-b border-slate-200 shrink-0">
+                  <div>
+                    P1: {instantScoreBanner.p1CorrectCount}/{instantScoreBanner.p1TotalCount} = {instantScoreBanner.p1Score.toFixed(2)}đ | P2: {instantScoreBanner.p2Details.map((q) => `${q.correctSubCount}/4`).join('; ') || '0/4'} = {instantScoreBanner.p2Score.toFixed(2)}đ
+                  </div>
+                  <div>
+                    P3: {instantScoreBanner.p3CorrectCount}/{instantScoreBanner.p3TotalCount} = {instantScoreBanner.p3Score.toFixed(2)}đ | SBD: {instantScoreBanner.sbd} | Mã đề: {instantScoreBanner.examCode}
+                  </div>
+                </div>
+
+                {/* Ảnh minh chứng bài chấm */}
+                <div className="relative bg-slate-900 overflow-auto flex-1 min-h-[140px] max-h-[36dvh]">
                   <img
                     src={instantScoreBanner.annotatedImageDataUrl}
                     alt="Kết quả chấm trực tiếp"
-                    className="w-full max-h-[42dvh] object-contain mx-auto"
+                    className="w-full h-full object-contain mx-auto"
                   />
                 </div>
-                <div className="px-3 py-2 bg-slate-900/95 text-white flex items-center justify-between gap-2 text-xs">
-                  <span className="truncate font-semibold text-emerald-300">
-                    ✓ {instantScoreBanner.studentName} ({instantScoreBanner.className})
-                  </span>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => handleSaveEvidenceSheet(instantScoreBanner, false)}
-                      className="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-bold"
-                    >
-                      Lưu ảnh
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setInstantScoreBanner(null)}
-                      className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white font-bold"
-                    >
-                      Chấm tiếp →
-                    </button>
-                  </div>
+
+                {/* Thanh điều khiển: Lưu ảnh & NÚT CHẤM TIẾP BÀI SAU */}
+                <div className="p-3 bg-slate-900 text-white flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleSaveEvidenceSheet(instantScoreBanner, false)}
+                    className="px-3 py-3 rounded-xl bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs shrink-0 cursor-pointer"
+                  >
+                    Lưu ảnh
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInstantScoreBanner(null);
+                      setActiveHudRecord(null);
+                      lockStartTimeRef.current = null;
+                      setTimeout(() => {
+                        cooldownRef.current = false;
+                      }, 350);
+                    }}
+                    className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-600 hover:to-teal-600 text-white font-black text-sm shadow-[0_4px_0_#065f46] active:translate-y-0.5 active:shadow-[0_1px_0_#065f46] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Play className="w-4 h-4 fill-white" />
+                    <span>CHẤM BÀI TIẾP THEO →</span>
+                  </button>
                 </div>
               </div>
             )}
@@ -4164,6 +4204,56 @@ export default function App() {
                   <strong>&ldquo;Thêm vào màn hình chính&rdquo;</strong>.
                 </p>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODAL CẢNH BÁO BẮT BUỘC PHẢI CÓ ĐÁP ÁN TRƯỚC KHI CHẤM BÀI              */}
+      {/* ===================================================================== */}
+      {showNoKeyWarningModal && (
+        <div
+          onClick={() => setShowNoKeyWarningModal(false)}
+          className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl p-5 sm:p-6 max-w-sm w-full shadow-2xl border-2 border-rose-300 animate-bottom-sheet text-center space-y-4"
+          >
+            <div className="w-16 h-16 rounded-3xl bg-rose-100 text-rose-600 mx-auto flex items-center justify-center shadow-inner border border-rose-200">
+              <Key className="w-8 h-8 stroke-[2.2]" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="font-black text-lg text-slate-900 leading-snug">
+                Chưa Có Đáp Án Cho Đề Thi!
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                Khi bắt đầu cấu hình chấm, <strong>bắt buộc phải nhập hoặc quét đáp án trước mới chấm được</strong>, để tránh trường hợp giáo viên quên ra kết quả chấm sai của học sinh.
+              </p>
+            </div>
+
+            <div className="pt-2 space-y-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNoKeyWarningModal(false);
+                  setSessionView('keys');
+                }}
+                className="w-full py-3 px-4 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-sm shadow-[0_4px_0_#1e3a8a] active:translate-y-0.5 active:shadow-[0_1px_0_#1e3a8a] transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <Key className="w-4 h-4" />
+                <span>👉 NHẬP ĐÁP ÁN NGAY</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowNoKeyWarningModal(false)}
+                className="w-full py-2.5 px-4 rounded-xl text-slate-500 hover:text-slate-800 text-xs font-bold cursor-pointer"
+              >
+                Để sau / Đóng
+              </button>
             </div>
           </div>
         </div>
