@@ -1,6 +1,8 @@
 import {
   AnswerKeyData,
   BubblePoint,
+  CustomScoringConfig,
+  getDefaultScoringConfig,
   getTemplateBubbleMap,
   renderVectorFallbackSheet1024x550,
   TARGET_CORNERS_1024x550,
@@ -22,7 +24,7 @@ export interface DetectedCorners {
 }
 
 export interface OMRSettings {
-  fillThreshold: number; // default 0.36 (36% relative darkness increase)
+  fillThreshold: number; // default 0.36
   offsetX: number;
   offsetY: number;
   radiusScale: number;
@@ -38,7 +40,7 @@ export interface P1QuestionResult {
 }
 
 export interface P2QuestionResult {
-  qIndex: number; // 1..4
+  qIndex: number; // 1..8
   subResults: {
     subKey: 'a' | 'b' | 'c' | 'd';
     studentAnswer: 'D' | 'S' | '' | 'DOUBLE';
@@ -46,7 +48,7 @@ export interface P2QuestionResult {
     isCorrect: boolean;
   }[];
   correctSubCount: number;
-  pointsEarned: number; // 0, 0.1, 0.25, 0.5, 1.0
+  pointsEarned: number;
 }
 
 export interface P3QuestionResult {
@@ -62,6 +64,12 @@ export interface interfaceGradedSheetRecord {
   timestamp: string;
   templateId: TemplateId;
   sbd: string;
+  sbdClassPrefix: string; // 2 chữ số đầu của SBD nhận diện lớp
+  sbdStudentOrder: number | null; // Số thứ tự học sinh trích xuất từ SBD
+  studentName?: string;
+  className?: string;
+  subjectName?: string;
+  examPeriod?: string;
   examCode: string;
   matchedKeyFound: boolean;
   p1Score: number;
@@ -80,6 +88,52 @@ export interface interfaceGradedSheetRecord {
 }
 
 /**
+ * Tách Mã Lớp (2 chữ số đầu) và Số Thứ Tự (STT) từ chuỗi Số Báo Danh (SBD)
+ * Ví dụ: SBD "010015" -> prefix = "01", stt = 15
+ * Ví dụ: SBD "0218" hoặc "02000018" -> prefix = "02", stt = 18
+ */
+export function parseSbdToClassAndStt(rawSbd: string): {
+  sbdClassPrefix: string;
+  sbdStudentOrder: number | null;
+} {
+  const digitsOnly = rawSbd.replace(/[^0-9]/g, '');
+  if (digitsOnly.length < 3) {
+    return {
+      sbdClassPrefix: digitsOnly.slice(0, 2),
+      sbdStudentOrder: null,
+    };
+  }
+  const sbdClassPrefix = digitsOnly.slice(0, 2);
+  const restDigits = digitsOnly.slice(2);
+  const parsedOrder = parseInt(restDigits, 10);
+  return {
+    sbdClassPrefix,
+    sbdStudentOrder: Number.isNaN(parsedOrder) ? null : parsedOrder,
+  };
+}
+
+/**
+ * Tìm AnswerKey khớp với mã đề (hỗ trợ đối sánh linh hoạt 3 số và 4 số: "0101" <-> "101")
+ */
+export function findMatchingAnswerKey(
+  examCode: string,
+  answerKeys: Record<string, AnswerKeyData>
+): AnswerKeyData | undefined {
+  if (answerKeys[examCode]) return answerKeys[examCode];
+  const trimmed = examCode.replace(/\?/g, '').trim();
+  if (answerKeys[trimmed]) return answerKeys[trimmed];
+  if (trimmed.length === 4 && trimmed.startsWith('0')) {
+    const code3 = trimmed.slice(1);
+    if (answerKeys[code3]) return answerKeys[code3];
+  }
+  if (trimmed.length === 3) {
+    const code4 = trimmed.padStart(4, '0');
+    if (answerKeys[code4]) return answerKeys[code4];
+  }
+  return undefined;
+}
+
+/**
  * 1. BẮT 4 GÓC ĐỊNH VỊ VUÔNG ĐEN BẰNG INTEGRAL IMAGE ADAPTIVE THRESHOLD
  */
 export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
@@ -88,7 +142,6 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
   const gray = new Uint8Array(size);
   const integral = new Float64Array(size);
 
-  // Chuyển sang ảnh xám + tính bảng Integral Image trong O(W*H)
   for (let y = 0; y < height; y++) {
     let rowSum = 0;
     const rowOffset = y * width;
@@ -103,10 +156,9 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
     }
   }
 
-  // Adaptive Thresholding (Bradley-Roth)
   const bin = new Uint8Array(size);
   const win = Math.max(12, Math.round(Math.min(width, height) / 28));
-  const tFactor = 0.72; // đen hơn 28% so với trung bình vùng lân cận
+  const tFactor = 0.72;
 
   for (let y = 0; y < height; y++) {
     const y1 = Math.max(0, y - win);
@@ -127,7 +179,6 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
     }
   }
 
-  // Connected Components để tìm các khối vuông đen đặc ở 4 góc
   const visited = new Uint8Array(size);
   const minSide = Math.max(6, Math.round(Math.min(width, height) * 0.012));
   const maxSide = Math.round(Math.min(width, height) * 0.12);
@@ -223,7 +274,6 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
     };
   }
 
-  // Lọc các ứng viên trong 4 góc phần tư (Quadrants) và ưu tiên điểm nằm sát 4 góc ngoài cùng + diện tích lớn
   const maxArea = Math.max(...candidates.map((c) => c.area));
   const largeCandidates = candidates.filter((c) => c.area >= maxArea * 0.32);
   const pool = largeCandidates.length >= 4 ? largeCandidates : candidates;
@@ -251,7 +301,6 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
     };
   }
 
-  // Kiểm tra tính hợp lệ hình học của tứ giác 4 góc
   const topW = Math.hypot(trCand.cx - tlCand.cx, trCand.cy - tlCand.cy);
   const botW = Math.hypot(brCand.cx - blCand.cx, brCand.cy - blCand.cy);
   const leftH = Math.hypot(blCand.cx - tlCand.cx, blCand.cy - tlCand.cy);
@@ -276,7 +325,6 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
  * 2. GIẢI MA TRẬN HOMOGRAPHY 8-DOF & NẮN PHẲNG PERSPECTIVE TRANSFORM VỀ 1024 x 550
  */
 function solveHomography8x8(srcPts: Point2D[], dstPts: Point2D[]): number[] {
-  // Tìm ma trận H sao cho H * dst = src (Inverse mapping để nội suy mượt không bị rỗ pixel)
   const A: number[][] = [];
   const b: number[] = [];
 
@@ -292,7 +340,6 @@ function solveHomography8x8(srcPts: Point2D[], dstPts: Point2D[]): number[] {
     b.push(v);
   }
 
-  // Khử Gauss với chọn phần tử trụ (Partial Pivoting)
   const n = 8;
   for (let i = 0; i < n; i++) {
     let maxRow = i;
@@ -406,7 +453,6 @@ export function warpPerspectiveTo1024x550(
 
 /**
  * 3. ĐO MẬT ĐỘ ĐIỂM ĐEN TRONG Ô TRÒN (BUBBLE FILL RATIO)
- * Đo độ tối vùng lõi bên trong vòng tròn (r * 0.72) so với nền giấy cục bộ xung quanh
  */
 function measureBubbleFill(
   gray: Uint8Array,
@@ -416,7 +462,7 @@ function measureBubbleFill(
 ): number {
   const cx = Math.round(bubble.x);
   const cy = Math.round(bubble.y);
-  const innerR = Math.max(3, bubble.r * 0.72);
+  const innerR = Math.max(2.6, bubble.r * 0.72);
   const innerR2 = innerR * innerR;
   const bgR1 = bubble.r * 1.25;
   const bgR2 = bubble.r * 1.75;
@@ -454,14 +500,13 @@ function measureBubbleFill(
   const avgInner = innerSum / innerCount;
   const avgBg = bgCount > 0 ? Math.max(180, bgSum / bgCount) : 235;
 
-  // Tỷ lệ giảm độ sáng + mật độ pixel đen
   const relativeDrop = Math.max(0, (avgBg - avgInner) / avgBg);
   const darkRatio = darkPixels / innerCount;
   return Math.min(1, relativeDrop * 0.65 + darkRatio * 0.55);
 }
 
 /**
- * Chuẩn hóa chuỗi đáp án Phần III để so sánh chính xác (ví dụ "28,1" hoặc "28.125" -> khớp 4 ký tự đầu hoặc giá trị số)
+ * Chuẩn hóa chuỗi đáp án Phần III để so sánh chính xác
  */
 export function isP3AnswerMatch(studentStr: string, correctVal: number | string): boolean {
   if (!studentStr || studentStr.includes('?')) return false;
@@ -470,7 +515,6 @@ export function isP3AnswerMatch(studentStr: string, correctVal: number | string)
 
   if (cleanStudent === cleanKey) return true;
 
-  // Trên phiếu QM2025, Phần III chỉ có tối đa 4 cột ký tự (ví dụ 28.125 học sinh tô "28,1")
   const keyTrunc4 = cleanKey.slice(0, 4);
   if (cleanStudent === keyTrunc4) return true;
 
@@ -478,7 +522,6 @@ export function isP3AnswerMatch(studentStr: string, correctVal: number | string)
   const numKey = Number(cleanKey);
   if (!Number.isNaN(numStudent) && !Number.isNaN(numKey)) {
     if (Math.abs(numStudent - numKey) <= 0.001) return true;
-    // Kiểm tra làm tròn đến 1 hoặc 2 chữ số thập phân vừa khít 4 ô trên phiếu
     if (cleanKey.length > 4) {
       const decimalsIn4 = Math.max(0, 4 - cleanKey.indexOf('.') - 1);
       const roundedKey = Number(numKey.toFixed(decimalsIn4));
@@ -495,7 +538,8 @@ export function gradeWarpedSheet(
   warpedCanvas: HTMLCanvasElement,
   templateId: TemplateId,
   answerKeys: Record<string, AnswerKeyData>,
-  settings: OMRSettings
+  settings: OMRSettings,
+  scoringConfig?: CustomScoringConfig
 ): interfaceGradedSheetRecord {
   const width = warpedCanvas.width;
   const height = warpedCanvas.height;
@@ -509,6 +553,11 @@ export function gradeWarpedSheet(
   }
 
   const tpl = TEMPLATES[templateId];
+  const cfg = scoringConfig || getDefaultScoringConfig(templateId);
+  const activeP1Count = Math.min(tpl.p1Count, Math.max(0, cfg.activeP1Count));
+  const activeP2Count = Math.min(tpl.p2Count, Math.max(0, cfg.activeP2Count));
+  const activeP3Count = Math.min(tpl.p3Count, Math.max(0, cfg.activeP3Count));
+
   const map = getTemplateBubbleMap(
     templateId,
     settings.offsetX,
@@ -517,14 +566,12 @@ export function gradeWarpedSheet(
   );
   const thresh = settings.fillThreshold;
 
-  // Tạo canvas chú thích kết quả chấm
   const outCanvas = document.createElement('canvas');
   outCanvas.width = width;
   outCanvas.height = height;
   const outCtx = outCanvas.getContext('2d')!;
   outCtx.drawImage(warpedCanvas, 0, 0);
 
-  // Vẽ 4 tâm góc định vị đã khóa
   const cornerList = [
     TARGET_CORNERS_1024x550.tl,
     TARGET_CORNERS_1024x550.tr,
@@ -539,9 +586,10 @@ export function gradeWarpedSheet(
 
   const warnings: string[] = [];
 
-  // A. Đọc Mã Đề (3 cột)
+  // A. Đọc Mã Đề (3 hoặc 4 cột tùy mẫu phiếu)
+  const maDeColCount = map.maDe.length;
   let examCode = '';
-  for (let col = 0; col < 3; col++) {
+  for (let col = 0; col < maDeColCount; col++) {
     const fills = map.maDe[col].map((b) => measureBubbleFill(gray, width, height, b));
     const maxFill = Math.max(...fills);
     const maxIdx = fills.indexOf(maxFill);
@@ -558,14 +606,15 @@ export function gradeWarpedSheet(
     }
   }
 
-  // B. Đọc Số Báo Danh (6 cột)
-  let sbd = '';
-  for (let col = 0; col < 6; col++) {
+  // B. Đọc Số Báo Danh (6 hoặc 8 cột tùy mẫu phiếu)
+  const sbdColCount = map.sbd.length;
+  let rawSbd = '';
+  for (let col = 0; col < sbdColCount; col++) {
     const fills = map.sbd[col].map((b) => measureBubbleFill(gray, width, height, b));
     const maxFill = Math.max(...fills);
     const maxIdx = fills.indexOf(maxFill);
     if (maxFill >= thresh * 0.85) {
-      sbd += String(maxIdx);
+      rawSbd += String(maxIdx);
       const b = map.sbd[col][maxIdx];
       outCtx.strokeStyle = '#3b82f6';
       outCtx.lineWidth = 2;
@@ -573,15 +622,26 @@ export function gradeWarpedSheet(
       outCtx.arc(b.x, b.y, b.r + 1.5, 0, Math.PI * 2);
       outCtx.stroke();
     } else {
-      sbd += '?';
+      rawSbd += '?';
     }
   }
 
-  if (examCode.includes('?')) warnings.push(`Mã đề chưa tô đủ 3 chữ số (${examCode})`);
-  if (sbd.includes('?')) warnings.push(`SBD chưa tô đủ 6 chữ số (${sbd})`);
+  // Nếu trên phiếu 8 cột mà học sinh chỉ tô 6 cột đầu (2 cột cuối để trống), tự động cắt gọn
+  const sbd =
+    sbdColCount === 8 && rawSbd.endsWith('??') && !rawSbd.slice(0, 6).includes('?')
+      ? rawSbd.slice(0, 6)
+      : rawSbd;
 
-  // Tìm đáp án theo Mã Đề (nếu không khớp thì lấy mã đề đầu tiên để đối chiếu tạm và báo cảnh báo)
-  const matchedKey = answerKeys[examCode];
+  if (examCode.includes('?')) {
+    warnings.push(`Mã đề chưa tô đủ ${maDeColCount} chữ số (${examCode})`);
+  }
+  if (sbd.includes('?')) {
+    warnings.push(`SBD có cột chưa tô (${sbd})`);
+  }
+
+  const { sbdClassPrefix, sbdStudentOrder } = parseSbdToClassAndStt(sbd);
+
+  const matchedKey = findMatchingAnswerKey(examCode, answerKeys);
   const activeKey: AnswerKeyData | undefined =
     matchedKey || Object.values(answerKeys)[0];
   const matchedKeyFound = Boolean(matchedKey);
@@ -589,13 +649,14 @@ export function gradeWarpedSheet(
     warnings.push(`Không tìm thấy mã đề ${examCode}, đang đối chiếu tạm với mã đề ${activeKey.examCode}`);
   }
 
-  // C. Chấm Phần I (Trắc nghiệm 4 lựa chọn A, B, C, D)
+  // C. Chấm Phần I (theo số câu tùy chỉnh activeP1Count)
   const choices = ['A', 'B', 'C', 'D'];
   const p1Details: P1QuestionResult[] = [];
   let p1CorrectCount = 0;
 
-  for (let q = 0; q < tpl.p1Count; q++) {
+  for (let q = 0; q < activeP1Count; q++) {
     const rowBubbles = map.p1[q];
+    if (!rowBubbles) continue;
     const fills = rowBubbles.map((b) => measureBubbleFill(gray, width, height, b));
     const markedIndices = fills
       .map((f, idx) => (f >= thresh ? idx : -1))
@@ -617,7 +678,6 @@ export function gradeWarpedSheet(
       status = 'double';
       warnings.push(`Phần I - Câu ${q + 1}: Tô đúp nhiều đáp án`);
     } else {
-      // Kiểm tra nếu có 1 ô nổi trội hơn hẳn các ô còn lại (tô hơi mờ)
       const maxF = Math.max(...fills);
       const minF = Math.min(...fills);
       if (maxF >= thresh * 0.78 && maxF - minF > 0.16) {
@@ -630,7 +690,6 @@ export function gradeWarpedSheet(
 
     if (isCorrect) p1CorrectCount++;
 
-    // Vẽ overlay cho câu hỏi Phần I
     if (status === 'correct') {
       const b = rowBubbles[choices.indexOf(studentAnswer)];
       outCtx.fillStyle = 'rgba(16, 185, 129, 0.38)';
@@ -641,7 +700,6 @@ export function gradeWarpedSheet(
       outCtx.fill();
       outCtx.stroke();
     } else {
-      // Tô đỏ các ô học sinh chọn sai / tô đúp
       for (const mIdx of markedIndices) {
         const bWrong = rowBubbles[mIdx];
         outCtx.fillStyle = 'rgba(244, 63, 94, 0.38)';
@@ -652,7 +710,6 @@ export function gradeWarpedSheet(
         outCtx.fill();
         outCtx.stroke();
       }
-      // Khoanh vàng đáp án đúng
       if (correctIdx >= 0 && rowBubbles[correctIdx]) {
         const bRight = rowBubbles[correctIdx];
         outCtx.strokeStyle = '#f59e0b';
@@ -673,16 +730,16 @@ export function gradeWarpedSheet(
     });
   }
 
-  const p1PointPerQuestion = tpl.p1Count > 0 ? tpl.p1TotalPoints / tpl.p1Count : 0;
-  const p1Score = p1CorrectCount * p1PointPerQuestion;
+  const p1Score = p1CorrectCount * cfg.p1PointsPerQ;
 
-  // D. Chấm Phần II (Trắc nghiệm Đúng / Sai lũy tiến)
+  // D. Chấm Phần II (theo số câu activeP2Count và thang điểm p2PointsMap)
   const p2Details: P2QuestionResult[] = [];
   let p2Score = 0;
   const subKeys: ('a' | 'b' | 'c' | 'd')[] = ['a', 'b', 'c', 'd'];
 
-  for (let q = 0; q < tpl.p2Count; q++) {
+  for (let q = 0; q < activeP2Count; q++) {
     const qMap = map.p2[q];
+    if (!qMap) continue;
     let correctSubCount = 0;
     const subResults: P2QuestionResult['subResults'] = [];
 
@@ -708,7 +765,6 @@ export function gradeWarpedSheet(
       const isCorrect = studentAns === correctAns;
       if (isCorrect) correctSubCount++;
 
-      // Vẽ overlay Phần II
       const chosenBubble = studentAns === 'D' ? bD : studentAns === 'S' ? bS : null;
       const rightBubble = correctAns === 'D' ? bD : bS;
 
@@ -745,16 +801,9 @@ export function gradeWarpedSheet(
       });
     }
 
-    // Quy tắc điểm lũy tiến Bộ GD&ĐT 2025: 1 ý = 0.1đ, 2 ý = 0.25đ, 3 ý = 0.5đ, 4 ý = 1.0đ
     const progressivePoints =
-      correctSubCount === 1
-        ? 0.1
-        : correctSubCount === 2
-        ? 0.25
-        : correctSubCount === 3
-        ? 0.5
-        : correctSubCount === 4
-        ? 1.0
+      correctSubCount >= 1 && correctSubCount <= 4
+        ? cfg.p2PointsMap[correctSubCount - 1]
         : 0;
 
     p2Score += progressivePoints;
@@ -766,13 +815,13 @@ export function gradeWarpedSheet(
     });
   }
 
-  // E. Chấm Phần III (Trả lời ngắn dạng số - 6 câu)
+  // E. Chấm Phần III (theo số câu activeP3Count và điểm p3PointsPerQ)
   const p3Details: P3QuestionResult[] = [];
   let p3CorrectCount = 0;
-  const p3PointPerQuestion = tpl.p3Count > 0 ? tpl.p3TotalPoints / tpl.p3Count : 0;
 
-  for (let q = 0; q < tpl.p3Count; q++) {
+  for (let q = 0; q < activeP3Count; q++) {
     const qMap = map.p3[q];
+    if (!qMap) continue;
     let studentChars = '';
     const chosenBubbles: BubblePoint[] = [];
 
@@ -834,11 +883,11 @@ export function gradeWarpedSheet(
       studentString: studentChars,
       correctValue: correctVal,
       isCorrect,
-      pointsEarned: isCorrect ? p3PointPerQuestion : 0,
+      pointsEarned: isCorrect ? cfg.p3PointsPerQ : 0,
     });
   }
 
-  const p3Score = p3CorrectCount * p3PointPerQuestion;
+  const p3Score = p3CorrectCount * cfg.p3PointsPerQ;
   const totalScore = Math.round((p1Score + p2Score + p3Score) * 100) / 100;
 
   return {
@@ -850,15 +899,17 @@ export function gradeWarpedSheet(
     }),
     templateId,
     sbd,
+    sbdClassPrefix,
+    sbdStudentOrder,
     examCode,
     matchedKeyFound,
     p1Score: Math.round(p1Score * 100) / 100,
     p1CorrectCount,
-    p1TotalCount: tpl.p1Count,
+    p1TotalCount: activeP1Count,
     p2Score: Math.round(p2Score * 100) / 100,
     p3Score: Math.round(p3Score * 100) / 100,
     p3CorrectCount,
-    p3TotalCount: tpl.p3Count,
+    p3TotalCount: activeP3Count,
     totalScore,
     p1Details,
     p2Details,
@@ -873,10 +924,12 @@ export function gradeWarpedSheet(
  */
 export function recalculateRecordScore(
   record: interfaceGradedSheetRecord,
-  answerKeys: Record<string, AnswerKeyData>
+  answerKeys: Record<string, AnswerKeyData>,
+  scoringConfig?: CustomScoringConfig
 ): interfaceGradedSheetRecord {
-  const tpl = TEMPLATES[record.templateId];
-  const key = answerKeys[record.examCode] || Object.values(answerKeys)[0];
+  const cfg = scoringConfig || getDefaultScoringConfig(record.templateId);
+  const matchedKey = findMatchingAnswerKey(record.examCode, answerKeys);
+  const key = matchedKey || Object.values(answerKeys)[0];
 
   let p1CorrectCount = 0;
   const p1Details = record.p1Details.map((item, idx) => {
@@ -895,7 +948,7 @@ export function recalculateRecordScore(
     };
   });
 
-  const p1Score = tpl.p1Count > 0 ? (p1CorrectCount * tpl.p1TotalPoints) / tpl.p1Count : 0;
+  const p1Score = p1CorrectCount * cfg.p1PointsPerQ;
 
   let p2Score = 0;
   const p2Details = record.p2Details.map((item, idx) => {
@@ -907,21 +960,14 @@ export function recalculateRecordScore(
       return { ...sub, correctAnswer: correctAns, isCorrect };
     });
     const pointsEarned =
-      correctSubCount === 1
-        ? 0.1
-        : correctSubCount === 2
-        ? 0.25
-        : correctSubCount === 3
-        ? 0.5
-        : correctSubCount === 4
-        ? 1.0
+      correctSubCount >= 1 && correctSubCount <= 4
+        ? cfg.p2PointsMap[correctSubCount - 1]
         : 0;
     p2Score += pointsEarned;
     return { ...item, subResults, correctSubCount, pointsEarned };
   });
 
   let p3CorrectCount = 0;
-  const p3PointPerQ = tpl.p3Count > 0 ? tpl.p3TotalPoints / tpl.p3Count : 0;
   const p3Details = record.p3Details.map((item, idx) => {
     const correctValue = key?.p3[idx] ?? item.correctValue;
     const isCorrect = isP3AnswerMatch(item.studentString, correctValue);
@@ -930,16 +976,19 @@ export function recalculateRecordScore(
       ...item,
       correctValue,
       isCorrect,
-      pointsEarned: isCorrect ? p3PointPerQ : 0,
+      pointsEarned: isCorrect ? cfg.p3PointsPerQ : 0,
     };
   });
 
-  const p3Score = p3CorrectCount * p3PointPerQ;
+  const p3Score = p3CorrectCount * cfg.p3PointsPerQ;
   const totalScore = Math.round((p1Score + p2Score + p3Score) * 100) / 100;
+  const { sbdClassPrefix, sbdStudentOrder } = parseSbdToClassAndStt(record.sbd);
 
   return {
     ...record,
-    matchedKeyFound: Boolean(answerKeys[record.examCode]),
+    sbdClassPrefix,
+    sbdStudentOrder,
+    matchedKeyFound: Boolean(matchedKey),
     p1Score: Math.round(p1Score * 100) / 100,
     p1CorrectCount,
     p2Score: Math.round(p2Score * 100) / 100,
@@ -953,17 +1002,18 @@ export function recalculateRecordScore(
 }
 
 /**
- * 6. BỘ TẠO PHIẾU TÔ MẪU THỰC TẾ (SIMULATOR) TRÊN ẢNH PHIẾU GỐC QM 2025
- * Giúp giáo viên kiểm thử ngay lập tức thuật toán nhận diện 4 góc + tô chì + chấm điểm
+ * 6. BỘ TẠO PHIẾU TÔ MẪU THỰC TẾ (SIMULATOR) TRÊN ẢNH PHIẾU GỐC QM 2025 & CV 1239
  */
 export async function generateSimulatedSheetCanvas(
   templateId: TemplateId,
   sbd: string,
   examCode: string,
   answerKey: AnswerKeyData,
-  accuracyRate = 0.85
+  accuracyRate = 0.85,
+  scoringConfig?: CustomScoringConfig
 ): Promise<HTMLCanvasElement> {
   const tpl = TEMPLATES[templateId];
+  const cfg = scoringConfig || getDefaultScoringConfig(templateId);
   let sheetCanvas: HTMLCanvasElement;
 
   try {
@@ -988,39 +1038,40 @@ export async function generateSimulatedSheetCanvas(
   }
 
   const ctx = sheetCanvas.getContext('2d')!;
-
   const map = getTemplateBubbleMap(templateId);
 
   const fillPencilBubble = (b: BubblePoint) => {
     ctx.save();
-    ctx.fillStyle = '#1e293b'; // Màu chì 2B đậm thực tế
+    ctx.fillStyle = '#1e293b';
     ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r * 0.82, 0, Math.PI * 2);
+    ctx.arc(b.x, b.y, b.r * 0.84, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   };
 
-  // Tô Mã Đề (3 chữ số)
-  const cleanCode = examCode.padStart(3, '0').slice(0, 3);
-  for (let c = 0; c < 3; c++) {
+  // Tô Mã Đề (3 hoặc 4 chữ số)
+  const maDeColsCount = map.maDe.length;
+  const cleanCode = examCode.padStart(maDeColsCount, '0').slice(-maDeColsCount);
+  for (let c = 0; c < maDeColsCount; c++) {
     const d = Number(cleanCode[c]);
     if (!Number.isNaN(d) && map.maDe[c]?.[d]) {
       fillPencilBubble(map.maDe[c][d]);
     }
   }
 
-  // Tô Số Báo Danh (6 chữ số)
-  const cleanSbd = sbd.padStart(6, '0').slice(0, 6);
-  for (let c = 0; c < 6; c++) {
+  // Tô Số Báo Danh (6 hoặc 8 chữ số)
+  const cleanSbd = sbd.padStart(6, '0').slice(0, map.sbd.length);
+  for (let c = 0; c < cleanSbd.length; c++) {
     const d = Number(cleanSbd[c]);
     if (!Number.isNaN(d) && map.sbd[c]?.[d]) {
       fillPencilBubble(map.sbd[c][d]);
     }
   }
 
-  // Tô Phần I
+  // Tô Phần I (theo số câu activeP1Count)
   const choices = ['A', 'B', 'C', 'D'];
-  for (let q = 0; q < tpl.p1Count; q++) {
+  const activeP1 = Math.min(tpl.p1Count, cfg.activeP1Count);
+  for (let q = 0; q < activeP1; q++) {
     const rightAns = answerKey.p1[q] || 'A';
     const isRight = Math.random() < accuracyRate;
     const chosenAns = isRight
@@ -1032,9 +1083,10 @@ export async function generateSimulatedSheetCanvas(
     }
   }
 
-  // Tô Phần II
+  // Tô Phần II (theo số câu activeP2Count)
   const subKeys: ('a' | 'b' | 'c' | 'd')[] = ['a', 'b', 'c', 'd'];
-  for (let q = 0; q < tpl.p2Count; q++) {
+  const activeP2 = Math.min(tpl.p2Count, cfg.activeP2Count);
+  for (let q = 0; q < activeP2; q++) {
     for (const sk of subKeys) {
       const rightAns = answerKey.p2[q]?.[sk] || 'D';
       const isRight = Math.random() < accuracyRate;
@@ -1044,8 +1096,9 @@ export async function generateSimulatedSheetCanvas(
     }
   }
 
-  // Tô Phần III
-  for (let q = 0; q < tpl.p3Count; q++) {
+  // Tô Phần III (theo số câu activeP3Count)
+  const activeP3 = Math.min(tpl.p3Count, cfg.activeP3Count);
+  for (let q = 0; q < activeP3; q++) {
     const rawVal = String(answerKey.p3[q] ?? '16').replace('.', ',');
     const isRight = Math.random() < accuracyRate;
     const strToFill = isRight ? rawVal.slice(0, 4) : '12';
