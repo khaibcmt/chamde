@@ -133,6 +133,36 @@ export function capturePhoto(
 }
 
 /**
+ * Hàm chụp và chuẩn hóa ảnh trước khi đưa vào bộ chấm
+ * @param {HTMLVideoElement} videoEl - Thẻ video camera
+ * @param {number} standardWidth - Chiều rộng chuẩn của bộ chấm (ví dụ: 1240)
+ * @param {number} standardHeight - Chiều cao chuẩn của bộ chấm (ví dụ: 1754)
+ */
+export function captureStandardFrameForOMR(
+  videoEl: HTMLVideoElement | null,
+  standardWidth = 1240,
+  standardHeight = 1754
+): HTMLCanvasElement | null {
+  // 1. Kiểm tra video đã sẵn sàng hay chưa để tránh gửi ảnh rỗng (0x0)
+  if (!videoEl || videoEl.videoWidth === 0 || videoEl.readyState < 2) {
+    console.warn("Video camera chưa sẵn sàng.");
+    return null;
+  }
+
+  // 2. Tạo canvas trung gian chuẩn hóa
+  const normalizedCanvas = document.createElement('canvas');
+  normalizedCanvas.width = standardWidth;
+  normalizedCanvas.height = standardHeight;
+  const ctx = normalizedCanvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+
+  // 3. Vẽ đè và ép tỉ lệ ảnh về đúng chuẩn của bộ OMR
+  ctx.drawImage(videoEl, 0, 0, standardWidth, standardHeight);
+
+  return normalizedCanvas;
+}
+
+/**
  * Hiển thị thông báo lỗi thân thiện hướng dẫn giáo viên mở lại quyền Camera trong Cài đặt của từng hệ điều hành
  */
 export function getFriendlyCameraPermissionError(error: unknown): string {

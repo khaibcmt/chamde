@@ -78,6 +78,7 @@ import {
 } from './omr/visionEngine';
 import {
   capturePhoto,
+  captureStandardFrameForOMR,
   getFriendlyCameraPermissionError,
   setCameraTorch,
   startCrossPlatformCamera,
@@ -1179,12 +1180,25 @@ export default function App() {
               overlay.width = vw;
               overlay.height = vh;
             }
-            procCanvas.width = vw;
-            procCanvas.height = vh;
-            procCtx.drawImage(video, 0, 0, vw, vh);
 
-            const frameData = procCtx.getImageData(0, 0, vw, vh);
-            const corners = detectFourCornerMarkers(frameData);
+            const stdCanvas = captureStandardFrameForOMR(video, 1240, 1754);
+            if (!stdCanvas) {
+              animId = requestAnimationFrame(processFrame);
+              return;
+            }
+            const stdCtx = stdCanvas.getContext('2d', { willReadFrequently: true })!;
+            const frameData = stdCtx.getImageData(0, 0, 1240, 1754);
+            const rawCorners = detectFourCornerMarkers(frameData);
+
+            const scaleX = vw / 1240;
+            const scaleY = vh / 1754;
+            const corners = {
+              ...rawCorners,
+              tl: { x: rawCorners.tl.x * scaleX, y: rawCorners.tl.y * scaleY },
+              tr: { x: rawCorners.tr.x * scaleX, y: rawCorners.tr.y * scaleY },
+              bl: { x: rawCorners.bl.x * scaleX, y: rawCorners.bl.y * scaleY },
+              br: { x: rawCorners.br.x * scaleX, y: rawCorners.br.y * scaleY },
+            };
 
             // BỘ LỌC KIỂM DUYỆT TÍNH HỢP LỆ (VALIDATION GATE - NGĂN CHẶN CHẤM BỪA BÃI)
             const validation = corners.found
@@ -1413,14 +1427,13 @@ export default function App() {
     }
     const video = omrVideoRef.current;
     if (!video || video.readyState < 2) return;
-    const proc = document.createElement('canvas');
-    const vw = video.videoWidth || 1280;
-    const vh = video.videoHeight || 720;
-    proc.width = vw;
-    proc.height = vh;
-    const ctx = proc.getContext('2d')!;
-    ctx.drawImage(video, 0, 0, vw, vh);
-    const frameData = ctx.getImageData(0, 0, vw, vh);
+    const stdCanvas = captureStandardFrameForOMR(video, 1240, 1754);
+    if (!stdCanvas) {
+      playErrorAlertBeep();
+      return;
+    }
+    const stdCtx = stdCanvas.getContext('2d', { willReadFrequently: true })!;
+    const frameData = stdCtx.getImageData(0, 0, 1240, 1754);
     const corners = detectFourCornerMarkers(frameData);
 
     if (!corners.found) {
