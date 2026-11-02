@@ -130,88 +130,7 @@ export interface ExamSessionItem {
 
 const APP_VERSION = '1.89 (Build 89 • GDPT 2018)';
 
-const DEFAULT_EXAM_SESSIONS: ExamSessionItem[] = [
-  {
-    id: 'session-1',
-    name: 'Công nghệ 12 - GKI',
-    subject: 'Công Nghệ',
-    examPeriod: 'Kiểm tra Giữa kì I',
-    createdAt: '2026-11-02 10:47:17',
-    templateId: 'qm_khxh_tin_cn',
-    codeLength: 3,
-    scanSbd: true,
-    scoring: {
-      activeP1Count: 24,
-      p1PointsPerQ: 0.25,
-      activeP2Count: 4,
-      p2PointsMap: [0.1, 0.25, 0.5, 1.0],
-      activeP3Count: 0,
-      p3PointsPerQ: 0.5,
-    },
-    classId: 'cls-12a1',
-    answerKeys: {},
-  },
-  {
-    id: 'session-2',
-    name: 'Sinh 12 - Cuối kì I (Chuẩn GDPT 2018)',
-    subject: 'Sinh Học',
-    examPeriod: 'Kiểm tra Cuối kì I',
-    createdAt: '2026-11-02 10:45:40',
-    templateId: 'qm_khtn_dia',
-    codeLength: 3,
-    scanSbd: true,
-    scoring: {
-      activeP1Count: 18,
-      p1PointsPerQ: 0.25,
-      activeP2Count: 4,
-      p2PointsMap: [0.1, 0.25, 0.5, 1.0],
-      activeP3Count: 6,
-      p3PointsPerQ: 0.25,
-    },
-    classId: 'cls-12a1',
-    answerKeys: {},
-  },
-  {
-    id: 'session-3',
-    name: 'Kiểm tra định kỳ CV 1239 (Mã 4 số)',
-    subject: 'Toán Học',
-    examPeriod: 'Kiểm tra Cuối kì I',
-    createdAt: '2026-11-02 09:30:15',
-    templateId: 'qm_cv1239',
-    codeLength: 4,
-    scanSbd: true,
-    scoring: {
-      activeP1Count: 12,
-      p1PointsPerQ: 0.25,
-      activeP2Count: 4,
-      p2PointsMap: [0.1, 0.25, 0.5, 1.0],
-      activeP3Count: 6,
-      p3PointsPerQ: 0.5,
-    },
-    classId: 'cls-12a1',
-    answerKeys: {},
-  },
-  {
-    id: 'session-4',
-    name: 'Công nghệ 11 - GKI',
-    subject: 'Công Nghệ',
-    examPeriod: 'Kiểm tra Giữa kì I',
-    createdAt: '2026-11-02 08:46:27',
-    templateId: 'qm_khxh_tin_cn',
-    codeLength: 3,
-    scanSbd: true,
-    scoring: {
-      activeP1Count: 12,
-      p1PointsPerQ: 0.25,
-      activeP2Count: 4,
-      p2PointsMap: [0.1, 0.25, 0.5, 1.0],
-      activeP3Count: 0,
-      p3PointsPerQ: 0.5,
-    },
-    classId: 'cls-12a2',
-    answerKeys: {},
-  },
-];
+const DEFAULT_EXAM_SESSIONS: ExamSessionItem[] = [];
 
 const DEFAULT_CLASS_ROSTERS: ClassRosterGroup[] = [
   {
@@ -324,9 +243,16 @@ export default function App() {
   const [bottomTab, setBottomTab] = useState<BottomNavTab>('sessions');
   const [sessionView, setSessionView] = useState<SessionSubView>('list');
 
-  // Exam Sessions State
+  // Exam Sessions State: Khởi tạo danh sách sạch sẽ, tự động xóa các phiên mẫu demo cũ
   const [examSessions, setExamSessions] = useState<ExamSessionItem[]>(() => {
     try {
+      const isCleaned = localStorage.getItem('edu_cham_de_clean_init_v6');
+      if (!isCleaned) {
+        localStorage.removeItem('qm2025_exam_sessions_v2');
+        localStorage.removeItem('edu_cham_de_2025_records');
+        localStorage.setItem('edu_cham_de_clean_init_v6', 'true');
+        return [];
+      }
       const saved = localStorage.getItem('qm2025_exam_sessions_v2');
       if (saved) return JSON.parse(saved);
     } catch {
@@ -334,12 +260,19 @@ export default function App() {
     }
     return DEFAULT_EXAM_SESSIONS;
   });
-  const [activeSessionId, setActiveSessionId] = useState<string>('session-2');
+  const [activeSessionId, setActiveSessionId] = useState<string>('');
 
   const activeSession = useMemo(
-    () => examSessions.find((s) => s.id === activeSessionId) || examSessions[0],
+    () => examSessions.find((s) => s.id === activeSessionId) || examSessions[0] || null,
     [examSessions, activeSessionId]
   );
+
+  // Nếu chưa có đợt chấm nào mà ở màn hình hub hoặc keys thì tự chuyển về màn hình danh sách
+  useEffect(() => {
+    if (examSessions.length === 0 && (sessionView === 'hub' || sessionView === 'keys')) {
+      setSessionView('list');
+    }
+  }, [examSessions.length, sessionView]);
 
   // Draft State for "Tạo mới / Chỉnh sửa bài thi"
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
@@ -2084,21 +2017,46 @@ export default function App() {
                 </header>
 
                 <div className="p-3.5 space-y-3.5">
-                  {examSessions.map((session) => {
-                    const sh =
-                      SHEET_DATABASE.find(
-                        (s) => s.id === normalizeTemplateId(session.templateId)
-                      ) || SHEET_DATABASE[1];
-                    const totalPts = computeTotalScoreFromConfig(session.scoring);
-                    const isTenPoints = Math.abs(totalPts - 10) < 0.05;
+                  {examSessions.length === 0 ? (
+                    <div className="bg-white/90 rounded-3xl p-8 border-2 border-dashed border-blue-300 text-center shadow-xs space-y-4 my-4">
+                      <div className="w-16 h-16 rounded-3xl bg-blue-50 text-[#007aff] mx-auto flex items-center justify-center shadow-inner border border-blue-100">
+                        <FolderCheck className="w-8 h-8 stroke-[2.2]" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <h3 className="font-black text-lg text-slate-900">
+                          Chưa có đợt chấm nào
+                        </h3>
+                        <p className="text-xs sm:text-sm text-slate-500 max-w-xs mx-auto leading-relaxed">
+                          Danh sách đã được làm sạch để Thầy dễ nhìn và bắt đầu. Hãy bấm nút dưới đây để tạo bài kiểm tra đầu tiên!
+                        </p>
+                      </div>
+                      <div className="pt-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenCreateSession()}
+                          className="w-full max-w-xs mx-auto py-3.5 px-6 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 text-white font-extrabold text-sm sm:text-base shadow-[0_5px_0_#1e3a8a,0_10px_20px_rgba(37,99,235,0.3)] active:translate-y-1 active:shadow-[0_1px_0_#1e3a8a] transition-all flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <Plus className="w-5 h-5 stroke-[2.5]" />
+                          <span>+ TẠO ĐỢT CHẤM MỚI</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    examSessions.map((session) => {
+                      const sh =
+                        SHEET_DATABASE.find(
+                          (s) => s.id === normalizeTemplateId(session.templateId)
+                        ) || SHEET_DATABASE[1];
+                      const totalPts = computeTotalScoreFromConfig(session.scoring);
+                      const isTenPoints = Math.abs(totalPts - 10) < 0.05;
 
-                    return (
-                      <div
-                        key={session.id}
-                        onClick={() => {
-                          setActiveSessionId(session.id);
-                          setSessionView('hub');
-                        }}
+                      return (
+                        <div
+                          key={session.id}
+                          onClick={() => {
+                            setActiveSessionId(session.id);
+                            setSessionView('hub');
+                          }}
                         className="bg-white rounded-2xl p-4 shadow-sm border-2 border-b-4 border-slate-200 border-b-slate-300 hover:border-blue-400 hover:border-b-blue-500 active:translate-y-0.5 transition cursor-pointer space-y-3"
                       >
                         {/* Dòng 1: Tên đợt thi + Badge điểm 3D + Nút tùy chọn */}
@@ -2184,8 +2142,9 @@ export default function App() {
                         </div>
                       </div>
                     );
-                  })}
-                </div>
+                  })
+                )}
+              </div>
               </div>
             )}
 
