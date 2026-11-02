@@ -3455,29 +3455,45 @@ export default function App() {
                   <div
                     key={item.id}
                     className={`bg-white rounded-3xl overflow-hidden border-2 shadow-sm transition ${
-                      isCurrent ? 'border-[#007aff] ring-2 ring-blue-200' : 'border-blue-400/70'
+                      isCurrent ? 'border-blue-600 ring-2 ring-blue-200' : 'border-slate-300 hover:border-blue-400'
                     }`}
                   >
-                    {/* Ảnh phiếu thực tế (Nhấn để phóng to) */}
+                    {/* Ảnh phiếu gốc thực tế (Bỏ khung ngoài - Nhấn để phóng to) */}
                     <div
                       onClick={() => setPreviewSheetModalItem(item)}
-                      className="p-2 bg-white cursor-pointer"
+                      className="p-3 bg-slate-50/70 cursor-pointer flex flex-col items-center justify-center group"
                     >
+                      <div className="w-full flex items-center justify-between text-[11px] font-semibold text-slate-500 mb-1.5 px-1">
+                        <span className="inline-flex items-center gap-1 text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md font-bold">
+                          📄 Phiếu gốc chuẩn
+                        </span>
+                        <span className="text-slate-400 group-hover:text-blue-600 transition flex items-center gap-0.5">
+                          🔍 Chạm để xem to
+                        </span>
+                      </div>
                       <img
                         src={item.imageUrl}
                         alt={item.name}
-                        className="w-full max-h-64 object-contain mx-auto rounded-xl border border-slate-200"
+                        className="w-full max-h-64 object-contain mx-auto rounded-lg border border-slate-200 shadow-xs bg-white"
+                        loading="lazy"
                       />
                     </div>
 
-                    {/* Thanh chân Card mẫu phiếu giống hệt ảnh 12-23: Tên mẫu bên trái + Nút CHỌN xanh dương to bên phải */}
-                    <div className="bg-[#b8b8b8]/90 px-4 py-3 flex items-center justify-between gap-3">
+                    {/* Thanh thông tin và nút CHỌN */}
+                    <div className="bg-slate-100/90 border-t border-slate-200 px-4 py-3 flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-lg font-bold text-slate-950 truncate">
-                          {item.name}
+                        <div className="text-lg font-bold text-slate-900 truncate flex items-center gap-2">
+                          <span>{item.name}</span>
+                          {isCurrent && (
+                            <span className="text-xs bg-blue-600 text-white font-bold px-2 py-0.5 rounded-full">
+                              Đang dùng
+                            </span>
+                          )}
                         </div>
-                        <div className="text-xs font-semibold text-slate-800 flex items-center gap-2 flex-wrap">
-                          <span>Mã đề {item.codeLength} số</span>
+                        <div className="text-xs font-semibold text-slate-700 flex items-center gap-2 flex-wrap mt-0.5">
+                          <span className="bg-slate-200 text-slate-800 px-2 py-0.5 rounded font-bold">
+                            Mã đề {item.codeLength} số
+                          </span>
                           <span>•</span>
                           <span>
                             {item.p1} P1 · {item.p2} P2 · {item.p3} P3
@@ -3487,9 +3503,9 @@ export default function App() {
                             target="_blank"
                             rel="noreferrer"
                             onClick={(e) => e.stopPropagation()}
-                            className="text-blue-900 underline font-bold"
+                            className="text-blue-700 hover:text-blue-900 underline font-bold"
                           >
-                            Tải PDF phiếu chuẩn
+                            Tải PDF in
                           </a>
                         </div>
                       </div>
@@ -3497,7 +3513,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => handleSelectSheetFromBottomSheet(item)}
-                        className="bg-[#007aff] hover:bg-blue-600 text-white font-semibold text-lg px-7 py-2.5 rounded-2xl shadow-md shrink-0 active:scale-95 transition cursor-pointer"
+                        className="btn-3d btn-3d-blue text-white font-bold text-base px-6 py-2.5 rounded-2xl shadow-md shrink-0 cursor-pointer"
                       >
                         CHỌN
                       </button>
@@ -3511,44 +3527,56 @@ export default function App() {
       )}
 
       {/* ===================================================================== */}
-      {/* MODAL XEM TRƯỚC ẢNH PHIẾU PHÓNG TO (GIỐNG ẢNH 12-23)                  */}
+      {/* MODAL XEM TRƯỚC ẢNH PHIẾU PHÓNG TO                                   */}
       {/* ===================================================================== */}
       {previewSheetModalItem && (
         <div
           onClick={() => setPreviewSheetModalItem(null)}
-          className="fixed inset-0 z-50 bg-slate-900/75 backdrop-blur-xs flex items-center justify-center p-3"
+          className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white rounded-3xl border-4 border-[#007aff] max-w-lg w-full overflow-hidden shadow-2xl"
+            className="bg-white rounded-3xl border border-slate-300 max-w-lg w-full overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
           >
-            <div className="p-2 bg-white">
-              <img
-                src={previewSheetModalItem.imageUrl}
-                alt={previewSheetModalItem.name}
-                className="w-full max-h-[70vh] object-contain mx-auto"
-              />
-            </div>
-            <div className="bg-[#b8b8b8] px-5 py-3.5 flex items-center justify-between gap-3">
+            <div className="px-4 py-3 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
               <div>
-                <div className="text-xl font-bold text-slate-950">
+                <div className="text-lg font-bold text-slate-950">
                   {previewSheetModalItem.name}
                 </div>
-                <a
-                  href={previewSheetModalItem.pdfUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-xs font-bold text-blue-900 underline"
-                >
-                  ⬇ Tải PDF phiếu chuẩn để in
-                </a>
+                <div className="text-xs text-slate-600">
+                  Mã đề {previewSheetModalItem.codeLength} số · {previewSheetModalItem.p1} P1 · {previewSheetModalItem.p2} P2 · {previewSheetModalItem.p3} P3
+                </div>
               </div>
               <button
                 type="button"
-                onClick={() => handleSelectSheetFromBottomSheet(previewSheetModalItem)}
-                className="bg-[#007aff] text-white font-semibold text-lg px-8 py-2.5 rounded-2xl shadow-md cursor-pointer"
+                onClick={() => setPreviewSheetModalItem(null)}
+                className="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold flex items-center justify-center cursor-pointer"
               >
-                CHỌN
+                ✕
+              </button>
+            </div>
+            <div className="p-3 bg-slate-50 flex-1 overflow-auto flex items-center justify-center">
+              <img
+                src={previewSheetModalItem.imageUrl}
+                alt={previewSheetModalItem.name}
+                className="w-full max-h-[65vh] object-contain mx-auto rounded-lg border border-slate-200 shadow-sm bg-white"
+              />
+            </div>
+            <div className="bg-slate-100 border-t border-slate-200 px-5 py-3.5 flex items-center justify-between gap-3">
+              <a
+                href={previewSheetModalItem.pdfUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-bold text-blue-700 hover:text-blue-900 underline"
+              >
+                ⬇ Tải PDF phiếu chuẩn để in
+              </a>
+              <button
+                type="button"
+                onClick={() => handleSelectSheetFromBottomSheet(previewSheetModalItem)}
+                className="btn-3d btn-3d-blue text-white font-bold text-base px-8 py-2.5 rounded-2xl shadow-md cursor-pointer"
+              >
+                CHỌN MẪU NÀY
               </button>
             </div>
           </div>

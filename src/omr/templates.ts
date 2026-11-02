@@ -56,9 +56,8 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     p2: 4, // 4 câu Đúng/Sai (thang bậc thang: 0.1 - 0.25 - 0.5 - 1.0)
     p3: 6, // 6 câu điền số trả lời ngắn (0.5đ/câu)
     pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
-    imageUrl:
-      './assets/aistudio/1793598098184_1554969586358931506_2710154209101277242_25d48c9b35e6e10d15703c0735c92c52_58338367.jpg',
-    note: 'Đề chuẩn môn Toán: 12 câu P1, 4 câu P2, 6 câu P3',
+    imageUrl: './assets/sheets/phieu_goc_qm_toan.jpg',
+    note: 'Đề chuẩn môn Toán: 12 câu P1, 4 câu P2, 6 câu P3 (Mã đề 3 số)',
     defaultP1Point: 0.25,
     defaultP3Point: 0.5,
   },
@@ -72,9 +71,8 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     p2: 4, // 4 câu Đúng/Sai P2
     p3: 6, // 6 câu điền số P3
     pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
-    imageUrl:
-      './assets/aistudio/1793598098165_1554969586358931506_2710154209101277242_d0fc177ebbb685e60d288388ce05f0fa_092b48ea.jpg',
-    note: 'Dành cho Vật lí, Hoá học, Sinh học, Địa lí',
+    imageUrl: './assets/sheets/phieu_goc_qm_khtn_dia.jpg',
+    note: 'Dành cho Vật lí, Hoá học, Sinh học, Địa lí (Mã đề 3 số)',
     defaultP1Point: 0.25,
     defaultP3Point: 0.25,
   },
@@ -88,9 +86,8 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     p2: 6, // 6 câu Đúng/Sai P2
     p3: 0, // Không có phần điền số
     pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
-    imageUrl:
-      './assets/aistudio/1793598098303_1554969586358931506_2710154209101277242_3e35ec323cc0a7a0d3bc231e1dbaece4_84319c75.jpg',
-    note: 'Lịch sử, Tin học, Công nghệ, GD Kinh tế & Pháp luật',
+    imageUrl: './assets/sheets/phieu_goc_qm_khxh_tin_cn.jpg',
+    note: 'Lịch sử, Tin học, Công nghệ, GD Kinh tế & Pháp luật (Mã đề 3 số)',
     defaultP1Point: 0.25,
     defaultP3Point: 0.5,
   },
@@ -104,9 +101,8 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     p2: 0,
     p3: 0,
     pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
-    imageUrl:
-      './assets/aistudio/1793598098133_1554969586358931506_2710154209101277242_c13c64e8a43900a59423d2dc37df3bde_fa390bd1.jpg',
-    note: 'Tiếng Anh và các môn Ngoại ngữ (40 câu P1)',
+    imageUrl: './assets/sheets/phieu_goc_qm_ngoai_ngu.jpg',
+    note: 'Tiếng Anh và các môn Ngoại ngữ (40 câu P1, Mã đề 3 số)',
     defaultP1Point: 0.25,
     defaultP3Point: 0.5,
   },
@@ -120,9 +116,8 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     p2: 0,
     p3: 10, // 10 câu điền số trả lời ngắn
     pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
-    imageUrl:
-      './assets/aistudio/1793598098294_1554969586358931506_2710154209101277242_0ab4147aec63c9d6e164b135510a1868_d7161024.jpg',
-    note: 'Chuyên dụng ôn tập điền số (10 câu P3)',
+    imageUrl: './assets/sheets/phieu_goc_qm_on_tap_tl_ngan.jpg',
+    note: 'Chuyên dụng ôn tập điền số (10 câu P3, Mã đề 3 số)',
     defaultP1Point: 0.25,
     defaultP3Point: 1.0,
   },
@@ -138,9 +133,8 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     p2: 8,
     p3: 6,
     pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
-    imageUrl:
-      './assets/aistudio/1793598098312_1554969586358931506_2710154209101277242_2a8ea20c642e7fe4e4cda41a010941d8_9b5db303.jpg',
-    note: 'Phiếu tổng hợp A4 mã đề 3 số (40 P1, 8 P2, 6 P3)',
+    imageUrl: './assets/sheets/phieu_goc_qm_2025_a4.jpg',
+    note: 'Phiếu tổng hợp A4 chuẩn mã đề 3 số (40 P1, 8 P2, 6 P3)',
     defaultP1Point: 0.25,
     defaultP3Point: 0.25,
   },
@@ -154,9 +148,8 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     p2: 8,
     p3: 6,
     pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
-    imageUrl:
-      './assets/aistudio/1793598098249_1554969586358931506_2710154209101277242_9de402a82649a0a0d333ac027f09d536_fdc76a65.jpg',
-    note: 'Chuẩn Công văn 1239 Bộ GD&ĐT (Mã đề 4 chữ số)',
+    imageUrl: './assets/sheets/phieu_goc_qm_cv1239.jpg',
+    note: 'Chuẩn Công văn 1239 Bộ GD&ĐT (Mã đề 4 chữ số, 40 P1, 8 P2, 6 P3)',
     defaultP1Point: 0.25,
     defaultP3Point: 0.25,
   },
@@ -170,9 +163,8 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     p2: 8,
     p3: 6,
     pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
-    imageUrl:
-      './assets/aistudio/1793598098276_1554969586358931506_2710154209101277242_f1ea0c908ed619e372dbdbe6fbc405c2_6aaac1c4.jpg',
-    note: 'Phiếu Bộ GD viền hồng định vị sườn mã 3 số',
+    imageUrl: './assets/sheets/phieu_goc_bogd_2025_a4.jpg',
+    note: 'Phiếu Bộ GD viền hồng định vị sườn chuẩn (Mã đề 3 số)',
     defaultP1Point: 0.25,
     defaultP3Point: 0.25,
   },
@@ -186,9 +178,8 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     p2: 8,
     p3: 6,
     pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
-    imageUrl:
-      './assets/aistudio/1793598098241_1554969586358931506_2710154209101277242_fce42d3e731f522dea6d4ecdc3288bea_005d648a.jpg',
-    note: 'Phiếu Bộ GD theo CV 1239 viền hồng mã 4 số',
+    imageUrl: './assets/sheets/phieu_goc_bogd_cv1239.jpg',
+    note: 'Phiếu Bộ GD theo CV 1239 viền hồng (Mã đề 4 số)',
     defaultP1Point: 0.25,
     defaultP3Point: 0.25,
   },
@@ -202,9 +193,8 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     p2: 16,
     p3: 12,
     pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
-    imageUrl:
-      './assets/aistudio/1793598098222_1554969586358931506_2710154209101277242_552191508f5af2b32dcec6b01fcbfb49_747ddb7a.jpg',
-    note: 'Bản mở rộng dung lượng lớn (40 P1, 16 P2, 12 P3)',
+    imageUrl: './assets/sheets/phieu_goc_cv1239_mo_rong.jpg',
+    note: 'Bản mở rộng dung lượng lớn (40 P1, 16 P2, 12 P3, Mã đề 4 số)',
     defaultP1Point: 0.25,
     defaultP3Point: 0.25,
   },
@@ -220,9 +210,8 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     p2: 8,
     p3: 6,
     pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
-    imageUrl:
-      './assets/aistudio/1793598098285_1554969586358931506_2710154209101277242_f7b0ef08756686577a6809022ace7314_a8ddda0c.jpg',
-    note: 'Tương thích phiếu TNmaker mã đề 3 số',
+    imageUrl: './assets/sheets/phieu_goc_tnmaker_2025_a4.jpg',
+    note: 'Tương thích phiếu TNmaker mã đề 3 số (40 P1, 8 P2, 6 P3)',
     defaultP1Point: 0.25,
     defaultP3Point: 0.25,
   },
@@ -236,9 +225,8 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     p2: 8,
     p3: 6,
     pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
-    imageUrl:
-      './assets/aistudio/1793598098232_1554969586358931506_2710154209101277242_1855c4f33071a3f1f9194f626edc6004_2f8ce976.jpg',
-    note: 'Tương thích TNmaker chuẩn CV 1239 mã 4 số',
+    imageUrl: './assets/sheets/phieu_goc_tnmaker_cv1239.jpg',
+    note: 'Tương thích TNmaker chuẩn CV 1239 (Mã đề 4 số, 40 P1, 8 P2, 6 P3)',
     defaultP1Point: 0.25,
     defaultP3Point: 0.25,
   },
@@ -252,9 +240,8 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     p2: 8,
     p3: 6,
     pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
-    imageUrl:
-      './assets/aistudio/1793598098259_1554969586358931506_2710154209101277242_e30118e4e18234b62805eb0b852a957e_ee4947fa.jpg',
-    note: 'Tương thích Azota v15.0 có vạch mã chân trang',
+    imageUrl: './assets/sheets/phieu_goc_azota_2025_a4.jpg',
+    note: 'Tương thích Azota v15.0 có vạch mã chân trang (Mã đề 3 số)',
     defaultP1Point: 0.25,
     defaultP3Point: 0.25,
   },
@@ -268,9 +255,8 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     p2: 8,
     p3: 6,
     pdfUrl: './assets/aistudio/QM_2025_-_CV_1239_-_Ky_kiem_tra_420f9135.pdf',
-    imageUrl:
-      './assets/aistudio/1793598098212_1554969586358931506_2710154209101277242_254ffec78a100be5cee318778fff0403_0bdcb513.jpg',
-    note: 'Tương thích Azota v31.0 chuẩn CV 1239 mã 4 số',
+    imageUrl: './assets/sheets/phieu_goc_azota_cv1239.jpg',
+    note: 'Tương thích Azota v31.0 chuẩn CV 1239 (Mã đề 4 số)',
     defaultP1Point: 0.25,
     defaultP3Point: 0.25,
   },
