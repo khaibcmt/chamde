@@ -1112,24 +1112,38 @@ export default function App() {
             const oCtx = overlay.getContext('2d')!;
             oCtx.clearRect(0, 0, vw, vh);
 
-            // Vẽ 4 ô vuông định vị màu xanh lá cây (#00ff00) ở 4 góc giống chuẩn QM 2025
-            const boxSize = Math.round(Math.min(vw, vh) * 0.16);
-            const padX = Math.round(vw * 0.08);
-            const padY = Math.round(vh * 0.05);
+            // Vẽ khung hướng dẫn canh phiếu bán trong suốt
+            const cw = vw * 0.88;
+            const ch = vh * 0.74;
+            const cx = (vw - cw) / 2;
+            const cy = (vh - ch) / 2;
+            const arm = Math.min(32, Math.min(vw, vh) * 0.08);
 
-            oCtx.strokeStyle = '#00ff00';
-            oCtx.lineWidth = 5;
-            // TL square
-            oCtx.strokeRect(padX, padY, boxSize, boxSize);
-            // TR square
-            oCtx.strokeRect(vw - padX - boxSize, padY, boxSize, boxSize);
-            // BL square
-            oCtx.strokeRect(padX, vh - padY - boxSize, boxSize, boxSize);
-            // BR square
-            oCtx.strokeRect(vw - padX - boxSize, vh - padY - boxSize, boxSize, boxSize);
+            oCtx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+            oCtx.lineWidth = 2.5;
+            // TL
+            oCtx.beginPath();
+            oCtx.moveTo(cx, cy + arm);
+            oCtx.lineTo(cx, cy);
+            oCtx.lineTo(cx + arm, cy);
+            // TR
+            oCtx.moveTo(cx + cw - arm, cy);
+            oCtx.lineTo(cx + cw, cy);
+            oCtx.lineTo(cx + cw, cy + arm);
+            // BL
+            oCtx.moveTo(cx, cy + ch - arm);
+            oCtx.lineTo(cx, cy + ch);
+            oCtx.lineTo(cx + arm, cy + ch);
+            // BR
+            oCtx.moveTo(cx + cw - arm, cy + ch);
+            oCtx.lineTo(cx + cw, cy + ch);
+            oCtx.lineTo(cx + cw, cy + ch - arm);
+            oCtx.stroke();
 
             const isAllLocked = corners.found;
             if (isAllLocked) {
+              // Tô màu viền và nền vùng phiếu đã khóa
+              oCtx.fillStyle = 'rgba(16, 185, 129, 0.15)';
               oCtx.strokeStyle = '#10b981';
               oCtx.lineWidth = 4;
               oCtx.beginPath();
@@ -1138,7 +1152,24 @@ export default function App() {
               oCtx.lineTo(corners.br.x, corners.br.y);
               oCtx.lineTo(corners.bl.x, corners.bl.y);
               oCtx.closePath();
+              oCtx.fill();
               oCtx.stroke();
+
+              // Vẽ ô ngắm mục tiêu xanh lá neon trực tiếp trên 4 mốc đen phát hiện
+              const r = Math.max(14, Math.min(vw, vh) * 0.035);
+              const drawMarkerReticle = (pt: { x: number; y: number }) => {
+                oCtx.strokeStyle = '#00ff66';
+                oCtx.lineWidth = 3;
+                oCtx.strokeRect(pt.x - r, pt.y - r, r * 2, r * 2);
+                oCtx.fillStyle = '#00ff66';
+                oCtx.beginPath();
+                oCtx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+                oCtx.fill();
+              };
+              drawMarkerReticle(corners.tl);
+              drawMarkerReticle(corners.tr);
+              drawMarkerReticle(corners.br);
+              drawMarkerReticle(corners.bl);
             }
 
             const now = Date.now();
@@ -1258,6 +1289,47 @@ export default function App() {
       handleCompletedScanRecord(record);
     };
     img.src = url;
+  };
+
+  // Chụp & Chấm Ngay Lập Tức (Thao tác 1 chạm cho giáo viên không muốn chờ bộ đếm)
+  const handleManualSnap = () => {
+    const video = omrVideoRef.current;
+    if (!video || video.readyState < 2) return;
+    const proc = document.createElement('canvas');
+    const vw = video.videoWidth || 1280;
+    const vh = video.videoHeight || 720;
+    proc.width = vw;
+    proc.height = vh;
+    const ctx = proc.getContext('2d')!;
+    ctx.drawImage(video, 0, 0, vw, vh);
+    const frameData = ctx.getImageData(0, 0, vw, vh);
+    const corners = detectFourCornerMarkers(frameData);
+
+    if (!corners.found) {
+      playErrorAlertBeep();
+      setMissingExamCodeAlert({
+        message: `Chưa khóa đủ 4 mốc định vị (${corners.anchorCount}/4). Hãy giữ camera phẳng đối diện phiếu!`,
+        sbdRead: '',
+        imageUrl: '',
+      });
+      return;
+    }
+
+    try {
+      capturePhoto(video, 0.92);
+    } catch {
+      // ignore
+    }
+
+    const warped = warpPerspectiveTo1024x550(frameData, corners);
+    const record = gradeWarpedSheet(
+      warped,
+      selectedTemplate,
+      answerKeys,
+      omrSettings,
+      currentScoring
+    );
+    handleCompletedScanRecord(record);
   };
 
   // Run Simulator Test Sheet (with 100% real Perspective Transform + Bubble Coordinate Matrix)
@@ -1656,21 +1728,19 @@ export default function App() {
               className="absolute inset-0 w-full h-full object-cover pointer-events-none z-10"
             />
 
-            {/* Khung 4 ô vuông xanh lá tĩnh dự phòng khi camera đang khởi tạo */}
-            <div className="absolute inset-0 pointer-events-none z-10 flex flex-col justify-between p-5">
-              <div className="flex justify-between">
-                <div className="w-16 h-16 border-[4px] border-[#00ff00]" />
-                <div className="w-16 h-16 border-[4px] border-[#00ff00]" />
-              </div>
-              {countdownRemaining > 0 && (
-                <div className="self-center bg-emerald-600/95 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-lg">
-                  Giữ yên phiếu: {countdownRemaining.toFixed(1)}s...
+            {/* Thanh trạng thái nhận diện mốc neo thời gian thực */}
+            <div className="absolute top-3 inset-x-0 pointer-events-none z-10 flex flex-col items-center gap-1.5 px-3">
+              {anchorLockState.found ? (
+                <div className="bg-emerald-600/95 text-white px-4 py-2 rounded-full text-xs sm:text-sm font-bold shadow-2xl border-2 border-emerald-300 flex items-center gap-2 animate-pulse">
+                  <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
+                  <span>🎯 ĐÃ KHÓA 4 MỐC! Tự động chấm: {countdownRemaining > 0 ? `${countdownRemaining.toFixed(1)}s` : 'Đang xử lý...'}</span>
+                </div>
+              ) : (
+                <div className="bg-slate-900/85 backdrop-blur-xs text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg border border-white/20 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                  <span>🔍 Đang tìm 4 mốc đen ({anchorLockState.count || 0}/4) - Hướng camera vào phiếu</span>
                 </div>
               )}
-              <div className="flex justify-between">
-                <div className="w-16 h-16 border-[4px] border-[#00ff00]" />
-                <div className="w-16 h-16 border-[4px] border-[#00ff00]" />
-              </div>
             </div>
 
             {/* HỘP KẾT QUẢ NỔI BÁN TRONG SUỐT (HUD OVERLAY CHUẨN ẢNH 24 & 25) */}
@@ -1730,8 +1800,20 @@ export default function App() {
             )}
           </div>
 
-          {/* Thanh công cụ Giả lập Phiếu Thực Tế 1 Chạm (Để test ngay mọi mẫu phiếu) + Nút X Huỷ / Quay lại */}
+          {/* Thanh công cụ Chụp & Chấm Ngay + Giả lập Phiếu Thực Tế + Nút X Huỷ / Quay lại */}
           <div className="bg-[#f2f3f7] px-3 pt-2 pb-3 safe-area-bottom-nav shrink-0 space-y-2">
+            {/* Nút CHỤP & CHẤM NGAY 3D nổi bật */}
+            <div className="flex justify-center">
+              <button
+                type="button"
+                onClick={handleManualSnap}
+                className="w-full max-w-xs py-2.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white font-extrabold text-sm sm:text-base shadow-[0_5px_0_#065f46,0_10px_16px_rgba(16,185,129,0.3)] active:translate-y-1 active:shadow-[0_2px_0_#065f46] transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Camera className="w-5 h-5 stroke-[2.4]" />
+                <span>CHỤP & CHẤM NGAY</span>
+              </button>
+            </div>
+
             <div className="flex items-center justify-center gap-1.5 flex-wrap">
               <button
                 type="button"

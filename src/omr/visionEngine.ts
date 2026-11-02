@@ -187,8 +187,9 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
   }
 
   const visited = new Uint8Array(size);
-  const minSide = Math.max(6, Math.round(Math.min(width, height) * 0.012));
-  const maxSide = Math.round(Math.min(width, height) * 0.12);
+  // Cho phép nhận diện ô vuông neo từ nhỏ (1.0% khung hình) đến vừa (18% khung hình)
+  const minSide = Math.max(5, Math.round(Math.min(width, height) * 0.009));
+  const maxSide = Math.round(Math.min(width, height) * 0.18);
 
   interface CandidateSquare {
     cx: number;
@@ -197,6 +198,8 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
     bh: number;
     area: number;
     fill: number;
+    count: number;
+    score: number;
   }
 
   const candidates: CandidateSquare[] = [];
@@ -249,15 +252,18 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
         const bboxArea = bw * bh;
         const fill = count / bboxArea;
 
+        // Ô vuông mốc neo đen trên phiếu in chuẩn: hình vuông hoặc gần vuông, độ đặc cao (fill >= 0.52)
         if (
           bw >= minSide &&
           bw <= maxSide &&
           bh >= minSide &&
           bh <= maxSide &&
-          aspect >= 0.62 &&
-          aspect <= 1.55 &&
-          fill >= 0.55
+          aspect >= 0.55 &&
+          aspect <= 1.80 &&
+          fill >= 0.52
         ) {
+          const aspectDist = Math.abs(1 - aspect);
+          const qualityScore = bboxArea * fill * (1 - aspectDist * 0.4);
           candidates.push({
             cx: (minX + maxX) / 2,
             cy: (minY + maxY) / 2,
@@ -265,6 +271,8 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
             bh,
             area: bboxArea,
             fill,
+            count,
+            score: qualityScore,
           });
         }
       }
@@ -275,94 +283,270 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
     found: false,
     anchorCount: 0,
     locks: { tl: false, tr: false, bl: false, br: false },
-    tl: { x: width * 0.025, y: height * 0.069 },
-    tr: { x: width * 0.975, y: height * 0.069 },
-    bl: { x: width * 0.025, y: height * 0.931 },
-    br: { x: width * 0.975, y: height * 0.931 },
+    tl: { x: width * 0.08, y: height * 0.08 },
+    tr: { x: width * 0.92, y: height * 0.08 },
+    bl: { x: width * 0.08, y: height * 0.92 },
+    br: { x: width * 0.92, y: height * 0.92 },
   };
 
-  if (candidates.length === 0) {
+  if (candidates.length < 3) {
     return defaultFallback;
   }
 
-  const maxArea = Math.max(...candidates.map((c) => c.area));
-  const largeCandidates = candidates.filter((c) => c.area >= maxArea * 0.28);
-  const pool = largeCandidates.length >= 4 ? largeCandidates : candidates;
+  // Sắp xếp các ứng viên theo điểm chất lượng giảm dần
+  candidates.sort((a, b) => b.score - a.score);
 
-  const tlCand = pool
-    .filter((c) => c.cx < width * 0.38 && c.cy < height * 0.40)
-    .sort((a, b) => a.cx + a.cy - (b.cx + b.cy))[0];
-  const trCand = pool
-    .filter((c) => c.cx > width * 0.62 && c.cy < height * 0.40)
-    .sort((a, b) => b.cx - b.cy - (a.cx - a.cy))[0];
-  const blCand = pool
-    .filter((c) => c.cx < width * 0.38 && c.cy > height * 0.60)
-    .sort((a, b) => b.cy - b.cx - (a.cy - a.cx))[0];
-  const brCand = pool
-    .filter((c) => c.cx > width * 0.62 && c.cy > height * 0.60)
-    .sort((a, b) => b.cx + b.cy - (a.cx + a.cy))[0];
+  // Lọc tập ứng viên sáng giá nhất (top 16)
+  const topPool = candidates.slice(0, 16);
 
-  const locks = {
-    tl: Boolean(tlCand),
-    tr: Boolean(trCand),
-    bl: Boolean(blCand),
-    br: Boolean(brCand),
+  // Helper tính diện tích tứ giác lồi bằng Shoelace Formula
+  const computeQuadArea = (p0: Point2D, p1: Point2D, p2: Point2D, p3: Point2D) => {
+    return (
+      0.5 *
+      Math.abs(
+        p0.x * p1.y -
+          p1.x * p0.y +
+          p1.x * p2.y -
+          p2.x * p1.y +
+          p2.x * p3.y -
+          p3.x * p2.y +
+          p3.x * p0.y -
+          p0.x * p3.y
+      )
+    );
   };
-  const anchorCount =
-    (locks.tl ? 1 : 0) + (locks.tr ? 1 : 0) + (locks.bl ? 1 : 0) + (locks.br ? 1 : 0);
 
-  if (!tlCand || !trCand || !blCand || !brCand) {
+  // Helper kiểm tra tính lồi (Convexity)
+  const isConvexQuad = (p0: Point2D, p1: Point2D, p2: Point2D, p3: Point2D) => {
+    const pts = [p0, p1, p2, p3];
+    let sign = 0;
+    for (let i = 0; i < 4; i++) {
+      const a = pts[i];
+      const b = pts[(i + 1) % 4];
+      const c = pts[(i + 2) % 4];
+      const cp = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+      if (Math.abs(cp) > 1e-4) {
+        if (sign === 0) sign = cp > 0 ? 1 : -1;
+        else if ((cp > 0 ? 1 : -1) !== sign) return false;
+      }
+    }
+    return true;
+  };
+
+  let bestQuad: {
+    p0: Point2D;
+    p1: Point2D;
+    p2: Point2D;
+    p3: Point2D;
+    score: number;
+    area: number;
+  } | null = null;
+
+  // 1. Thử tất cả các bộ 4 đỉnh trong topPool
+  const N = topPool.length;
+  for (let i = 0; i < N - 3; i++) {
+    for (let j = i + 1; j < N - 2; j++) {
+      for (let k = j + 1; k < N - 1; k++) {
+        for (let l = k + 1; l < N; l++) {
+          const rawPts = [topPool[i], topPool[j], topPool[k], topPool[l]];
+          const midX = (rawPts[0].cx + rawPts[1].cx + rawPts[2].cx + rawPts[3].cx) / 4;
+          const midY = (rawPts[0].cy + rawPts[1].cy + rawPts[2].cy + rawPts[3].cy) / 4;
+
+          // Sắp xếp 4 điểm theo thứ tự chiều kim đồng hồ quanh tâm
+          rawPts.sort(
+            (a, b) =>
+              Math.atan2(a.cy - midY, a.cx - midX) - Math.atan2(b.cy - midY, b.cx - midX)
+          );
+
+          const p0 = { x: rawPts[0].cx, y: rawPts[0].cy };
+          const p1 = { x: rawPts[1].cx, y: rawPts[1].cy };
+          const p2 = { x: rawPts[2].cx, y: rawPts[2].cy };
+          const p3 = { x: rawPts[3].cx, y: rawPts[3].cy };
+
+          if (!isConvexQuad(p0, p1, p2, p3)) continue;
+
+          const quadArea = computeQuadArea(p0, p1, p2, p3);
+          const frameArea = width * height;
+          // Tờ phiếu phải chiếm tối thiểu 10% khung hình camera
+          if (quadArea < frameArea * 0.10) continue;
+
+          const edge01 = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+          const edge12 = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+          const edge23 = Math.hypot(p3.x - p2.x, p3.y - p2.y);
+          const edge30 = Math.hypot(p0.x - p3.x, p0.y - p3.y);
+
+          const wRatio = edge01 / Math.max(1, edge23);
+          const hRatio = edge12 / Math.max(1, edge30);
+          if (wRatio < 0.55 || wRatio > 1.85 || hRatio < 0.55 || hRatio > 1.85) continue;
+
+          // Độ đồng đều diện tích của 4 ô vuông đen (phải tương đồng trên cùng 1 phiếu)
+          const cAreas = [rawPts[0].area, rawPts[1].area, rawPts[2].area, rawPts[3].area];
+          const minA = Math.min(...cAreas);
+          const maxA = Math.max(...cAreas);
+          if (minA / Math.max(1, maxA) < 0.20) continue;
+
+          const combinedScore =
+            rawPts.reduce((acc, p) => acc + p.score, 0) + (quadArea / frameArea) * 600;
+
+          if (!bestQuad || combinedScore > bestQuad.score) {
+            bestQuad = { p0, p1, p2, p3, score: combinedScore, area: quadArea };
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Cơ chế suy luận hình bình hành khi chỉ thấy 3 mốc (3-out-of-4 Fallback Recovery)
+  if (!bestQuad && topPool.length >= 3) {
+    const pA = topPool[0];
+    const pB = topPool[1];
+    const pC = topPool[2];
+
+    // Điểm thứ 4 dự đoán bằng tính chất vector hình bình hành
+    const pD_pred1 = { x: pA.cx + pC.cx - pB.cx, y: pA.cy + pC.cy - pB.cy };
+    const pD_pred2 = { x: pB.cx + pC.cx - pA.cx, y: pB.cy + pC.cy - pA.cy };
+    const pD_pred3 = { x: pA.cx + pB.cx - pC.cx, y: pA.cy + pB.cy - pC.cy };
+
+    const validPredictions = [pD_pred1, pD_pred2, pD_pred3].filter(
+      (pt) => pt.x >= 0 && pt.x < width && pt.y >= 0 && pt.y < height
+    );
+
+    for (const pred of validPredictions) {
+      const pts = [
+        { x: pA.cx, y: pA.cy },
+        { x: pB.cx, y: pB.cy },
+        { x: pC.cx, y: pC.cy },
+        pred,
+      ];
+      const midX = (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4;
+      const midY = (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4;
+      pts.sort(
+        (a, b) => Math.atan2(a.y - midY, a.x - midX) - Math.atan2(b.y - midY, b.x - midX)
+      );
+
+      const p0 = pts[0],
+        p1 = pts[1],
+        p2 = pts[2],
+        p3 = pts[3];
+      if (isConvexQuad(p0, p1, p2, p3)) {
+        const quadArea = computeQuadArea(p0, p1, p2, p3);
+        if (quadArea >= width * height * 0.10) {
+          bestQuad = { p0, p1, p2, p3, score: 300, area: quadArea };
+          break;
+        }
+      }
+    }
+  }
+
+  if (!bestQuad) {
+    // Trả về số lượng mốc neo thực tế tìm thấy để thông báo giao diện
+    const count = Math.min(candidates.length, 3);
     return {
       found: false,
-      anchorCount,
-      locks,
-      tl: tlCand ? { x: tlCand.cx, y: tlCand.cy } : defaultFallback.tl,
-      tr: trCand ? { x: trCand.cx, y: trCand.cy } : defaultFallback.tr,
-      bl: blCand ? { x: blCand.cx, y: blCand.cy } : defaultFallback.bl,
-      br: brCand ? { x: brCand.cx, y: brCand.cy } : defaultFallback.br,
+      anchorCount: count,
+      locks: {
+        tl: count >= 1,
+        tr: count >= 2,
+        bl: count >= 3,
+        br: false,
+      },
+      tl: candidates[0] ? { x: candidates[0].cx, y: candidates[0].cy } : defaultFallback.tl,
+      tr: candidates[1] ? { x: candidates[1].cx, y: candidates[1].cy } : defaultFallback.tr,
+      bl: candidates[2] ? { x: candidates[2].cx, y: candidates[2].cy } : defaultFallback.bl,
+      br: defaultFallback.br,
     };
   }
 
-  const topW = Math.hypot(trCand.cx - tlCand.cx, trCand.cy - tlCand.cy);
-  const botW = Math.hypot(brCand.cx - blCand.cx, brCand.cy - blCand.cy);
-  const leftH = Math.hypot(blCand.cx - tlCand.cx, blCand.cy - tlCand.cy);
-  const rightH = Math.hypot(brCand.cx - trCand.cx, brCand.cy - trCand.cy);
+  // 3. Tự động xác định góc xoay (Orientation) & Ánh xạ đúng 4 góc TL, TR, BR, BL của tờ phiếu
+  const { p0, p1, p2, p3 } = bestQuad;
+  const orderedPts = [p0, p1, p2, p3];
 
-  const avgW = (topW + botW) / 2;
-  const avgH = (leftH + rightH) / 2;
-  const widthRatio = topW / Math.max(1, botW);
-  const heightRatio = leftH / Math.max(1, rightH);
-  const quadAspect = avgW / Math.max(1, avgH);
+  // Tính chiều dài cạnh ngang (P0->P1 và P3->P2) so với cạnh dọc (P1->P2 và P0->P3)
+  const wSide =
+    0.5 *
+    (Math.hypot(orderedPts[1].x - orderedPts[0].x, orderedPts[1].y - orderedPts[0].y) +
+      Math.hypot(orderedPts[2].x - orderedPts[3].x, orderedPts[2].y - orderedPts[3].y));
+  const hSide =
+    0.5 *
+    (Math.hypot(orderedPts[3].x - orderedPts[0].x, orderedPts[3].y - orderedPts[0].y) +
+      Math.hypot(orderedPts[2].x - orderedPts[1].x, orderedPts[2].y - orderedPts[1].y));
 
-  // Kiểm tra kích thước đồng đều giữa 4 ô neo đen ở 4 góc để loại trừ vật thể lạ bên ngoài
-  const areas = [tlCand.area, trCand.area, blCand.area, brCand.area];
-  const minCornerArea = Math.min(...areas);
-  const maxCornerArea = Math.max(...areas);
-  const areaConsistency = minCornerArea / Math.max(1, maxCornerArea) >= 0.25;
+  // Tờ phiếu Khổ ngang (1024x550) khi cầm điện thoại dọc sẽ có hSide > wSide (xoay 90 độ)
+  const isHeldVertically = hSide > wSide * 1.08;
 
-  const isValidQuad =
-    topW > width * 0.42 &&
-    botW > width * 0.42 &&
-    leftH > height * 0.35 &&
-    rightH > height * 0.35 &&
-    widthRatio >= 0.68 &&
-    widthRatio <= 1.45 &&
-    heightRatio >= 0.68 &&
-    heightRatio <= 1.45 &&
-    quadAspect >= 1.05 &&
-    quadAspect <= 2.65 &&
-    areaConsistency;
+  // Mẫu mật độ mực đen ở 2 đầu cạnh ngắn để phát hiện đầu nào là Mã Đề / Tiêu đề (Left header)
+  const sampleDensity = (ptA: Point2D, ptB: Point2D) => {
+    let dark = 0;
+    const steps = 14;
+    for (let s = 1; s < steps; s++) {
+      const t = s / steps;
+      const qx = Math.round(ptA.x + (ptB.x - ptA.x) * t);
+      const qy = Math.round(ptA.y + (ptB.y - ptA.y) * t);
+      for (let dy = -8; dy <= 8; dy += 2) {
+        for (let dx = -8; dx <= 8; dx += 2) {
+          const sx = Math.max(0, Math.min(width - 1, qx + dx));
+          const sy = Math.max(0, Math.min(height - 1, qy + dy));
+          if (gray[sy * width + sx] < 135) dark++;
+        }
+      }
+    }
+    return dark;
+  };
+
+  let mappedTL: Point2D;
+  let mappedTR: Point2D;
+  let mappedBR: Point2D;
+  let mappedBL: Point2D;
+
+  if (isHeldVertically) {
+    // Phiếu nằm dọc theo màn hình điện thoại (xoay 90 độ):
+    // Cạnh P0->P1 (ở trên) so với cạnh P3->P2 (ở dưới)
+    const darkTop = sampleDensity(orderedPts[0], orderedPts[1]);
+    const darkBottom = sampleDensity(orderedPts[3], orderedPts[2]);
+
+    if (darkTop >= darkBottom) {
+      // Đầu Mã Đề & SBD nằm ở phía trên camera:
+      // TL tờ phiếu = P1, TR tờ phiếu = P2, BR tờ phiếu = P3, BL tờ phiếu = P0
+      mappedTL = orderedPts[1];
+      mappedTR = orderedPts[2];
+      mappedBR = orderedPts[3];
+      mappedBL = orderedPts[0];
+    } else {
+      // Đầu Mã Đề & SBD nằm ở phía dưới camera:
+      // TL tờ phiếu = P3, TR tờ phiếu = P0, BR tờ phiếu = P1, BL tờ phiếu = P2
+      mappedTL = orderedPts[3];
+      mappedTR = orderedPts[0];
+      mappedBR = orderedPts[1];
+      mappedBL = orderedPts[2];
+    }
+  } else {
+    // Phiếu nằm ngang chuẩn theo màn hình:
+    const darkLeft = sampleDensity(orderedPts[0], orderedPts[3]);
+    const darkRight = sampleDensity(orderedPts[1], orderedPts[2]);
+
+    if (darkLeft >= darkRight) {
+      // Chiều chuẩn 0 độ:
+      mappedTL = orderedPts[0];
+      mappedTR = orderedPts[1];
+      mappedBR = orderedPts[2];
+      mappedBL = orderedPts[3];
+    } else {
+      // Xoay ngược 180 độ:
+      mappedTL = orderedPts[2];
+      mappedTR = orderedPts[3];
+      mappedBR = orderedPts[0];
+      mappedBL = orderedPts[1];
+    }
+  }
 
   return {
-    found: isValidQuad,
-    anchorCount: isValidQuad ? 4 : anchorCount,
-    locks: isValidQuad
-      ? { tl: true, tr: true, bl: true, br: true }
-      : locks,
-    tl: { x: tlCand.cx, y: tlCand.cy },
-    tr: { x: trCand.cx, y: trCand.cy },
-    bl: { x: blCand.cx, y: blCand.cy },
-    br: { x: brCand.cx, y: brCand.cy },
+    found: true,
+    anchorCount: 4,
+    locks: { tl: true, tr: true, bl: true, br: true },
+    tl: mappedTL,
+    tr: mappedTR,
+    br: mappedBR,
+    bl: mappedBL,
   };
 }
 
