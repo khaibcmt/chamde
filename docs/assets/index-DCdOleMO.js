@@ -48773,13 +48773,66 @@ var Layers = createLucideIcon("layers", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
-var PenLine = createLucideIcon("pen-line", [["path", {
-	d: "M13 21h8",
-	key: "1jsn5i"
+var Lock = createLucideIcon("lock", [["rect", {
+	width: "18",
+	height: "11",
+	x: "3",
+	y: "11",
+	rx: "2",
+	ry: "2",
+	key: "1w4ew1"
 }], ["path", {
-	d: "M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z",
-	key: "1a8usu"
+	d: "M7 11V7a5 5 0 0 1 10 0v4",
+	key: "fwvmzm"
 }]]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var Maximize2 = createLucideIcon("maximize-2", [
+	["path", {
+		d: "M15 3h6v6",
+		key: "1q9fwt"
+	}],
+	["path", {
+		d: "m21 3-7 7",
+		key: "1l2asr"
+	}],
+	["path", {
+		d: "m3 21 7-7",
+		key: "tjx5ai"
+	}],
+	["path", {
+		d: "M9 21H3v-6",
+		key: "wtvkvv"
+	}]
+]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var Minimize2 = createLucideIcon("minimize-2", [
+	["path", {
+		d: "m14 10 7-7",
+		key: "oa77jy"
+	}],
+	["path", {
+		d: "M20 10h-6V4",
+		key: "mjg0md"
+	}],
+	["path", {
+		d: "m3 21 7-7",
+		key: "tjx5ai"
+	}],
+	["path", {
+		d: "M4 14h6v6",
+		key: "rmj7iw"
+	}]
+]);
 /**
 * @license lucide-react v0.546.0 - ISC
 *
@@ -49076,6 +49129,26 @@ var Trash2 = createLucideIcon("trash-2", [
 	["path", {
 		d: "M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2",
 		key: "e791ji"
+	}]
+]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var TriangleAlert = createLucideIcon("triangle-alert", [
+	["path", {
+		d: "m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3",
+		key: "wmoenq"
+	}],
+	["path", {
+		d: "M12 9v4",
+		key: "juzpu7"
+	}],
+	["path", {
+		d: "M12 17h.01",
+		key: "p32p05"
 	}]
 ]);
 /**
@@ -50333,8 +50406,15 @@ function detectFourCornerMarkers(imageData) {
 			});
 		}
 	}
-	if (candidates.length < 4) return {
+	const defaultFallback = {
 		found: false,
+		anchorCount: 0,
+		locks: {
+			tl: false,
+			tr: false,
+			bl: false,
+			br: false
+		},
 		tl: {
 			x: width * .025,
 			y: height * .069
@@ -50352,38 +50432,70 @@ function detectFourCornerMarkers(imageData) {
 			y: height * .931
 		}
 	};
+	if (candidates.length === 0) return defaultFallback;
 	const maxArea = Math.max(...candidates.map((c) => c.area));
-	const largeCandidates = candidates.filter((c) => c.area >= maxArea * .32);
+	const largeCandidates = candidates.filter((c) => c.area >= maxArea * .28);
 	const pool = largeCandidates.length >= 4 ? largeCandidates : candidates;
-	const tlCand = pool.filter((c) => c.cx < width * .45 && c.cy < height * .45).sort((a, b) => a.cx + a.cy - (b.cx + b.cy))[0];
-	const trCand = pool.filter((c) => c.cx > width * .55 && c.cy < height * .45).sort((a, b) => b.cx - b.cy - (a.cx - a.cy))[0];
-	const blCand = pool.filter((c) => c.cx < width * .45 && c.cy > height * .55).sort((a, b) => b.cy - b.cx - (a.cy - a.cx))[0];
-	const brCand = pool.filter((c) => c.cx > width * .55 && c.cy > height * .55).sort((a, b) => b.cx + b.cy - (a.cx + a.cy))[0];
+	const tlCand = pool.filter((c) => c.cx < width * .42 && c.cy < height * .42).sort((a, b) => a.cx + a.cy - (b.cx + b.cy))[0];
+	const trCand = pool.filter((c) => c.cx > width * .58 && c.cy < height * .42).sort((a, b) => b.cx - b.cy - (a.cx - a.cy))[0];
+	const blCand = pool.filter((c) => c.cx < width * .42 && c.cy > height * .58).sort((a, b) => b.cy - b.cx - (a.cy - a.cx))[0];
+	const brCand = pool.filter((c) => c.cx > width * .58 && c.cy > height * .58).sort((a, b) => b.cx + b.cy - (a.cx + a.cy))[0];
+	const locks = {
+		tl: Boolean(tlCand),
+		tr: Boolean(trCand),
+		bl: Boolean(blCand),
+		br: Boolean(brCand)
+	};
+	const anchorCount = (locks.tl ? 1 : 0) + (locks.tr ? 1 : 0) + (locks.bl ? 1 : 0) + (locks.br ? 1 : 0);
 	if (!tlCand || !trCand || !blCand || !brCand) return {
 		found: false,
-		tl: {
-			x: width * .025,
-			y: height * .069
-		},
-		tr: {
-			x: width * .975,
-			y: height * .069
-		},
-		bl: {
-			x: width * .025,
-			y: height * .931
-		},
-		br: {
-			x: width * .975,
-			y: height * .931
-		}
+		anchorCount,
+		locks,
+		tl: tlCand ? {
+			x: tlCand.cx,
+			y: tlCand.cy
+		} : defaultFallback.tl,
+		tr: trCand ? {
+			x: trCand.cx,
+			y: trCand.cy
+		} : defaultFallback.tr,
+		bl: blCand ? {
+			x: blCand.cx,
+			y: blCand.cy
+		} : defaultFallback.bl,
+		br: brCand ? {
+			x: brCand.cx,
+			y: brCand.cy
+		} : defaultFallback.br
 	};
 	const topW = Math.hypot(trCand.cx - tlCand.cx, trCand.cy - tlCand.cy);
 	const botW = Math.hypot(brCand.cx - blCand.cx, brCand.cy - blCand.cy);
 	const leftH = Math.hypot(blCand.cx - tlCand.cx, blCand.cy - tlCand.cy);
 	const rightH = Math.hypot(brCand.cx - trCand.cx, brCand.cy - trCand.cy);
+	const avgW = (topW + botW) / 2;
+	const avgH = (leftH + rightH) / 2;
+	const widthRatio = topW / Math.max(1, botW);
+	const heightRatio = leftH / Math.max(1, rightH);
+	const quadAspect = avgW / Math.max(1, avgH);
+	const areas = [
+		tlCand.area,
+		trCand.area,
+		blCand.area,
+		brCand.area
+	];
+	const minCornerArea = Math.min(...areas);
+	const maxCornerArea = Math.max(...areas);
+	const areaConsistency = minCornerArea / Math.max(1, maxCornerArea) >= .25;
+	const isValidQuad = topW > width * .42 && botW > width * .42 && leftH > height * .35 && rightH > height * .35 && widthRatio >= .68 && widthRatio <= 1.45 && heightRatio >= .68 && heightRatio <= 1.45 && quadAspect >= 1.05 && quadAspect <= 2.65 && areaConsistency;
 	return {
-		found: topW > width * .4 && botW > width * .4 && leftH > height * .35 && rightH > height * .35,
+		found: isValidQuad,
+		anchorCount: isValidQuad ? 4 : anchorCount,
+		locks: isValidQuad ? {
+			tl: true,
+			tr: true,
+			bl: true,
+			br: true
+		} : locks,
 		tl: {
 			x: tlCand.cx,
 			y: tlCand.cy
@@ -50884,82 +50996,9 @@ function gradeWarpedSheet(warpedCanvas, templateId, answerKeys, settings, scorin
 	};
 }
 /**
-* 5. TÍNH LẠI ĐIỂM KHI GIÁO VIÊN SỬA NHANH BÀI LÀM TRÊN POPUP HUD
-*/
-function recalculateRecordScore(record, answerKeys, scoringConfig) {
-	const cfg = scoringConfig || getDefaultScoringConfig(record.templateId);
-	const matchedKey = findMatchingAnswerKey(record.examCode, answerKeys);
-	const key = matchedKey || Object.values(answerKeys)[0];
-	let p1CorrectCount = 0;
-	const p1Details = record.p1Details.map((item, idx) => {
-		const correctAns = key?.p1[idx] || item.correctAnswer;
-		const isCorrect = item.studentAnswer === correctAns;
-		if (isCorrect) p1CorrectCount++;
-		return {
-			...item,
-			correctAnswer: correctAns,
-			isCorrect,
-			status: item.studentAnswer === "" ? "blank" : isCorrect ? "correct" : "wrong"
-		};
-	});
-	const p1Score = p1CorrectCount * cfg.p1PointsPerQ;
-	let p2Score = 0;
-	const p2Details = record.p2Details.map((item, idx) => {
-		let correctSubCount = 0;
-		const subResults = item.subResults.map((sub) => {
-			const correctAns = key?.p2[idx]?.[sub.subKey] || sub.correctAnswer;
-			const isCorrect = sub.studentAnswer === correctAns;
-			if (isCorrect) correctSubCount++;
-			return {
-				...sub,
-				correctAnswer: correctAns,
-				isCorrect
-			};
-		});
-		const pointsEarned = correctSubCount >= 1 && correctSubCount <= 4 ? cfg.p2PointsMap[correctSubCount - 1] : 0;
-		p2Score += pointsEarned;
-		return {
-			...item,
-			subResults,
-			correctSubCount,
-			pointsEarned
-		};
-	});
-	let p3CorrectCount = 0;
-	const p3Details = record.p3Details.map((item, idx) => {
-		const correctValue = key?.p3[idx] ?? item.correctValue;
-		const isCorrect = isP3AnswerMatch(item.studentString, correctValue);
-		if (isCorrect) p3CorrectCount++;
-		return {
-			...item,
-			correctValue,
-			isCorrect,
-			pointsEarned: isCorrect ? cfg.p3PointsPerQ : 0
-		};
-	});
-	const p3Score = p3CorrectCount * cfg.p3PointsPerQ;
-	const totalScore = Math.round((p1Score + p2Score + p3Score) * 100) / 100;
-	const { sbdClassPrefix, sbdStudentOrder } = parseSbdToClassAndStt(record.sbd);
-	return {
-		...record,
-		sbdClassPrefix,
-		sbdStudentOrder,
-		matchedKeyFound: Boolean(matchedKey),
-		p1Score: Math.round(p1Score * 100) / 100,
-		p1CorrectCount,
-		p2Score: Math.round(p2Score * 100) / 100,
-		p3Score: Math.round(p3Score * 100) / 100,
-		p3CorrectCount,
-		totalScore,
-		p1Details,
-		p2Details,
-		p3Details
-	};
-}
-/**
 * 6. BỘ TẠO PHIẾU TÔ MẪU THỰC TẾ (SIMULATOR) TRÊN ẢNH PHIẾU GỐC QM 2025 & CV 1239
 */
-async function generateSimulatedSheetCanvas(templateId, sbd, examCode, answerKey, accuracyRate = .85, scoringConfig) {
+async function generateSimulatedSheetCanvas(templateId, sbd, examCode, answerKey, accuracyRate = .85, scoringConfig, options) {
 	const tpl = TEMPLATES[templateId];
 	const cfg = scoringConfig || getDefaultScoringConfig(templateId);
 	let sheetCanvas;
@@ -50991,16 +51030,20 @@ async function generateSimulatedSheetCanvas(templateId, sbd, examCode, answerKey
 		ctx.fill();
 		ctx.restore();
 	};
-	const maDeColsCount = map.maDe.length;
-	const cleanCode = examCode.padStart(maDeColsCount, "0").slice(-maDeColsCount);
-	for (let c = 0; c < maDeColsCount; c++) {
-		const d = Number(cleanCode[c]);
-		if (!Number.isNaN(d) && map.maDe[c]?.[d]) fillPencilBubble(map.maDe[c][d]);
+	if (!options?.skipExamCode && examCode.trim() !== "") {
+		const maDeColsCount = map.maDe.length;
+		const cleanCode = examCode.padStart(maDeColsCount, "0").slice(-maDeColsCount);
+		for (let c = 0; c < maDeColsCount; c++) {
+			const d = Number(cleanCode[c]);
+			if (!Number.isNaN(d) && map.maDe[c]?.[d]) fillPencilBubble(map.maDe[c][d]);
+		}
 	}
-	const cleanSbd = sbd.padStart(6, "0").slice(0, map.sbd.length);
-	for (let c = 0; c < cleanSbd.length; c++) {
-		const d = Number(cleanSbd[c]);
-		if (!Number.isNaN(d) && map.sbd[c]?.[d]) fillPencilBubble(map.sbd[c][d]);
+	if (!options?.skipSbd && sbd.trim() !== "") {
+		const cleanSbd = sbd.padStart(6, "0").slice(0, map.sbd.length);
+		for (let c = 0; c < cleanSbd.length; c++) {
+			const d = Number(cleanSbd[c]);
+			if (!Number.isNaN(d) && map.sbd[c]?.[d]) fillPencilBubble(map.sbd[c][d]);
+		}
 	}
 	const choices = [
 		"A",
@@ -51245,7 +51288,7 @@ var require_react_jsx_runtime_production = /* @__PURE__ */ __commonJSMin(((expor
 var import_jsx_runtime = (/* @__PURE__ */ __commonJSMin(((exports, module) => {
 	module.exports = require_react_jsx_runtime_production();
 })))();
-var APP_VERSION = "2025.5.0-PRO";
+var APP_VERSION = "2025.6.0-PRO";
 var DEFAULT_CLASS_ROSTERS = [{
 	id: "cls-12a1",
 	className: "12A1",
@@ -51355,16 +51398,34 @@ function playSuccessBeep() {
 		osc.stop(ctx.currentTime + .19);
 	} catch {}
 }
-function speakScoreVietnamese(score, studentName) {
+function playErrorAlertBeep() {
+	try {
+		const ctx = new (window.AudioContext || window.webkitAudioContext)();
+		const osc = ctx.createOscillator();
+		const gain = ctx.createGain();
+		osc.type = "sawtooth";
+		osc.frequency.setValueAtTime(310, ctx.currentTime);
+		osc.frequency.setValueAtTime(210, ctx.currentTime + .16);
+		gain.gain.setValueAtTime(.24, ctx.currentTime);
+		gain.gain.exponentialRampToValueAtTime(.001, ctx.currentTime + .36);
+		osc.connect(gain);
+		gain.connect(ctx.destination);
+		osc.start();
+		osc.stop(ctx.currentTime + .37);
+	} catch {}
+}
+function speakTextVietnamese(text) {
 	try {
 		if (!("speechSynthesis" in window)) return;
 		window.speechSynthesis.cancel();
-		const text = studentName ? `${studentName}, ${score.toString().replace(".", " phẩy ")} điểm` : `${score.toString().replace(".", " phẩy ")} điểm`;
 		const utter = new SpeechSynthesisUtterance(text);
 		utter.lang = "vi-VN";
-		utter.rate = 1.15;
+		utter.rate = 1.12;
 		window.speechSynthesis.speak(utter);
 	} catch {}
+}
+function speakScoreVietnamese(score, studentName) {
+	speakTextVietnamese(studentName ? `${studentName}, ${score.toString().replace(".", " phẩy ")} điểm` : `${score.toString().replace(".", " phẩy ")} điểm`);
 }
 function App() {
 	const [activeTab, setActiveTab] = (0, import_react.useState)("keys");
@@ -51419,6 +51480,7 @@ function App() {
 	const [isQrCameraOpen, setIsQrCameraOpen] = (0, import_react.useState)(false);
 	const qrVideoRef = (0, import_react.useRef)(null);
 	const [isOmrCameraOpen, setIsOmrCameraOpen] = (0, import_react.useState)(false);
+	const [isScannerFullscreen, setIsScannerFullscreen] = (0, import_react.useState)(false);
 	const [autoTriggerOmr, setAutoTriggerOmr] = (0, import_react.useState)(true);
 	const [showGridOverlay, setShowGridOverlay] = (0, import_react.useState)(false);
 	const [showCalibration, setShowCalibration] = (0, import_react.useState)(false);
@@ -51434,8 +51496,36 @@ function App() {
 	const [torchSupported, setTorchSupported] = (0, import_react.useState)(false);
 	const [torchEnabled, setTorchEnabled] = (0, import_react.useState)(false);
 	const [lastCapturedBase64Jpeg, setLastCapturedBase64Jpeg] = (0, import_react.useState)("");
+	const [anchorLockState, setAnchorLockState] = (0, import_react.useState)({
+		found: false,
+		count: 0,
+		tl: false,
+		tr: false,
+		bl: false,
+		br: false
+	});
+	const [missingExamCodeAlert, setMissingExamCodeAlert] = (0, import_react.useState)(null);
+	const [instantScoreBanner, setInstantScoreBanner] = (0, import_react.useState)(null);
 	const lockCounterRef = (0, import_react.useRef)(0);
 	const cooldownRef = (0, import_react.useRef)(false);
+	const enterScannerFullscreenMode = async () => {
+		setActiveTab("scanner");
+		setIsScannerFullscreen(true);
+		setIsOmrCameraOpen(true);
+		try {
+			const docEl = document.documentElement;
+			if (!document.fullscreenElement && docEl.requestFullscreen) await docEl.requestFullscreen();
+			else if (docEl.webkitRequestFullscreen) await docEl.webkitRequestFullscreen();
+		} catch {}
+	};
+	const exitScannerFullscreenMode = async () => {
+		setIsScannerFullscreen(false);
+		try {
+			const docWithWebkit = document;
+			if (document.fullscreenElement && document.exitFullscreen) await document.exitFullscreen();
+			else if (docWithWebkit.webkitExitFullscreen) await docWithWebkit.webkitExitFullscreen();
+		} catch {}
+	};
 	const [gradedRecords, setGradedRecords] = (0, import_react.useState)(() => {
 		try {
 			const saved = localStorage.getItem("edu_cham_de_2025_records");
@@ -51485,25 +51575,45 @@ function App() {
 	* Tự động đối chiếu SBD của phiếu chấm với Danh Sách Lớp:
 	* - 2 chữ số đầu của SBD nhận biết Lớp (so khớp với sbdPrefix của lớp)
 	* - Các chữ số còn lại là STT của học sinh trong lớp đó
+	* - Nếu SBD bị tô thiếu ('?'), không khớp hoặc nằm ngoài danh sách ban đầu:
+	*   KHÔNG cho phép can thiệp chỉnh sửa thủ công và TỰ ĐỘNG XUẤT VÀO ĐOẠN CUỐI CỦA DANH SÁCH LỚP ĐÓ.
 	*/
 	const enrichAndSyncRecordWithRoster = (rawRecord, saveToRoster) => {
+		const isSbdComplete = !rawRecord.sbd.includes("?") && rawRecord.sbd.trim().length >= 3;
 		const { sbdClassPrefix, sbdStudentOrder } = parseSbdToClassAndStt(rawRecord.sbd);
-		let matchedClass = classRosters.find((c) => c.sbdPrefix.padStart(2, "0") === sbdClassPrefix);
-		if (!matchedClass && activeClassGroup?.sbdPrefix === sbdClassPrefix) matchedClass = activeClassGroup;
-		const matchedStudent = matchedClass && sbdStudentOrder !== null ? matchedClass.students.find((s) => s.stt === sbdStudentOrder) : void 0;
+		let matchedClass = isSbdComplete ? classRosters.find((c) => c.sbdPrefix.padStart(2, "0") === sbdClassPrefix) : void 0;
+		if (!matchedClass) matchedClass = activeClassGroup;
+		const matchedStudent = isSbdComplete && matchedClass && sbdStudentOrder !== null ? matchedClass.students.find((s) => !s.isAppendedAtEnd && s.stt === sbdStudentOrder) : void 0;
+		const targetClassName = matchedClass ? matchedClass.className : activeClassGroup?.className || "12A1";
+		const displayStudentName = matchedStudent ? matchedStudent.fullName : isSbdComplete && sbdStudentOrder !== null ? `Phiếu ngoài DS - STT ${sbdStudentOrder} (Xuất cuối DS lớp ${targetClassName})` : `Phiếu thiếu/lỗi SBD (${rawRecord.sbd}) (Xuất cuối DS lớp ${targetClassName})`;
 		const enriched = {
 			...rawRecord,
-			sbdClassPrefix,
-			sbdStudentOrder,
-			className: matchedClass ? matchedClass.className : activeClassGroup?.className || "Chưa phân lớp",
-			studentName: matchedStudent ? matchedStudent.fullName : void 0,
+			sbdClassPrefix: isSbdComplete ? sbdClassPrefix : matchedClass?.sbdPrefix || "--",
+			sbdStudentOrder: matchedStudent ? sbdStudentOrder : null,
+			className: targetClassName,
+			studentName: displayStudentName,
 			subjectName: selectedSubject,
 			examPeriod: selectedExamPeriod
 		};
-		if (saveToRoster && matchedClass && sbdStudentOrder !== null) setClassRosters((prev) => prev.map((cls) => {
+		if (saveToRoster && matchedClass) setClassRosters((prev) => prev.map((cls) => {
 			if (cls.id !== matchedClass.id) return cls;
-			const updatedStudents = cls.students.some((st) => st.stt === sbdStudentOrder) ? cls.students.map((st) => st.stt === sbdStudentOrder ? {
-				...st,
+			if (matchedStudent && sbdStudentOrder !== null) return {
+				...cls,
+				students: cls.students.map((st) => !st.isAppendedAtEnd && st.stt === sbdStudentOrder ? {
+					...st,
+					sbd: enriched.sbd,
+					examCode: enriched.examCode,
+					p1Score: enriched.p1Score,
+					p2Score: enriched.p2Score,
+					p3Score: enriched.p3Score,
+					totalScore: enriched.totalScore,
+					gradedAt: enriched.timestamp,
+					recordId: enriched.id
+				} : st)
+			};
+			const appendedItem = {
+				stt: (cls.students.length > 0 ? Math.max(...cls.students.map((s) => s.stt)) : 0) + 1,
+				fullName: displayStudentName,
 				sbd: enriched.sbd,
 				examCode: enriched.examCode,
 				p1Score: enriched.p1Score,
@@ -51511,27 +51621,41 @@ function App() {
 				p3Score: enriched.p3Score,
 				totalScore: enriched.totalScore,
 				gradedAt: enriched.timestamp,
-				recordId: enriched.id
-			} : st) : [...cls.students, {
-				stt: sbdStudentOrder,
-				fullName: `Học sinh STT ${sbdStudentOrder}`,
-				sbd: enriched.sbd,
-				examCode: enriched.examCode,
-				p1Score: enriched.p1Score,
-				p2Score: enriched.p2Score,
-				p3Score: enriched.p3Score,
-				totalScore: enriched.totalScore,
-				gradedAt: enriched.timestamp,
-				recordId: enriched.id
-			}].sort((a, b) => a.stt - b.stt);
+				recordId: enriched.id,
+				isAppendedAtEnd: true
+			};
 			return {
 				...cls,
-				students: updatedStudents
+				students: [...cls.students, appendedItem]
 			};
 		}));
 		return enriched;
 	};
 	const handleCompletedScanRecord = (rawRecord) => {
+		if (!rawRecord.examCode || rawRecord.examCode.includes("?") || rawRecord.examCode.trim() === "") {
+			playErrorAlertBeep();
+			if (navigator.vibrate) navigator.vibrate([
+				220,
+				80,
+				220,
+				80,
+				280
+			]);
+			const errMsg = `BÁO LỖI & TỪ CHỐI CHẤM: Phiếu trả lời KHÔNG TÔ MÃ ĐỀ (hoặc tô thiếu chữ số Mã Đề: "${rawRecord.examCode || "Trống"}"). Hệ thống không chấm và không ghi điểm phiếu này!`;
+			setMissingExamCodeAlert({
+				message: errMsg,
+				sbdRead: rawRecord.sbd,
+				imageUrl: rawRecord.annotatedImageDataUrl
+			});
+			setInstantScoreBanner(null);
+			setStatusBanner({
+				type: "warning",
+				message: `🚫 ${errMsg}`
+			});
+			if (voiceReadout) speakTextVietnamese("Báo lỗi! Phiếu chưa tô đủ mã đề, hệ thống từ chối chấm bài này.");
+			return;
+		}
+		setMissingExamCodeAlert(null);
 		playSuccessBeep();
 		if (navigator.vibrate) navigator.vibrate([
 			70,
@@ -51540,6 +51664,7 @@ function App() {
 		]);
 		if (gradingMode === "verify") {
 			const enriched = enrichAndSyncRecordWithRoster(rawRecord, false);
+			setInstantScoreBanner(enriched);
 			setActiveHudRecord(enriched);
 			if (voiceReadout) speakScoreVietnamese(enriched.totalScore, enriched.studentName);
 			setStatusBanner({
@@ -51550,10 +51675,11 @@ function App() {
 		}
 		const enriched = enrichAndSyncRecordWithRoster(rawRecord, true);
 		setGradedRecords((prev) => [enriched, ...prev.filter((r) => r.sbd !== enriched.sbd || enriched.sbd.includes("?"))]);
+		setInstantScoreBanner(enriched);
 		if (voiceReadout) speakScoreVietnamese(enriched.totalScore, enriched.studentName);
 		if (gradingMode === "continuous") setStatusBanner({
 			type: "success",
-			message: `Đã chấm & lưu tự động: SBD ${enriched.sbd} ${enriched.studentName ? `(${enriched.studentName} - Lớp ${enriched.className})` : ""} • Mã đề ${enriched.examCode} • Tổng: ${enriched.totalScore.toFixed(2)}đ`
+			message: `Đã nhận đủ 4 neo & tự động chấm: SBD ${enriched.sbd} (${enriched.studentName}) • Mã đề ${enriched.examCode} • ĐIỂM: ${enriched.totalScore.toFixed(2)}đ`
 		});
 		else setActiveHudRecord(enriched);
 	};
@@ -51817,10 +51943,29 @@ function App() {
 						procCtx.drawImage(video, 0, 0, vw, vh);
 						const frameData = procCtx.getImageData(0, 0, vw, vh);
 						const corners = detectFourCornerMarkers(frameData);
+						setAnchorLockState({
+							found: corners.found,
+							count: corners.anchorCount,
+							tl: corners.locks.tl,
+							tr: corners.locks.tr,
+							bl: corners.locks.bl,
+							br: corners.locks.br
+						});
 						const oCtx = overlay.getContext("2d");
 						oCtx.clearRect(0, 0, vw, vh);
-						const polyColor = corners.found ? "#10b981" : "#f59e0b";
-						oCtx.strokeStyle = polyColor;
+						oCtx.save();
+						oCtx.fillStyle = "rgba(2, 6, 23, 0.42)";
+						oCtx.fillRect(0, 0, vw, vh);
+						oCtx.globalCompositeOperation = "destination-out";
+						oCtx.beginPath();
+						oCtx.moveTo(corners.tl.x, corners.tl.y);
+						oCtx.lineTo(corners.tr.x, corners.tr.y);
+						oCtx.lineTo(corners.br.x, corners.br.y);
+						oCtx.lineTo(corners.bl.x, corners.bl.y);
+						oCtx.closePath();
+						oCtx.fill();
+						oCtx.restore();
+						oCtx.strokeStyle = corners.found ? "#10b981" : "#f59e0b";
 						oCtx.lineWidth = 4;
 						oCtx.beginPath();
 						oCtx.moveTo(corners.tl.x, corners.tl.y);
@@ -51829,20 +51974,41 @@ function App() {
 						oCtx.lineTo(corners.bl.x, corners.bl.y);
 						oCtx.closePath();
 						oCtx.stroke();
-						for (const pt of [
-							corners.tl,
-							corners.tr,
-							corners.bl,
-							corners.br
-						]) {
-							oCtx.fillStyle = polyColor;
+						const cornerItems = [
+							{
+								pt: corners.tl,
+								locked: corners.locks.tl,
+								label: "NEO 1 (TL)"
+							},
+							{
+								pt: corners.tr,
+								locked: corners.locks.tr,
+								label: "NEO 2 (TR)"
+							},
+							{
+								pt: corners.bl,
+								locked: corners.locks.bl,
+								label: "NEO 3 (BL)"
+							},
+							{
+								pt: corners.br,
+								locked: corners.locks.br,
+								label: "NEO 4 (BR)"
+							}
+						];
+						for (const item of cornerItems) {
+							const boxColor = item.locked ? "#10b981" : "#ef4444";
+							oCtx.strokeStyle = boxColor;
+							oCtx.lineWidth = 3;
+							oCtx.strokeRect(item.pt.x - 18, item.pt.y - 18, 36, 36);
+							oCtx.fillStyle = boxColor;
 							oCtx.beginPath();
-							oCtx.arc(pt.x, pt.y, 10, 0, Math.PI * 2);
+							oCtx.arc(item.pt.x, item.pt.y, 7, 0, Math.PI * 2);
 							oCtx.fill();
 						}
 						if (corners.found && !cooldownRef.current && (!activeHudRecord || gradingMode === "continuous")) {
 							lockCounterRef.current += 1;
-							if (autoTriggerOmr && lockCounterRef.current >= 9) {
+							if (autoTriggerOmr && lockCounterRef.current >= 4) {
 								lockCounterRef.current = 0;
 								cooldownRef.current = true;
 								try {
@@ -51853,7 +52019,7 @@ function App() {
 								handleCompletedScanRecord(record);
 								setTimeout(() => {
 									cooldownRef.current = false;
-								}, 1800);
+								}, 1500);
 							}
 						} else lockCounterRef.current = Math.max(0, lockCounterRef.current - 1);
 					}
@@ -51895,17 +52061,27 @@ function App() {
 	const handleManualCaptureFromVideo = () => {
 		const video = omrVideoRef.current;
 		if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) return;
-		try {
-			const base64Jpeg = capturePhoto(video, .92);
-			setLastCapturedBase64Jpeg(base64Jpeg);
-		} catch {}
 		const canvas = document.createElement("canvas");
 		canvas.width = video.videoWidth;
 		canvas.height = video.videoHeight;
 		const ctx = canvas.getContext("2d");
 		ctx.drawImage(video, 0, 0);
 		const frameData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-		const record = gradeWarpedSheet(warpPerspectiveTo1024x550(frameData, detectFourCornerMarkers(frameData)), selectedTemplate, answerKeys, omrSettings, currentScoring);
+		const corners = detectFourCornerMarkers(frameData);
+		if (!corners.found) {
+			playErrorAlertBeep();
+			setStatusBanner({
+				type: "warning",
+				message: `⚠️ TỪ CHỐI QUÉT: Mới nhận diện được ${corners.anchorCount}/4 neo cố định. Hệ thống CHỈ quét bảng trả lời trắc nghiệm khi bắt đủ 4 neo cố định, không quét sang các vật thể khác!`
+			});
+			if (voiceReadout) speakTextVietnamese("Chưa nhận đủ 4 neo cố định của bảng trả lời.");
+			return;
+		}
+		try {
+			const base64Jpeg = capturePhoto(video, .92);
+			setLastCapturedBase64Jpeg(base64Jpeg);
+		} catch {}
+		const record = gradeWarpedSheet(warpPerspectiveTo1024x550(frameData, corners), selectedTemplate, answerKeys, omrSettings, currentScoring);
 		handleCompletedScanRecord(record);
 	};
 	const handleGradeUploadedSheetImage = (file) => {
@@ -51918,13 +52094,22 @@ function App() {
 			const ctx = canvas.getContext("2d");
 			ctx.drawImage(img, 0, 0);
 			const imgData = ctx.getImageData(0, 0, img.width, img.height);
-			const record = gradeWarpedSheet(warpPerspectiveTo1024x550(imgData, detectFourCornerMarkers(imgData)), selectedTemplate, answerKeys, omrSettings, currentScoring);
+			const corners = detectFourCornerMarkers(imgData);
 			URL.revokeObjectURL(url);
+			if (!corners.found) {
+				playErrorAlertBeep();
+				setStatusBanner({
+					type: "warning",
+					message: `⚠️ ẢNH KHÔNG HỢP LỆ (${corners.anchorCount}/4 neo): Hệ thống CHỈ quét bảng trả lời trắc nghiệm theo 4 neo cố định, không quét sang các hình ảnh khác!`
+				});
+				return;
+			}
+			const record = gradeWarpedSheet(warpPerspectiveTo1024x550(imgData, corners), selectedTemplate, answerKeys, omrSettings, currentScoring);
 			handleCompletedScanRecord(record);
 		};
 		img.src = url;
 	};
-	const handleRunSimulatedSheet = async (accuracy = .88) => {
+	const handleRunSimulatedSheet = async (accuracy = .88, options) => {
 		const targetKey = findMatchingAnswerKey(simExamCode, answerKeys) || Object.values(answerKeys)[0] || {
 			examCode: simExamCode || "0101",
 			p1: new Array(40).fill("A"),
@@ -51943,12 +52128,23 @@ function App() {
 				2700
 			]
 		};
-		const record = gradeWarpedSheet(await generateSimulatedSheetCanvas(selectedTemplate, simSbd, targetKey.examCode, targetKey, accuracy, currentScoring), selectedTemplate, answerKeys, omrSettings, currentScoring);
+		const simCanvas = await generateSimulatedSheetCanvas(selectedTemplate, simSbd, targetKey.examCode, targetKey, accuracy, currentScoring, options);
+		setAnchorLockState({
+			found: true,
+			count: 4,
+			tl: true,
+			tr: true,
+			bl: true,
+			br: true
+		});
+		const record = gradeWarpedSheet(simCanvas, selectedTemplate, answerKeys, omrSettings, currentScoring);
 		handleCompletedScanRecord(record);
-		const { sbdClassPrefix, sbdStudentOrder } = parseSbdToClassAndStt(simSbd);
-		if (sbdStudentOrder !== null) {
-			const nextOrder = String(sbdStudentOrder + 1).padStart(4, "0");
-			setSimSbd(`${sbdClassPrefix || "01"}${nextOrder}`);
+		if (!options?.skipExamCode && !options?.skipSbd) {
+			const { sbdClassPrefix, sbdStudentOrder } = parseSbdToClassAndStt(simSbd);
+			if (sbdStudentOrder !== null) {
+				const nextOrder = String(sbdStudentOrder + 1).padStart(4, "0");
+				setSimSbd(`${sbdClassPrefix || "01"}${nextOrder}`);
+			}
 		}
 	};
 	const buildStampedEvidenceBlob = async (record) => {
@@ -52225,16 +52421,16 @@ function App() {
         <p>Dùng Camera quét trực tiếp mã QR chung từ phần mềm trộn đề QM2025, tải ảnh mã QR hoặc nhập file Excel đáp án chuẩn (.xlsx).</p>
       </div>
       <div class="card-3d c-emerald">
-        <h3>Bước 4: Đưa Camera Quét Phiếu Học Sinh</h3>
-        <p>Chọn chế độ <strong>Chấm xem ngay</strong> hoặc <strong>Chấm liên tục tốc độ cao</strong>. Thuật toán tự động bắt 4 góc vuông đen, nắn phẳng Homography và đọc điểm bằng giọng nói Tiếng Việt.</p>
+        <h3>Bước 4: Chấm Full Màn Hình Theo 4 Neo Cố Định</h3>
+        <p>Nhấn nút <strong>Chấm Bài</strong> để kích hoạt <strong>Full Màn Hình</strong> trên mọi thiết bị. Hệ thống chỉ quét vùng bảng trả lời giới hạn bởi <strong>4 Neo Cố Định</strong> (không quét sang vật thể khác). Khi nhận đủ 4/4 neo sẽ <strong>tự động chấm và hiện điểm ngay</strong>. Nếu phiếu <strong>không tô Mã đề</strong>, hệ thống báo lỗi đỏ và <strong>không chấm</strong>.</p>
       </div>
       <div class="card-3d c-blue">
-        <h3>Bước 5: Xuất Excel & Lưu Hồ Sơ Minh Chứng</h3>
-        <p>Điểm tự động điền vào đúng STT học sinh trong Danh Sách Lớp. Tải bảng điểm Excel (.xlsx) và xuất Hồ sơ ảnh bài chấm minh chứng (.jpg / .html / PDF).</p>
+        <h3>Bước 5: Khóa Bảo Mật Kết Quả & Xuất Cuối DS Lớp</h3>
+        <p><strong>Số báo danh, Mã đề và toàn bộ đáp án</strong> được khóa bảo mật <strong>Read-Only (không được quyền can thiệp)</strong>. Các phiếu thiếu SBD hoặc ngoài danh sách sẽ tự động được <strong>xuất vào đoạn cuối của Danh Sách Lớp đó</strong>.</p>
       </div>
       <div class="card-3d c-violet">
-        <h3>Cơ Chế Tự Động Cập Nhật (Auto-Update)</h3>
-        <p>Ứng dụng trang bị cơ chế đồng bộ phiên bản thời gian thực trên nền tảng Web/Cloud, đảm bảo giáo viên luôn sử dụng thuật toán OMR và mẫu phiếu mới nhất của Bộ GD&ĐT.</p>
+        <h3>Cơ Chế Tự Động Cập Nhật (Auto-Update ${APP_VERSION})</h3>
+        <p>Ứng dụng trang bị cơ chế đồng bộ phiên bản thời gian thực trên nền tảng Web/PWA Offline, đảm bảo giáo viên luôn sử dụng thuật toán OMR 4 neo cố định và mẫu phiếu mới nhất của Bộ GD&ĐT.</p>
       </div>
     </div>
 
@@ -52469,7 +52665,7 @@ function App() {
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 								onClick: () => setShowGuideModal(true),
 								className: "btn-3d btn-3d-amber px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white flex items-center gap-1.5",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleQuestionMark, { className: "w-4 h-4" }), "Hướng Dẫn"]
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleQuestionMark, { className: "w-4 h-4" }), "Hướng Dẫn Mới Nhất"]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 								onClick: handleExportExcel,
@@ -52494,14 +52690,17 @@ function App() {
 						className: "grid grid-cols-1 sm:grid-cols-3 gap-3",
 						children: [
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								onClick: () => setActiveTab("keys"),
+								onClick: () => {
+									setIsScannerFullscreen(false);
+									setActiveTab("keys");
+								},
 								className: `py-3 px-4 rounded-2xl flex items-center justify-center gap-2.5 text-sm sm:text-base font-black transition-all ${activeTab === "keys" ? "btn-3d btn-3d-blue text-white ring-2 ring-offset-2 ring-blue-500" : "btn-3d btn-3d-white text-slate-800"}`,
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(QrCode, { className: "w-5 h-5 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "BƯỚC 1: ĐÁP ÁN & QUÉT QR" })]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								onClick: () => setActiveTab("scanner"),
+								onClick: () => enterScannerFullscreenMode(true),
 								className: `py-3 px-4 rounded-2xl flex items-center justify-center gap-2.5 text-sm sm:text-base font-black transition-all ${activeTab === "scanner" ? "btn-3d btn-3d-emerald text-white ring-2 ring-offset-2 ring-emerald-500" : "btn-3d btn-3d-white text-slate-800"}`,
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "w-5 h-5 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "BƯỚC 2: CAMERA CHẤM BÀI" })]
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Maximize2, { className: "w-5 h-5 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "BƯỚC 2: CHẤM BÀI (FULL MÀN HÌNH)" })]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 								onClick: () => setActiveTab("results"),
@@ -53317,389 +53516,535 @@ function App() {
 												})
 											]
 										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-											onClick: () => setActiveTab("scanner"),
+											onClick: () => enterScannerFullscreenMode(true),
 											className: "btn-3d btn-3d-emerald px-5 py-3 rounded-xl text-white font-black text-sm flex items-center gap-2",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "w-5 h-5" }), "Chuyển Sang Quét Chấm Bài Ngay →"]
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Maximize2, { className: "w-5 h-5" }), "Chấm Bài Ngay (Full Màn Hình) →"]
 										})]
 									})
 								]
 							})]
 						})
 					}),
-					activeTab === "scanner" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-						className: "grid grid-cols-1 lg:grid-cols-12 gap-4",
-						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "lg:col-span-8 panel-3d-sky rounded-2xl p-4 space-y-3.5",
+					activeTab === "scanner" && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: isScannerFullscreen ? "fixed inset-0 z-40 bg-slate-950/98 overflow-y-auto p-2.5 sm:p-4 safe-area-main" : "",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "max-w-7xl mx-auto space-y-3.5",
 							children: [
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex flex-wrap items-center justify-between gap-2.5",
+									className: "bg-gradient-to-r from-slate-900 via-blue-950 to-emerald-950 border-2 border-emerald-400 rounded-2xl p-3 sm:p-4 text-white shadow-xl flex flex-wrap items-center justify-between gap-3",
 									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex items-center gap-2",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "w-3 h-3 rounded-full bg-emerald-500 animate-ping" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h2", {
-											className: "text-sm sm:text-base font-black uppercase tracking-wider text-slate-900",
-											children: [
-												"Camera OMR — ",
-												currentTpl.shortName,
-												" (",
-												selectedSubject,
-												" • Lớp ",
-												activeClassGroup?.className,
-												")"
-											]
+										className: "flex items-center gap-3 flex-wrap",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-400 flex items-center gap-2",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "text-xs sm:text-sm font-black uppercase tracking-wider text-emerald-300",
+												children: "CHẾ ĐỘ CHẤM FULL MÀN HÌNH • CHỈ QUÉT 4 NEO CỐ ĐỊNH"
+											})]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center gap-1.5 flex-wrap",
+											children: [[
+												{
+													key: "tl",
+													label: "NEO 1 (Trái-Trên)",
+													locked: anchorLockState.tl
+												},
+												{
+													key: "tr",
+													label: "NEO 2 (Phải-Trên)",
+													locked: anchorLockState.tr
+												},
+												{
+													key: "bl",
+													label: "NEO 3 (Trái-Dưới)",
+													locked: anchorLockState.bl
+												},
+												{
+													key: "br",
+													label: "NEO 4 (Phải-Dưới)",
+													locked: anchorLockState.br
+												}
+											].map((anchor) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+												className: `px-2.5 py-1 rounded-lg text-[11px] font-mono font-black border transition-all ${anchor.locked ? "bg-emerald-500 text-slate-950 border-emerald-200 shadow-sm" : "bg-slate-800/90 text-slate-400 border-slate-700"}`,
+												children: [anchor.locked ? "✓ " : "○ ", anchor.label]
+											}, anchor.key)), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+												className: "px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 font-mono font-black text-xs",
+												children: [anchorLockState.count, "/4 NEO"]
+											})]
 										})]
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 										className: "flex items-center gap-2 flex-wrap",
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-												onClick: () => setAutoTriggerOmr((v) => !v),
-												className: `btn-3d px-3 py-1.5 rounded-xl text-xs font-black ${autoTriggerOmr ? "btn-3d-emerald text-white" : "btn-3d-white text-slate-700"}`,
-												children: ["Tự động chụp: ", autoTriggerOmr ? "BẬT" : "TẮT"]
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-												onClick: () => setShowGridOverlay((v) => !v),
-												className: `btn-3d px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 ${showGridOverlay ? "btn-3d-blue text-white" : "btn-3d-white text-slate-700"}`,
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Eye, { className: "w-4 h-4" }), "Lưới tọa độ"]
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-												onClick: () => setShowCalibration((v) => !v),
-												className: `btn-3d px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 ${showCalibration ? "btn-3d-amber text-white" : "btn-3d-white text-slate-700"}`,
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SlidersVertical, { className: "w-4 h-4" }), "Tinh chỉnh"]
-											})
-										]
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											onClick: () => setShowGuideModal(true),
+											className: "btn-3d btn-3d-amber px-3 py-2 rounded-xl text-white font-black text-xs flex items-center gap-1.5",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleQuestionMark, { className: "w-4 h-4" }), "Hướng Dẫn Mới Nhất"]
+										}), isScannerFullscreen ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											onClick: exitScannerFullscreenMode,
+											className: "btn-3d btn-3d-rose px-3.5 py-2 rounded-xl text-white font-black text-xs flex items-center gap-1.5",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Minimize2, { className: "w-4 h-4" }), "Thu Nhỏ / Thoát Full Màn Hình"]
+										}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											onClick: () => enterScannerFullscreenMode(true),
+											className: "btn-3d btn-3d-emerald px-3.5 py-2 rounded-xl text-white font-black text-xs flex items-center gap-1.5",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Maximize2, { className: "w-4 h-4" }), "Bật Full Màn Hình"]
+										})]
 									})]
 								}),
-								showCalibration && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-xl bg-white border-2 border-amber-300 text-xs",
-									children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex justify-between text-slate-700 font-extrabold mb-1",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Ngưỡng đậm chì:" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-												className: "font-mono text-amber-700",
-												children: [Math.round(omrSettings.fillThreshold * 100), "%"]
-											})]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-											type: "range",
-											min: .2,
-											max: .55,
-											step: .01,
-											value: omrSettings.fillThreshold,
-											onChange: (e) => setOmrSettings((s) => ({
-												...s,
-												fillThreshold: Number(e.target.value)
-											})),
-											className: "w-full accent-amber-500"
-										})] }),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex justify-between text-slate-700 font-extrabold mb-1",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Dịch ngang (X):" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-												className: "font-mono text-amber-700",
-												children: [omrSettings.offsetX, "px"]
-											})]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-											type: "range",
-											min: -15,
-											max: 15,
-											step: .5,
-											value: omrSettings.offsetX,
-											onChange: (e) => setOmrSettings((s) => ({
-												...s,
-												offsetX: Number(e.target.value)
-											})),
-											className: "w-full accent-amber-500"
-										})] }),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex justify-between text-slate-700 font-extrabold mb-1",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Dịch dọc (Y):" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-												className: "font-mono text-amber-700",
-												children: [omrSettings.offsetY, "px"]
-											})]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-											type: "range",
-											min: -15,
-											max: 15,
-											step: .5,
-											value: omrSettings.offsetY,
-											onChange: (e) => setOmrSettings((s) => ({
-												...s,
-												offsetY: Number(e.target.value)
-											})),
-											className: "w-full accent-amber-500"
-										})] }),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex justify-between text-slate-700 font-extrabold mb-1",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Bán kính ô (R):" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-												className: "font-mono text-amber-700",
-												children: [Math.round(omrSettings.radiusScale * 100), "%"]
-											})]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-											type: "range",
-											min: .75,
-											max: 1.25,
-											step: .02,
-											value: omrSettings.radiusScale,
-											onChange: (e) => setOmrSettings((s) => ({
-												...s,
-												radiusScale: Number(e.target.value)
-											})),
-											className: "w-full accent-amber-500"
-										})] })
-									]
+								missingExamCodeAlert && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "bg-rose-600 border-4 border-amber-300 rounded-2xl p-4 text-white shadow-2xl flex flex-wrap items-center justify-between gap-3 animate-pulse",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex items-center gap-3",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "w-12 h-12 rounded-2xl bg-white text-rose-600 flex items-center justify-center shrink-0 shadow-md",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(TriangleAlert, { className: "w-7 h-7" })
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "text-sm sm:text-base font-black uppercase tracking-wide text-amber-200",
+											children: "⚠️ BÁO LỖI TỪ CHỐI CHẤM BÀI — HỌC SINH KHÔNG TÔ MÃ ĐỀ!"
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+											className: "text-xs sm:text-sm font-bold text-white mt-0.5",
+											children: missingExamCodeAlert
+										})] })]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										onClick: () => setMissingExamCodeAlert(null),
+										className: "btn-3d btn-3d-white px-4 py-2 rounded-xl text-rose-700 font-black text-xs sm:text-sm",
+										children: "Đã Hiểu & Quét Phiếu Tiếp Theo"
+									})]
 								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "relative rounded-2xl overflow-hidden border-2 border-sky-400 bg-slate-900 aspect-[1024/550] flex items-center justify-center",
-									children: isOmrCameraOpen ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("video", {
-											ref: omrVideoRef,
-											className: "w-full h-full object-cover",
-											autoPlay: true,
-											playsInline: true,
-											muted: true
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("canvas", {
-											ref: omrOverlayCanvasRef,
-											className: "absolute inset-0 w-full h-full pointer-events-none"
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "absolute top-3 right-3 flex items-center gap-2",
-											children: [torchSupported && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-												onClick: handleToggleCameraTorch,
-												className: `btn-3d px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg ${torchEnabled ? "btn-3d-amber text-white ring-2 ring-yellow-300" : "btn-3d-white text-slate-900"}`,
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Zap, { className: "w-4 h-4" }), torchEnabled ? "Tắt Flash (Torch)" : "Bật Flash (Torch)"]
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-												onClick: () => setIsOmrCameraOpen(false),
-												className: "btn-3d btn-3d-rose px-3 py-2 rounded-xl text-xs font-black text-white shadow-lg flex items-center gap-1",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "w-4 h-4" }), "Đóng Camera"]
+								instantScoreBanner && !missingExamCodeAlert && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "bg-gradient-to-r from-emerald-600 via-teal-600 to-blue-700 border-2 border-emerald-300 rounded-2xl p-3.5 sm:p-4 text-white shadow-xl flex flex-wrap items-center justify-between gap-3",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex items-center gap-3.5",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "px-4 py-2 rounded-2xl bg-white text-emerald-700 text-center shadow-lg",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "text-[10px] font-black uppercase tracking-wider",
+												children: "ĐIỂM BÀI CHẤM"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "text-2xl sm:text-3xl font-black font-mono tabular-nums",
+												children: instantScoreBanner.totalScore.toFixed(2)
 											})]
-										}),
-										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "absolute bottom-3 inset-x-3 flex flex-wrap items-center justify-between gap-2",
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center gap-2 flex-wrap",
 											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "px-3 py-1.5 rounded-lg bg-slate-950/85 border border-slate-700 text-xs font-mono text-emerald-400",
-												children: "Canh 4 ô vuông đen ở 4 góc tờ phiếu vào khung xanh"
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "flex items-center gap-2",
-												children: [torchSupported && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-													onClick: handleToggleCameraTorch,
-													className: `btn-3d px-3.5 py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-lg flex items-center gap-1.5 ${torchEnabled ? "btn-3d-amber text-white" : "btn-3d-white text-slate-900"}`,
-													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Zap, { className: "w-4 h-4" }), "Bật/Tắt Flash"]
-												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-													onClick: handleManualCaptureFromVideo,
-													className: "btn-3d btn-3d-emerald px-5 py-2.5 rounded-xl text-white font-black text-sm shadow-lg",
-													children: "Chụp & Chấm Ngay (Base64 JPEG)"
-												})]
-											})]
-										})
-									] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "relative w-full h-full flex flex-col items-center justify-center p-4 text-center",
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
-												src: currentTpl.imageUrl,
-												alt: currentTpl.name,
-												className: "absolute inset-0 w-full h-full object-contain opacity-25 pointer-events-none"
-											}),
-											showGridOverlay && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(TemplateCoordinatePreviewOverlay, {
-												templateId: selectedTemplate,
-												settings: omrSettings
-											}),
-											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "relative z-10 max-w-lg space-y-3.5 bg-white/95 backdrop-blur-md p-5 rounded-2xl border-2 border-sky-300 shadow-xl",
+												className: "px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 text-xs font-black",
+												children: "✓ ĐÃ KHỚP 4/4 NEO CỐ ĐỊNH — TỰ ĐỘNG CHẤM"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+												className: "text-sm sm:text-base font-black",
 												children: [
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-														className: "w-12 h-12 rounded-2xl bg-blue-100 border-2 border-blue-300 flex items-center justify-center mx-auto text-blue-700",
-														children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "w-6 h-6" })
-													}),
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
-														className: "text-base sm:text-lg font-black text-slate-900",
-														children: "Bật Camera Quét Phiếu Hoặc Chấm Mô Phỏng 1 Chạm"
-													}),
-													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-														className: "text-xs sm:text-sm font-semibold text-slate-600 leading-relaxed",
+													instantScoreBanner.studentName,
+													" (",
+													instantScoreBanner.className,
+													")"
+												]
+											})]
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "text-xs sm:text-sm font-mono font-bold text-emerald-100 mt-1",
+											children: [
+												"SBD (Khóa Read-Only): ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: instantScoreBanner.sbd }),
+												" • Mã đề: ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: instantScoreBanner.examCode }),
+												" • P1: ",
+												instantScoreBanner.p1Score,
+												"đ | P2: ",
+												instantScoreBanner.p2Score,
+												"đ | P3: ",
+												instantScoreBanner.p3Score,
+												"đ"
+											]
+										})] })]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "flex items-center gap-2",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											onClick: () => setActiveTab("results"),
+											className: "btn-3d btn-3d-white px-3.5 py-2 rounded-xl text-slate-900 font-black text-xs",
+											children: "Xem Danh Sách Lớp"
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											onClick: () => setInstantScoreBanner(null),
+											className: "p-2 rounded-xl bg-white/20 hover:bg-white/30 text-white",
+											children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "w-4 h-4" })
+										})]
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "grid grid-cols-1 lg:grid-cols-12 gap-4",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "lg:col-span-8 panel-3d-sky rounded-2xl p-4 space-y-3.5",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "flex flex-wrap items-center justify-between gap-2.5",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "flex items-center gap-2",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "w-3 h-3 rounded-full bg-emerald-500 animate-ping" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h2", {
+														className: "text-sm sm:text-base font-black uppercase tracking-wider text-slate-900",
 														children: [
-															"Hệ thống tự động nhận diện 2 chữ số đầu của SBD (ví dụ",
-															" ",
-															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-																className: "text-blue-700",
-																children: activeClassGroup?.sbdPrefix || "01"
-															}),
-															" = Lớp",
-															" ",
-															/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", {
-																className: "text-blue-700",
-																children: activeClassGroup?.className || "12A1"
-															}),
-															") và số thứ tự học sinh để xuất thẳng điểm vào Danh Sách Lớp."
+															"Camera OMR 4 Neo Cố Định — ",
+															currentTpl.shortName,
+															" (",
+															selectedSubject,
+															" • Lớp ",
+															activeClassGroup?.className,
+															")"
 														]
+													})]
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "flex items-center gap-2 flex-wrap",
+													children: [
+														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+															onClick: () => setAutoTriggerOmr((v) => !v),
+															className: `btn-3d px-3 py-1.5 rounded-xl text-xs font-black ${autoTriggerOmr ? "btn-3d-emerald text-white" : "btn-3d-white text-slate-700"}`,
+															children: ["Đủ 4 neo tự chấm: ", autoTriggerOmr ? "BẬT" : "TẮT"]
+														}),
+														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+															onClick: () => setShowGridOverlay((v) => !v),
+															className: `btn-3d px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 ${showGridOverlay ? "btn-3d-blue text-white" : "btn-3d-white text-slate-700"}`,
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Eye, { className: "w-4 h-4" }), "Lưới tọa độ"]
+														}),
+														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+															onClick: () => setShowCalibration((v) => !v),
+															className: `btn-3d px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 ${showCalibration ? "btn-3d-amber text-white" : "btn-3d-white text-slate-700"}`,
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SlidersVertical, { className: "w-4 h-4" }), "Tinh chỉnh"]
+														})
+													]
+												})]
+											}),
+											showCalibration && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-xl bg-white border-2 border-amber-300 text-xs",
+												children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "flex justify-between text-slate-700 font-extrabold mb-1",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Ngưỡng đậm chì:" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+															className: "font-mono text-amber-700",
+															children: [Math.round(omrSettings.fillThreshold * 100), "%"]
+														})]
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+														type: "range",
+														min: .2,
+														max: .55,
+														step: .01,
+														value: omrSettings.fillThreshold,
+														onChange: (e) => setOmrSettings((s) => ({
+															...s,
+															fillThreshold: Number(e.target.value)
+														})),
+														className: "w-full accent-amber-500"
+													})] }),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "flex justify-between text-slate-700 font-extrabold mb-1",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Dịch ngang (X):" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+															className: "font-mono text-amber-700",
+															children: [omrSettings.offsetX, "px"]
+														})]
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+														type: "range",
+														min: -15,
+														max: 15,
+														step: .5,
+														value: omrSettings.offsetX,
+														onChange: (e) => setOmrSettings((s) => ({
+															...s,
+															offsetX: Number(e.target.value)
+														})),
+														className: "w-full accent-amber-500"
+													})] }),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "flex justify-between text-slate-700 font-extrabold mb-1",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Dịch dọc (Y):" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+															className: "font-mono text-amber-700",
+															children: [omrSettings.offsetY, "px"]
+														})]
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+														type: "range",
+														min: -15,
+														max: 15,
+														step: .5,
+														value: omrSettings.offsetY,
+														onChange: (e) => setOmrSettings((s) => ({
+															...s,
+															offsetY: Number(e.target.value)
+														})),
+														className: "w-full accent-amber-500"
+													})] }),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "flex justify-between text-slate-700 font-extrabold mb-1",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Bán kính ô (R):" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+															className: "font-mono text-amber-700",
+															children: [Math.round(omrSettings.radiusScale * 100), "%"]
+														})]
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+														type: "range",
+														min: .75,
+														max: 1.25,
+														step: .02,
+														value: omrSettings.radiusScale,
+														onChange: (e) => setOmrSettings((s) => ({
+															...s,
+															radiusScale: Number(e.target.value)
+														})),
+														className: "w-full accent-amber-500"
+													})] })
+												]
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "relative rounded-2xl overflow-hidden border-2 border-sky-400 bg-slate-900 aspect-[1024/550] flex items-center justify-center",
+												children: isOmrCameraOpen ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("video", {
+														ref: omrVideoRef,
+														className: "w-full h-full object-cover",
+														autoPlay: true,
+														playsInline: true,
+														muted: true
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("canvas", {
+														ref: omrOverlayCanvasRef,
+														className: "absolute inset-0 w-full h-full pointer-events-none"
 													}),
 													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-														className: "flex flex-wrap items-center justify-center gap-3 pt-1",
-														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-															onClick: () => setIsOmrCameraOpen(true),
-															className: "btn-3d btn-3d-emerald px-5 py-3 rounded-xl text-white font-black text-sm flex items-center gap-2",
-															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "w-5 h-5" }), "Mở Camera Chấm Bài"]
-														}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-															className: "btn-3d btn-3d-blue px-4 py-3 rounded-xl text-white font-black text-sm flex items-center gap-2 cursor-pointer",
+														className: "absolute top-3 right-3 flex items-center gap-2",
+														children: [torchSupported && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+															onClick: handleToggleCameraTorch,
+															className: `btn-3d px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg ${torchEnabled ? "btn-3d-amber text-white ring-2 ring-yellow-300" : "btn-3d-white text-slate-900"}`,
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Zap, { className: "w-4 h-4" }), torchEnabled ? "Tắt Flash (Torch)" : "Bật Flash (Torch)"]
+														}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+															onClick: () => setIsOmrCameraOpen(false),
+															className: "btn-3d btn-3d-rose px-3 py-2 rounded-xl text-xs font-black text-white shadow-lg flex items-center gap-1",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "w-4 h-4" }), "Đóng Camera"]
+														})]
+													}),
+													/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "absolute bottom-3 inset-x-3 flex flex-wrap items-center justify-between gap-2",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+															className: "px-3 py-1.5 rounded-lg bg-slate-950/90 border border-emerald-500/60 text-xs font-mono text-emerald-300",
 															children: [
-																/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Upload, { className: "w-5 h-5" }),
-																"Tải Ảnh Phiếu Đã Chụp",
-																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-																	type: "file",
-																	accept: "image/*",
-																	className: "hidden",
-																	onChange: (e) => {
-																		const f = e.target.files?.[0];
-																		if (f) handleGradeUploadedSheetImage(f);
-																		e.target.value = "";
-																	}
-																})
+																"Chỉ quét vùng trong 4 Neo Cố Định (",
+																anchorLockState.count,
+																"/4) — Nhận đủ 4 neo tự động chấm & hiện điểm"
 															]
+														}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+															className: "flex items-center gap-2",
+															children: [torchSupported && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+																onClick: handleToggleCameraTorch,
+																className: `btn-3d px-3.5 py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-lg flex items-center gap-1.5 ${torchEnabled ? "btn-3d-amber text-white" : "btn-3d-white text-slate-900"}`,
+																children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Zap, { className: "w-4 h-4" }), "Bật/Tắt Flash"]
+															}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+																onClick: handleManualCaptureFromVideo,
+																className: "btn-3d btn-3d-emerald px-5 py-2.5 rounded-xl text-white font-black text-sm shadow-lg",
+																children: "Chụp & Chấm Theo 4 Neo"
+															})]
 														})]
 													})
-												]
+												] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "relative w-full h-full flex flex-col items-center justify-center p-4 text-center",
+													children: [
+														/* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
+															src: currentTpl.imageUrl,
+															alt: currentTpl.name,
+															className: "absolute inset-0 w-full h-full object-contain opacity-25 pointer-events-none"
+														}),
+														showGridOverlay && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(TemplateCoordinatePreviewOverlay, {
+															templateId: selectedTemplate,
+															settings: omrSettings
+														}),
+														/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+															className: "relative z-10 max-w-lg space-y-3.5 bg-white/95 backdrop-blur-md p-5 rounded-2xl border-2 border-sky-300 shadow-xl",
+															children: [
+																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+																	className: "w-12 h-12 rounded-2xl bg-blue-100 border-2 border-blue-300 flex items-center justify-center mx-auto text-blue-700",
+																	children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "w-6 h-6" })
+																}),
+																/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+																	className: "text-base sm:text-lg font-black text-slate-900",
+																	children: "Quét Bảng Trả Lời Theo 4 Neo Cố Định (Full Màn Hình)"
+																}),
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+																	className: "text-xs sm:text-sm font-semibold text-slate-600 leading-relaxed",
+																	children: [
+																		"Hệ thống ",
+																		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "chỉ quét vùng bảng trả lời trong 4 neo cố định" }),
+																		", tự động chấm và hiện điểm ngay khi nhận đủ 4 neo, ",
+																		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "báo lỗi và không chấm khi không tô Mã đề" }),
+																		", đồng thời khóa bảo mật SBD & đáp án."
+																	]
+																}),
+																/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+																	className: "flex flex-wrap items-center justify-center gap-3 pt-1",
+																	children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+																		onClick: () => enterScannerFullscreenMode(true),
+																		className: "btn-3d btn-3d-emerald px-5 py-3 rounded-xl text-white font-black text-sm flex items-center gap-2",
+																		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Maximize2, { className: "w-5 h-5" }), "Mở Camera Chấm Bài (Full Màn Hình)"]
+																	}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+																		className: "btn-3d btn-3d-blue px-4 py-3 rounded-xl text-white font-black text-sm flex items-center gap-2 cursor-pointer",
+																		children: [
+																			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Upload, { className: "w-5 h-5" }),
+																			"Tải Ảnh Phiếu Đã Chụp",
+																			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+																				type: "file",
+																				accept: "image/*",
+																				className: "hidden",
+																				onChange: (e) => {
+																					const f = e.target.files?.[0];
+																					if (f) handleGradeUploadedSheetImage(f);
+																					e.target.value = "";
+																				}
+																			})
+																		]
+																	})]
+																})
+															]
+														})
+													]
+												})
 											})
 										]
-									})
-								})
-							]
-						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "lg:col-span-4 space-y-4",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "panel-3d-emerald rounded-2xl p-4 sm:p-5 space-y-3.5",
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "flex items-center justify-between border-b-2 border-emerald-200 pb-2",
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "lg:col-span-4 space-y-4",
 										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex items-center gap-2",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(WandSparkles, { className: "w-5 h-5 text-emerald-600" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
-												className: "text-sm font-black uppercase tracking-wider text-emerald-950",
-												children: "Mô Phỏng Chấm Thử"
-											})]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-											className: "text-xs font-mono font-black px-2 py-0.5 rounded-md bg-emerald-200/80 text-emerald-950",
+											className: "panel-3d-emerald rounded-2xl p-4 sm:p-5 space-y-3.5",
 											children: [
-												"Lớp ",
-												activeClassGroup?.className,
-												" (Mã ",
-												activeClassGroup?.sbdPrefix,
-												")"
-											]
-										})]
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
-										className: "text-xs sm:text-sm text-slate-700 font-semibold",
-										children: [
-											"Tạo tờ phiếu",
-											" ",
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-												className: "text-slate-950 font-black",
-												children: currentTpl.shortName
-											}),
-											" đã tô chì thực tế với SBD thuộc lớp đang chọn để kiểm tra tốc độ chấm & tự động điền điểm vào Danh Sách Lớp:"
-										]
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "grid grid-cols-2 gap-2.5",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-											className: "block text-xs text-slate-700 font-black uppercase mb-1",
-											children: "SBD (2 số đầu = Lớp)"
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-											type: "text",
-											maxLength: 8,
-											value: simSbd,
-											onChange: (e) => setSimSbd(e.target.value),
-											className: "w-full bg-white border-2 border-emerald-400 rounded-xl px-3 py-2 font-mono font-black text-sm text-slate-900"
-										})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-											className: "block text-xs text-slate-700 font-black uppercase mb-1",
-											children: [
-												"Mã đề (",
-												currentTpl.maDeDigits,
-												" số)"
-											]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
-											value: simExamCode,
-											onChange: (e) => setSimExamCode(e.target.value),
-											className: "w-full bg-white border-2 border-emerald-400 rounded-xl px-3 py-2 font-mono font-black text-sm text-slate-900",
-											children: Object.keys(answerKeys).map((c) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-												value: c,
-												children: ["Mã đề ", c]
-											}, c))
-										})] })]
-									}),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "grid grid-cols-2 gap-2.5 pt-1",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-											onClick: () => handleRunSimulatedSheet(.9),
-											className: "btn-3d btn-3d-emerald py-3 px-3 rounded-xl text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Zap, { className: "w-4 h-4 shrink-0" }), "Chấm Thử Khá/Giỏi"]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-											onClick: () => handleRunSimulatedSheet(1),
-											className: "btn-3d btn-3d-blue py-3 px-3 rounded-xl text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5",
-											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Award, { className: "w-4 h-4 shrink-0" }), "Chấm Thử Điểm 10"]
-										})]
-									})
-								]
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "panel-3d-violet rounded-2xl p-4 sm:p-5 space-y-3",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-center justify-between border-b-2 border-violet-200 pb-2",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", {
-										className: "text-sm font-black uppercase tracking-wider text-violet-950",
-										children: [
-											"Các Phiếu Vừa Quét (",
-											gradedRecords.length,
-											")"
-										]
-									}), gradedRecords.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-										onClick: () => setActiveTab("results"),
-										className: "text-xs text-violet-700 hover:text-violet-950 font-black underline",
-										children: "Xem sổ điểm lớp →"
-									})]
-								}), gradedRecords.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
-									className: "text-sm text-slate-500 font-semibold py-5 text-center",
-									children: "Chưa có bài chấm nào trong phiên này."
-								}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "space-y-2.5 max-h-64 overflow-y-auto pr-1",
-									children: gradedRecords.slice(0, 6).map((rec) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										onClick: () => setActiveHudRecord(rec),
-										className: "w-full text-left bg-white hover:bg-violet-50/70 border-2 border-violet-200 rounded-xl p-3 flex items-center justify-between transition-all cursor-pointer shadow-2xs",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "text-sm font-black text-slate-900 font-mono",
-											children: [
-												"SBD: ",
-												rec.sbd,
-												" ",
-												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-													className: "text-violet-700",
-													children: ["• Mã: ", rec.examCode]
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "flex items-center justify-between border-b-2 border-emerald-200 pb-2",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "flex items-center gap-2",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(WandSparkles, { className: "w-5 h-5 text-emerald-600" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+															className: "text-sm font-black uppercase tracking-wider text-emerald-950",
+															children: "Mô Phỏng Quét 4 Neo & Kiểm Thử Quy Tắc"
+														})]
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+														className: "text-xs font-mono font-black px-2 py-0.5 rounded-md bg-emerald-200/80 text-emerald-950",
+														children: [
+															"Lớp ",
+															activeClassGroup?.className,
+															" (Mã ",
+															activeClassGroup?.sbdPrefix,
+															")"
+														]
+													})]
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+													className: "text-xs sm:text-sm text-slate-700 font-semibold",
+													children: "Kiểm tra tức thì quy trình nhận đủ 4 neo cố định tự động chấm, báo lỗi khi không tô Mã đề, và xuất phiếu thiếu/ngoài SBD xuống cuối danh sách lớp:"
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "grid grid-cols-2 gap-2.5",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+														className: "block text-xs text-slate-700 font-black uppercase mb-1",
+														children: "SBD (2 số đầu = Lớp)"
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
+														type: "text",
+														maxLength: 8,
+														value: simSbd,
+														onChange: (e) => setSimSbd(e.target.value),
+														className: "w-full bg-white border-2 border-emerald-400 rounded-xl px-3 py-2 font-mono font-black text-sm text-slate-900"
+													})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
+														className: "block text-xs text-slate-700 font-black uppercase mb-1",
+														children: [
+															"Mã đề (",
+															currentTpl.maDeDigits,
+															" số)"
+														]
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
+														value: simExamCode,
+														onChange: (e) => setSimExamCode(e.target.value),
+														className: "w-full bg-white border-2 border-emerald-400 rounded-xl px-3 py-2 font-mono font-black text-sm text-slate-900",
+														children: Object.keys(answerKeys).map((c) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+															value: c,
+															children: ["Mã đề ", c]
+														}, c))
+													})] })]
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "grid grid-cols-2 gap-2.5 pt-1",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														onClick: () => handleRunSimulatedSheet(.9),
+														className: "btn-3d btn-3d-emerald py-2.5 px-3 rounded-xl text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Zap, { className: "w-4 h-4 shrink-0" }), "Đủ 4 Neo: Khá/Giỏi"]
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														onClick: () => handleRunSimulatedSheet(1),
+														className: "btn-3d btn-3d-blue py-2.5 px-3 rounded-xl text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Award, { className: "w-4 h-4 shrink-0" }), "Đủ 4 Neo: Điểm 10"]
+													})]
+												}),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													className: "grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-emerald-200",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														onClick: () => handleRunSimulatedSheet(.9, { skipExamCode: true }),
+														className: "btn-3d btn-3d-rose py-2 px-2.5 rounded-xl text-white font-black text-xs flex items-center justify-center gap-1.5",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(TriangleAlert, { className: "w-4 h-4 shrink-0" }), "Test Lỗi Không Tô Mã Đề"]
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+														onClick: () => handleRunSimulatedSheet(.9, { skipSbd: true }),
+														className: "btn-3d btn-3d-amber py-2 px-2.5 rounded-xl text-white font-black text-xs flex items-center justify-center gap-1.5",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Users, { className: "w-4 h-4 shrink-0" }), "Test SBD Xuất Cuối DS Lớp"]
+													})]
 												})
 											]
-										}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-											className: "text-xs font-bold text-slate-600 mt-0.5",
-											children: rec.studentName ? `${rec.studentName} (${rec.className})` : `Lớp ${rec.className || "--"} • STT ${rec.sbdStudentOrder ?? "--"}`
-										})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "flex items-center gap-2.5",
+										}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "panel-3d-violet rounded-2xl p-4 sm:p-5 space-y-3",
 											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-												className: "text-right",
-												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-													className: "text-lg font-black font-mono text-emerald-600 tabular-nums",
-													children: rec.totalScore.toFixed(2)
-												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-													className: "text-[11px] font-bold text-slate-500",
-													children: "điểm"
+												className: "flex items-center justify-between border-b-2 border-violet-200 pb-2",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h3", {
+													className: "text-sm font-black uppercase tracking-wider text-violet-950",
+													children: [
+														"Các Phiếu Vừa Quét (",
+														gradedRecords.length,
+														")"
+													]
+												}), gradedRecords.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+													onClick: () => {
+														setIsScannerFullscreen(false);
+														setActiveTab("results");
+													},
+													className: "text-xs text-violet-700 hover:text-violet-950 font-black underline",
+													children: "Xem sổ điểm lớp →"
 												})]
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-												onClick: (e) => {
-													e.stopPropagation();
-													handleSaveEvidenceSheet(rec, false);
-												},
-												title: "Tải ảnh minh chứng bài chấm",
-												className: "btn-3d btn-3d-white p-2 rounded-lg text-slate-800",
-												children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "w-4 h-4" })
+											}), gradedRecords.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+												className: "text-sm text-slate-500 font-semibold py-5 text-center",
+												children: "Chưa có bài chấm nào trong phiên này."
+											}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: "space-y-2.5 max-h-64 overflow-y-auto pr-1",
+												children: gradedRecords.slice(0, 6).map((rec) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+													onClick: () => setActiveHudRecord(rec),
+													className: "w-full text-left bg-white hover:bg-violet-50/70 border-2 border-violet-200 rounded-xl p-3 flex items-center justify-between transition-all cursor-pointer shadow-2xs",
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "text-sm font-black text-slate-900 font-mono flex items-center gap-1.5",
+														children: [
+															/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Lock, { className: "w-3.5 h-3.5 text-slate-500" }),
+															"SBD: ",
+															rec.sbd,
+															" ",
+															/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+																className: "text-violet-700",
+																children: ["• Mã: ", rec.examCode]
+															})
+														]
+													}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+														className: "text-xs font-bold text-slate-600 mt-0.5",
+														children: rec.studentName ? `${rec.studentName} (${rec.className})` : `Lớp ${rec.className || "--"} • STT ${rec.sbdStudentOrder ?? "--"}`
+													})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+														className: "flex items-center gap-2.5",
+														children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+															className: "text-right",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+																className: "text-lg font-black font-mono text-emerald-600 tabular-nums",
+																children: rec.totalScore.toFixed(2)
+															}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+																className: "text-[11px] font-bold text-slate-500",
+																children: "điểm"
+															})]
+														}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+															onClick: (e) => {
+																e.stopPropagation();
+																handleSaveEvidenceSheet(rec, false);
+															},
+															title: "Tải ảnh minh chứng bài chấm",
+															className: "btn-3d btn-3d-white p-2 rounded-lg text-slate-800",
+															children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "w-4 h-4" })
+														})]
+													})]
+												}, rec.id))
 											})]
 										})]
-									}, rec.id))
-								})]
-							})]
-						})]
+									})]
+								})
+							]
+						})
 					}),
 					activeTab === "results" && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "space-y-4",
@@ -53848,7 +54193,7 @@ function App() {
 											const expectedSbd = st.sbd || `${activeClassGroup.sbdPrefix}${String(st.stt).padStart(4, "0")}`;
 											const linkedRecord = gradedRecords.find((r) => r.id === st.recordId);
 											return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("tr", {
-												className: "hover:bg-sky-50/70 transition-colors",
+												className: `transition-colors ${st.isAppendedAtEnd ? "bg-amber-50/90 hover:bg-amber-100/80" : "hover:bg-sky-50/70"}`,
 												children: [
 													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 														className: "py-3 px-3.5 font-mono font-black text-slate-800",
@@ -53860,7 +54205,13 @@ function App() {
 													}),
 													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 														className: "py-3 px-3.5 font-bold text-slate-900",
-														children: st.fullName
+														children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+															className: "flex items-center gap-2 flex-wrap",
+															children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: st.fullName }), st.isAppendedAtEnd && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+																className: "px-2 py-0.5 rounded-md bg-amber-200 text-amber-950 text-[11px] font-black",
+																children: "Xuất cuối DS lớp (Không can thiệp SBD)"
+															})]
+														})
 													}),
 													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("td", {
 														className: "py-3 px-3.5 font-bold text-slate-600",
@@ -53903,14 +54254,14 @@ function App() {
 														}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 															onClick: () => {
 																setSimSbd(expectedSbd);
-																setActiveTab("scanner");
+																enterScannerFullscreenMode(true);
 															},
 															className: "btn-3d btn-3d-white px-3 py-1 rounded-lg text-xs font-black text-blue-700",
-															children: "Chấm ngay →"
+															children: "Chấm ngay (Full) →"
 														})
 													})
 												]
-											}, st.stt);
+											}, `${st.stt}-${st.recordId || "init"}`);
 										})
 									})]
 								})
@@ -54138,11 +54489,11 @@ function App() {
 												}),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h5", {
 													className: "text-sm font-black text-indigo-950",
-													children: "Thuật Toán OMR Nắn Phẳng Phối Cảnh 8-DOF"
+													children: "Chỉ Quét Bảng Trả Lời Theo 4 Neo Cố Định & Tự Chấm"
 												}),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 													className: "text-xs text-slate-700 font-medium",
-													children: "Bắt 4 góc định vị bằng Integral Image Adaptive Threshold, tự động nắn phẳng tờ phiếu bị nghiêng và đo mật độ chì chống bóng râm."
+													children: "Loại bỏ hoàn toàn mọi vật thể ngoài 4 neo cố định. Ngay khi nhận đủ 4/4 neo cố định, hệ thống tự động chấm và hiện điểm tức thì trên màn hình Fullscreen."
 												})
 											]
 										}),
@@ -54155,11 +54506,11 @@ function App() {
 												}),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h5", {
 													className: "text-sm font-black text-teal-950",
-													children: "Lưu Minh Chứng Bài Chấm & Chia Sẻ Lên Drive"
+													children: "Báo Lỗi Không Tô Mã Đề & Khóa Bảo Mật Kết Quả"
 												}),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 													className: "text-xs text-slate-700 font-medium",
-													children: "Đóng dấu thông tin học sinh, lớp, môn, kỳ kiểm tra và điểm số lên ảnh phiếu đã khoanh đáp án; tải về máy hoặc chia sẻ lên Google Drive điện thoại."
+													children: "Tự động phát cảnh báo lỗi và từ chối chấm khi phiếu không tô Mã đề. Khóa bảo mật SBD và các đáp án (không cho phép can thiệp chỉnh sửa)."
 												})
 											]
 										}),
@@ -54172,11 +54523,11 @@ function App() {
 												}),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h5", {
 													className: "text-sm font-black text-blue-950",
-													children: "Tương Thích Mọi Hệ Điều Hành & Tự Cập Nhật"
+													children: "Xuất Phiếu Thiếu/Ngoài SBD Vào Cuối Danh Sách Lớp"
 												}),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 													className: "text-xs text-slate-700 font-medium",
-													children: "Chạy mượt trên iOS Safari, Android Chrome, Windows, macOS, máy tính bảng và bảng tương tác thông minh mà không cần cài đặt."
+													children: "Các bài chấm thiếu SBD hoặc không khớp STT trong lớp được giữ nguyên hiện trạng và tự động xuất vào đoạn cuối của Danh Sách Lớp đó."
 												})
 											]
 										})
@@ -54187,7 +54538,12 @@ function App() {
 								className: "feature-3d-card feature-3d-amber rounded-2xl p-5 space-y-3",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("h4", {
 									className: "text-base sm:text-lg font-black uppercase tracking-wider text-amber-950 flex items-center gap-2",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(BookOpen, { className: "w-5 h-5 text-amber-600" }), "4. Quy Trình Hướng Dẫn Sử Dụng Chuẩn 5 Bước Cho Giáo Viên"]
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(BookOpen, { className: "w-5 h-5 text-amber-600" }),
+										"4. Quy Trình Hướng Dẫn Sử Dụng Chuẩn 5 Bước Mới Nhất (",
+										APP_VERSION,
+										")"
+									]
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "grid grid-cols-1 md:grid-cols-5 gap-3 text-xs sm:text-sm",
 									children: [
@@ -54200,8 +54556,8 @@ function App() {
 												className: "text-slate-700 font-medium",
 												children: [
 													"Chọn Môn học, Kỳ kiểm tra và Lớp học. Bấm ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Danh Sách Lớp" }),
-													" để dán tên học sinh và đặt 2 chữ số đầu của SBD cho lớp."
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Danh Sách Lớp (+ Thêm)" }),
+													" ngay trên đầu trang để nạp tên học sinh và đặt 2 chữ số đầu SBD."
 												]
 											})]
 										}),
@@ -54229,25 +54585,31 @@ function App() {
 											className: "bg-white rounded-xl p-3 border-2 border-amber-200",
 											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 												className: "font-black text-amber-800 mb-1",
-												children: "BƯỚC 4: Quét Chấm Bài"
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+												children: "BƯỚC 4: Chấm Full Màn Hình"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 												className: "text-slate-700 font-medium",
-												children: "Mở Camera hướng vào 4 ô vuông đen ở 4 góc tờ phiếu. Hệ thống tự chụp, chấm điểm và điền điểm vào đúng học sinh."
+												children: [
+													"Nhấn ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Chấm Bài" }),
+													" để vào ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Full Màn Hình" }),
+													". Chỉ quét vùng trong ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "4 neo cố định" }),
+													"; đủ 4 neo tự chấm & hiện điểm; báo lỗi nếu không tô Mã đề."
+												]
 											})]
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 											className: "bg-white rounded-xl p-3 border-2 border-amber-200",
 											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 												className: "font-black text-amber-800 mb-1",
-												children: "BƯỚC 5: Xuất Điểm & Lưu"
+												children: "BƯỚC 5: Bảo Mật & Xuất Lớp"
 											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 												className: "text-slate-700 font-medium",
 												children: [
-													"Bấm ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Xuất Điểm Excel (.XLSX)" }),
-													" để lấy bảng điểm lớp và tải ",
-													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Hồ Sơ Minh Chứng" }),
-													" để lưu trữ."
+													"SBD và đáp án được khóa không cho can thiệp; bài thiếu/ngoài SBD tự động xuất vào ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "đoạn cuối của Danh Sách Lớp đó" }),
+													"."
 												]
 											})]
 										})
@@ -54525,42 +54887,29 @@ function App() {
 									]
 								})]
 							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "flex items-center gap-3 flex-wrap text-xs sm:text-sm mt-1.5",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-									className: "font-bold flex items-center gap-1.5",
-									children: ["SBD:", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-										type: "text",
-										value: activeHudRecord.sbd,
-										onChange: (e) => {
-											const nextSbd = e.target.value;
-											const recalc = recalculateRecordScore({
-												...activeHudRecord,
-												sbd: nextSbd
-											}, answerKeys, currentScoring);
-											const synced = enrichAndSyncRecordWithRoster(recalc, gradingMode !== "verify");
-											setActiveHudRecord(synced);
-											setGradedRecords((prev) => prev.map((r) => r.id === synced.id ? synced : r));
-										},
-										className: "w-28 bg-white text-slate-900 rounded-lg px-2 py-0.5 font-mono font-black text-sm"
-									})]
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("label", {
-									className: "font-bold flex items-center gap-1.5",
-									children: ["Mã đề:", /* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-										type: "text",
-										value: activeHudRecord.examCode,
-										onChange: (e) => {
-											const nextCode = e.target.value;
-											const recalc = recalculateRecordScore({
-												...activeHudRecord,
-												examCode: nextCode
-											}, answerKeys, currentScoring);
-											const synced = enrichAndSyncRecordWithRoster(recalc, gradingMode !== "verify");
-											setActiveHudRecord(synced);
-											setGradedRecords((prev) => prev.map((r) => r.id === synced.id ? synced : r));
-										},
-										className: "w-20 bg-white text-slate-900 rounded-lg px-2 py-0.5 font-mono font-black text-sm"
-									})]
-								})]
+								className: "flex items-center gap-2.5 flex-wrap text-xs sm:text-sm mt-1.5",
+								children: [
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+										className: "px-2.5 py-1 rounded-lg bg-slate-900/40 border border-white/30 font-mono font-black flex items-center gap-1.5",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Lock, { className: "w-3.5 h-3.5 text-amber-300" }),
+											"SBD (Khóa): ",
+											activeHudRecord.sbd
+										]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+										className: "px-2.5 py-1 rounded-lg bg-slate-900/40 border border-white/30 font-mono font-black flex items-center gap-1.5",
+										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Lock, { className: "w-3.5 h-3.5 text-amber-300" }),
+											"Mã đề (Khóa): ",
+											activeHudRecord.examCode
+										]
+									}),
+									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 font-black text-xs",
+										children: "🔒 Đã khóa bảo mật (Không được quyền can thiệp SBD & Đáp án)"
+									})
+								]
 							})] })]
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 							className: "flex items-center gap-2 flex-wrap",
@@ -54588,7 +54937,7 @@ function App() {
 							className: "lg:col-span-7 space-y-2",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "text-xs sm:text-sm font-black text-slate-800 flex items-center justify-between",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Ảnh Phiếu Đã Nắn Phẳng & Khoanh Vùng Đáp Án:" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Ảnh Phiếu Đã Nắn Phẳng Theo 4 Neo Cố Định:" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 									className: "text-xs font-bold",
 									children: [
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
@@ -54619,47 +54968,36 @@ function App() {
 							className: "lg:col-span-5 space-y-3 text-xs sm:text-sm",
 							children: [
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "p-2.5 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-950 text-xs font-bold flex items-center gap-2",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Lock, { className: "w-4 h-4 text-amber-700 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [
+										"Số báo danh và toàn bộ đáp án quét từ phiếu được ",
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "khóa nguyên trạng (Read-Only)" }),
+										", không được quyền can thiệp chỉnh sửa. Nếu SBD thiếu hoặc ngoài danh sách, kết quả được tự động xuất vào ",
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "cuối danh sách lớp" }),
+										"."
+									] })]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "bg-blue-50 border-2 border-blue-200 rounded-xl p-3",
 									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 										className: "font-black text-blue-900 mb-2 flex items-center justify-between",
 										children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 											className: "flex items-center gap-1.5",
 											children: [
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)(PenLine, { className: "w-4 h-4 text-blue-600" }),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Lock, { className: "w-4 h-4 text-blue-600" }),
 												"Phần I (",
 												activeHudRecord.p1CorrectCount,
 												"/",
 												activeHudRecord.p1TotalCount,
 												" câu = ",
 												activeHudRecord.p1Score,
-												"đ)"
+												"đ) — Chỉ xem"
 											]
 										})
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 										className: "grid grid-cols-6 gap-1.5 max-h-44 overflow-y-auto pr-1",
-										children: activeHudRecord.p1Details.map((q, idx) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-											onClick: () => {
-												const order = [
-													"A",
-													"B",
-													"C",
-													"D",
-													""
-												];
-												const nextAns = order[(order.indexOf(q.studentAnswer) + 1) % order.length];
-												const nextP1 = activeHudRecord.p1Details.map((item, i) => i === idx ? {
-													...item,
-													studentAnswer: nextAns
-												} : item);
-												const recalc = recalculateRecordScore({
-													...activeHudRecord,
-													p1Details: nextP1
-												}, answerKeys, currentScoring);
-												const synced = enrichAndSyncRecordWithRoster(recalc, gradingMode !== "verify");
-												setActiveHudRecord(synced);
-												setGradedRecords((prev) => prev.map((r) => r.id === synced.id ? synced : r));
-											},
-											className: `p-1.5 rounded-lg border text-center font-mono transition-all ${q.isCorrect ? "bg-emerald-100 border-emerald-400 text-emerald-950 font-black" : "bg-rose-100 border-rose-400 text-rose-950 font-black"}`,
+										children: activeHudRecord.p1Details.map((q) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: `p-1.5 rounded-lg border text-center font-mono select-none ${q.isCorrect ? "bg-emerald-100 border-emerald-400 text-emerald-950 font-black" : "bg-rose-100 border-rose-400 text-rose-950 font-black"}`,
 											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 												className: "text-[10px] text-slate-600",
 												children: ["C.", q.qIndex]
@@ -54676,11 +55014,12 @@ function App() {
 								activeHudRecord.p2Details.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "bg-emerald-50 border-2 border-emerald-200 rounded-xl p-3",
 									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "font-black text-emerald-900 mb-2",
+										className: "font-black text-emerald-900 mb-2 flex items-center gap-1.5",
 										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Lock, { className: "w-4 h-4 text-emerald-600" }),
 											"Phần II — Đúng/Sai (",
 											activeHudRecord.p2Score,
-											"đ)"
+											"đ) — Chỉ xem"
 										]
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 										className: "grid grid-cols-2 gap-2",
@@ -54714,15 +55053,16 @@ function App() {
 								activeHudRecord.p3Details.length > 0 && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 									className: "bg-purple-50 border-2 border-purple-200 rounded-xl p-3",
 									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: "font-black text-purple-900 mb-2",
+										className: "font-black text-purple-900 mb-2 flex items-center gap-1.5",
 										children: [
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Lock, { className: "w-4 h-4 text-purple-600" }),
 											"Phần III — Trả lời ngắn (",
 											activeHudRecord.p3Score,
-											"đ)"
+											"đ) — Chỉ xem"
 										]
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 										className: "grid grid-cols-2 gap-2",
-										children: activeHudRecord.p3Details.map((q, idx) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										children: activeHudRecord.p3Details.map((q) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 											className: `p-2 rounded-lg border font-mono text-xs flex items-center justify-between ${q.isCorrect ? "bg-emerald-100 border-emerald-300 text-emerald-950" : "bg-rose-100 border-rose-300 text-rose-950"}`,
 											children: [
 												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
@@ -54733,24 +55073,9 @@ function App() {
 														":"
 													]
 												}),
-												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("input", {
-													type: "text",
-													value: q.studentString,
-													onChange: (e) => {
-														const nextStr = e.target.value;
-														const nextP3 = activeHudRecord.p3Details.map((item, i) => i === idx ? {
-															...item,
-															studentString: nextStr
-														} : item);
-														const recalc = recalculateRecordScore({
-															...activeHudRecord,
-															p3Details: nextP3
-														}, answerKeys, currentScoring);
-														const synced = enrichAndSyncRecordWithRoster(recalc, gradingMode !== "verify");
-														setActiveHudRecord(synced);
-														setGradedRecords((prev) => prev.map((r) => r.id === synced.id ? synced : r));
-													},
-													className: "w-16 bg-white border border-slate-300 rounded px-1.5 py-0.5 text-right font-black"
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+													className: "px-2 py-0.5 bg-white/80 border border-slate-300 rounded font-black",
+													children: q.studentString || "Trống"
 												}),
 												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 													className: "text-[11px] text-amber-800 font-bold",
@@ -55035,7 +55360,10 @@ function App() {
 					className: "max-w-3xl mx-auto grid grid-cols-5 gap-1.5 p-2",
 					children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-							onClick: () => setActiveTab("keys"),
+							onClick: () => {
+								setIsScannerFullscreen(false);
+								setActiveTab("keys");
+							},
 							className: `py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${activeTab === "keys" ? "btn-3d btn-3d-blue text-white" : "btn-3d btn-3d-white text-slate-700"}`,
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(QrCode, { className: "w-4 h-4 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "truncate",
@@ -55043,15 +55371,18 @@ function App() {
 							})]
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-							onClick: () => setActiveTab("scanner"),
+							onClick: () => enterScannerFullscreenMode(true),
 							className: `py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${activeTab === "scanner" ? "btn-3d btn-3d-emerald text-white" : "btn-3d btn-3d-white text-slate-700"}`,
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "w-4 h-4 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Maximize2, { className: "w-4 h-4 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "truncate",
 								children: "2. Chấm Bài"
 							})]
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-							onClick: () => setActiveTab("results"),
+							onClick: () => {
+								setIsScannerFullscreen(false);
+								setActiveTab("results");
+							},
 							className: `py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${activeTab === "results" ? "btn-3d btn-3d-violet text-white" : "btn-3d btn-3d-white text-slate-700"}`,
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileSpreadsheet, { className: "w-4 h-4 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 								className: "truncate",

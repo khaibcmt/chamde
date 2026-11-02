@@ -17,6 +17,13 @@ export interface Point2D {
 
 export interface DetectedCorners {
   found: boolean;
+  anchorCount: number;
+  locks: {
+    tl: boolean;
+    tr: boolean;
+    bl: boolean;
+    br: boolean;
+  };
   tl: Point2D;
   tr: Point2D;
   bl: Point2D;
@@ -264,40 +271,55 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
     }
   }
 
-  if (candidates.length < 4) {
-    return {
-      found: false,
-      tl: { x: width * 0.025, y: height * 0.069 },
-      tr: { x: width * 0.975, y: height * 0.069 },
-      bl: { x: width * 0.025, y: height * 0.931 },
-      br: { x: width * 0.975, y: height * 0.931 },
-    };
+  const defaultFallback: DetectedCorners = {
+    found: false,
+    anchorCount: 0,
+    locks: { tl: false, tr: false, bl: false, br: false },
+    tl: { x: width * 0.025, y: height * 0.069 },
+    tr: { x: width * 0.975, y: height * 0.069 },
+    bl: { x: width * 0.025, y: height * 0.931 },
+    br: { x: width * 0.975, y: height * 0.931 },
+  };
+
+  if (candidates.length === 0) {
+    return defaultFallback;
   }
 
   const maxArea = Math.max(...candidates.map((c) => c.area));
-  const largeCandidates = candidates.filter((c) => c.area >= maxArea * 0.32);
+  const largeCandidates = candidates.filter((c) => c.area >= maxArea * 0.28);
   const pool = largeCandidates.length >= 4 ? largeCandidates : candidates;
 
   const tlCand = pool
-    .filter((c) => c.cx < width * 0.45 && c.cy < height * 0.45)
+    .filter((c) => c.cx < width * 0.42 && c.cy < height * 0.42)
     .sort((a, b) => a.cx + a.cy - (b.cx + b.cy))[0];
   const trCand = pool
-    .filter((c) => c.cx > width * 0.55 && c.cy < height * 0.45)
+    .filter((c) => c.cx > width * 0.58 && c.cy < height * 0.42)
     .sort((a, b) => b.cx - b.cy - (a.cx - a.cy))[0];
   const blCand = pool
-    .filter((c) => c.cx < width * 0.45 && c.cy > height * 0.55)
+    .filter((c) => c.cx < width * 0.42 && c.cy > height * 0.58)
     .sort((a, b) => b.cy - b.cx - (a.cy - a.cx))[0];
   const brCand = pool
-    .filter((c) => c.cx > width * 0.55 && c.cy > height * 0.55)
+    .filter((c) => c.cx > width * 0.58 && c.cy > height * 0.58)
     .sort((a, b) => b.cx + b.cy - (a.cx + a.cy))[0];
+
+  const locks = {
+    tl: Boolean(tlCand),
+    tr: Boolean(trCand),
+    bl: Boolean(blCand),
+    br: Boolean(brCand),
+  };
+  const anchorCount =
+    (locks.tl ? 1 : 0) + (locks.tr ? 1 : 0) + (locks.bl ? 1 : 0) + (locks.br ? 1 : 0);
 
   if (!tlCand || !trCand || !blCand || !brCand) {
     return {
       found: false,
-      tl: { x: width * 0.025, y: height * 0.069 },
-      tr: { x: width * 0.975, y: height * 0.069 },
-      bl: { x: width * 0.025, y: height * 0.931 },
-      br: { x: width * 0.975, y: height * 0.931 },
+      anchorCount,
+      locks,
+      tl: tlCand ? { x: tlCand.cx, y: tlCand.cy } : defaultFallback.tl,
+      tr: trCand ? { x: trCand.cx, y: trCand.cy } : defaultFallback.tr,
+      bl: blCand ? { x: blCand.cx, y: blCand.cy } : defaultFallback.bl,
+      br: brCand ? { x: brCand.cx, y: brCand.cy } : defaultFallback.br,
     };
   }
 
@@ -306,14 +328,37 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
   const leftH = Math.hypot(blCand.cx - tlCand.cx, blCand.cy - tlCand.cy);
   const rightH = Math.hypot(brCand.cx - trCand.cx, brCand.cy - trCand.cy);
 
+  const avgW = (topW + botW) / 2;
+  const avgH = (leftH + rightH) / 2;
+  const widthRatio = topW / Math.max(1, botW);
+  const heightRatio = leftH / Math.max(1, rightH);
+  const quadAspect = avgW / Math.max(1, avgH);
+
+  // Kiểm tra kích thước đồng đều giữa 4 ô neo đen ở 4 góc để loại trừ vật thể lạ bên ngoài
+  const areas = [tlCand.area, trCand.area, blCand.area, brCand.area];
+  const minCornerArea = Math.min(...areas);
+  const maxCornerArea = Math.max(...areas);
+  const areaConsistency = minCornerArea / Math.max(1, maxCornerArea) >= 0.25;
+
   const isValidQuad =
-    topW > width * 0.4 &&
-    botW > width * 0.4 &&
+    topW > width * 0.42 &&
+    botW > width * 0.42 &&
     leftH > height * 0.35 &&
-    rightH > height * 0.35;
+    rightH > height * 0.35 &&
+    widthRatio >= 0.68 &&
+    widthRatio <= 1.45 &&
+    heightRatio >= 0.68 &&
+    heightRatio <= 1.45 &&
+    quadAspect >= 1.05 &&
+    quadAspect <= 2.65 &&
+    areaConsistency;
 
   return {
     found: isValidQuad,
+    anchorCount: isValidQuad ? 4 : anchorCount,
+    locks: isValidQuad
+      ? { tl: true, tr: true, bl: true, br: true }
+      : locks,
     tl: { x: tlCand.cx, y: tlCand.cy },
     tr: { x: trCand.cx, y: trCand.cy },
     bl: { x: blCand.cx, y: blCand.cy },
@@ -1010,7 +1055,8 @@ export async function generateSimulatedSheetCanvas(
   examCode: string,
   answerKey: AnswerKeyData,
   accuracyRate = 0.85,
-  scoringConfig?: CustomScoringConfig
+  scoringConfig?: CustomScoringConfig,
+  options?: { skipExamCode?: boolean; skipSbd?: boolean }
 ): Promise<HTMLCanvasElement> {
   const tpl = TEMPLATES[templateId];
   const cfg = scoringConfig || getDefaultScoringConfig(templateId);
@@ -1049,22 +1095,26 @@ export async function generateSimulatedSheetCanvas(
     ctx.restore();
   };
 
-  // Tô Mã Đề (3 hoặc 4 chữ số)
-  const maDeColsCount = map.maDe.length;
-  const cleanCode = examCode.padStart(maDeColsCount, '0').slice(-maDeColsCount);
-  for (let c = 0; c < maDeColsCount; c++) {
-    const d = Number(cleanCode[c]);
-    if (!Number.isNaN(d) && map.maDe[c]?.[d]) {
-      fillPencilBubble(map.maDe[c][d]);
+  // Tô Mã Đề (3 hoặc 4 chữ số) — Bỏ qua nếu đang test lỗi không tô Mã đề
+  if (!options?.skipExamCode && examCode.trim() !== '') {
+    const maDeColsCount = map.maDe.length;
+    const cleanCode = examCode.padStart(maDeColsCount, '0').slice(-maDeColsCount);
+    for (let c = 0; c < maDeColsCount; c++) {
+      const d = Number(cleanCode[c]);
+      if (!Number.isNaN(d) && map.maDe[c]?.[d]) {
+        fillPencilBubble(map.maDe[c][d]);
+      }
     }
   }
 
-  // Tô Số Báo Danh (6 hoặc 8 chữ số)
-  const cleanSbd = sbd.padStart(6, '0').slice(0, map.sbd.length);
-  for (let c = 0; c < cleanSbd.length; c++) {
-    const d = Number(cleanSbd[c]);
-    if (!Number.isNaN(d) && map.sbd[c]?.[d]) {
-      fillPencilBubble(map.sbd[c][d]);
+  // Tô Số Báo Danh (6 hoặc 8 chữ số) — Bỏ qua nếu đang test học sinh quên tô SBD
+  if (!options?.skipSbd && sbd.trim() !== '') {
+    const cleanSbd = sbd.padStart(6, '0').slice(0, map.sbd.length);
+    for (let c = 0; c < cleanSbd.length; c++) {
+      const d = Number(cleanSbd[c]);
+      if (!Number.isNaN(d) && map.sbd[c]?.[d]) {
+        fillPencilBubble(map.sbd[c][d]);
+      }
     }
   }
 

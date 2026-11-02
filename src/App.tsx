@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import jsQR from 'jsqr';
 import * as XLSX from 'xlsx';
 import {
+  AlertTriangle,
   Award,
   BookOpen,
   Camera,
@@ -11,7 +12,6 @@ import {
   ChevronUp,
   Cpu,
   Download,
-  Edit3,
   Eye,
   FileSpreadsheet,
   FileText,
@@ -21,11 +21,14 @@ import {
   HelpCircle,
   Image as ImageIcon,
   Layers,
+  Lock,
+  Maximize2,
+  Minimize2,
   Plus,
   Printer,
   QrCode,
   RefreshCw,
-   Share2,
+  Share2,
   ShieldCheck,
   Sliders,
   Smartphone,
@@ -86,6 +89,7 @@ export interface StudentRosterItem {
   totalScore?: number;
   gradedAt?: string;
   recordId?: string;
+  isAppendedAtEnd?: boolean;
 }
 
 export interface ClassRosterGroup {
@@ -95,7 +99,7 @@ export interface ClassRosterGroup {
   students: StudentRosterItem[];
 }
 
-const APP_VERSION = '2025.5.0-PRO';
+const APP_VERSION = '2025.6.0-PRO';
 
 const DEFAULT_CLASS_ROSTERS: ClassRosterGroup[] = [
   {
@@ -171,20 +175,44 @@ function playSuccessBeep() {
   }
 }
 
-function speakScoreVietnamese(score: number, studentName?: string) {
+function playErrorAlertBeep() {
+  try {
+    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(310, ctx.currentTime);
+    osc.frequency.setValueAtTime(210, ctx.currentTime + 0.16);
+    gain.gain.setValueAtTime(0.24, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.36);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.37);
+  } catch {
+    // Ignore audio errors
+  }
+}
+
+function speakTextVietnamese(text: string) {
   try {
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
-    const text = studentName
-      ? `${studentName}, ${score.toString().replace('.', ' phẩy ')} điểm`
-      : `${score.toString().replace('.', ' phẩy ')} điểm`;
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = 'vi-VN';
-    utter.rate = 1.15;
+    utter.rate = 1.12;
     window.speechSynthesis.speak(utter);
   } catch {
     // Ignore speech synthesis errors
   }
+}
+
+function speakScoreVietnamese(score: number, studentName?: string) {
+  const text = studentName
+    ? `${studentName}, ${score.toString().replace('.', ' phẩy ')} điểm`
+    : `${score.toString().replace('.', ' phẩy ')} điểm`;
+  speakTextVietnamese(text);
 }
 
 export default function App() {
@@ -263,8 +291,9 @@ export default function App() {
   const [isQrCameraOpen, setIsQrCameraOpen] = useState(false);
   const qrVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  // OMR Scanner State
+  // OMR Scanner State & Fullscreen Mode
   const [isOmrCameraOpen, setIsOmrCameraOpen] = useState(false);
+  const [isScannerFullscreen, setIsScannerFullscreen] = useState(false);
   const [autoTriggerOmr, setAutoTriggerOmr] = useState(true);
   const [showGridOverlay, setShowGridOverlay] = useState(false);
   const [showCalibration, setShowCalibration] = useState(false);
@@ -281,8 +310,64 @@ export default function App() {
   const [torchSupported, setTorchSupported] = useState<boolean>(false);
   const [torchEnabled, setTorchEnabled] = useState<boolean>(false);
   const [lastCapturedBase64Jpeg, setLastCapturedBase64Jpeg] = useState<string>('');
+  const [anchorLockState, setAnchorLockState] = useState<{
+    found: boolean;
+    count: number;
+    tl: boolean;
+    tr: boolean;
+    bl: boolean;
+    br: boolean;
+  }>({
+    found: false,
+    count: 0,
+    tl: false,
+    tr: false,
+    bl: false,
+    br: false,
+  });
+  const [missingExamCodeAlert, setMissingExamCodeAlert] = useState<{
+    message: string;
+    sbdRead: string;
+    imageUrl: string;
+  } | null>(null);
+  const [instantScoreBanner, setInstantScoreBanner] = useState<interfaceGradedSheetRecord | null>(null);
   const lockCounterRef = useRef<number>(0);
   const cooldownRef = useRef<boolean>(false);
+
+  // Kích hoạt chế độ Full Màn Hình khi nhấn vào nút Chấm Bài trên mọi thiết bị
+  const enterScannerFullscreenMode = async () => {
+    setActiveTab('scanner');
+    setIsScannerFullscreen(true);
+    setIsOmrCameraOpen(true);
+    try {
+      const docEl = document.documentElement as HTMLElement & {
+        webkitRequestFullscreen?: () => Promise<void>;
+      };
+      if (!document.fullscreenElement && docEl.requestFullscreen) {
+        await docEl.requestFullscreen();
+      } else if (docEl.webkitRequestFullscreen) {
+        await docEl.webkitRequestFullscreen();
+      }
+    } catch {
+      // Trên iOS Safari hoặc iframe không hỗ trợ Fullscreen API gốc, giao diện fixed inset-0 z-40 tự động phủ kín 100% màn hình
+    }
+  };
+
+  const exitScannerFullscreenMode = async () => {
+    setIsScannerFullscreen(false);
+    try {
+      const docWithWebkit = document as Document & {
+        webkitExitFullscreen?: () => Promise<void>;
+      };
+      if (document.fullscreenElement && document.exitFullscreen) {
+        await document.exitFullscreen();
+      } else if (docWithWebkit.webkitExitFullscreen) {
+        await docWithWebkit.webkitExitFullscreen();
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   // Kết quả chấm
   const [gradedRecords, setGradedRecords] = useState<interfaceGradedSheetRecord[]>(() => {
@@ -356,43 +441,56 @@ export default function App() {
    * Tự động đối chiếu SBD của phiếu chấm với Danh Sách Lớp:
    * - 2 chữ số đầu của SBD nhận biết Lớp (so khớp với sbdPrefix của lớp)
    * - Các chữ số còn lại là STT của học sinh trong lớp đó
+   * - Nếu SBD bị tô thiếu ('?'), không khớp hoặc nằm ngoài danh sách ban đầu:
+   *   KHÔNG cho phép can thiệp chỉnh sửa thủ công và TỰ ĐỘNG XUẤT VÀO ĐOẠN CUỐI CỦA DANH SÁCH LỚP ĐÓ.
    */
   const enrichAndSyncRecordWithRoster = (
     rawRecord: interfaceGradedSheetRecord,
     saveToRoster: boolean
   ): interfaceGradedSheetRecord => {
+    const isSbdComplete = !rawRecord.sbd.includes('?') && rawRecord.sbd.trim().length >= 3;
     const { sbdClassPrefix, sbdStudentOrder } = parseSbdToClassAndStt(rawRecord.sbd);
 
-    let matchedClass = classRosters.find(
-      (c) => c.sbdPrefix.padStart(2, '0') === sbdClassPrefix
-    );
-    if (!matchedClass && activeClassGroup?.sbdPrefix === sbdClassPrefix) {
+    let matchedClass = isSbdComplete
+      ? classRosters.find((c) => c.sbdPrefix.padStart(2, '0') === sbdClassPrefix)
+      : undefined;
+    if (!matchedClass) {
       matchedClass = activeClassGroup;
     }
 
     const matchedStudent =
-      matchedClass && sbdStudentOrder !== null
-        ? matchedClass.students.find((s) => s.stt === sbdStudentOrder)
+      isSbdComplete && matchedClass && sbdStudentOrder !== null
+        ? matchedClass.students.find((s) => !s.isAppendedAtEnd && s.stt === sbdStudentOrder)
         : undefined;
+
+    const targetClassName = matchedClass ? matchedClass.className : activeClassGroup?.className || '12A1';
+    const displayStudentName = matchedStudent
+      ? matchedStudent.fullName
+      : isSbdComplete && sbdStudentOrder !== null
+      ? `Phiếu ngoài DS - STT ${sbdStudentOrder} (Xuất cuối DS lớp ${targetClassName})`
+      : `Phiếu thiếu/lỗi SBD (${rawRecord.sbd}) (Xuất cuối DS lớp ${targetClassName})`;
 
     const enriched: interfaceGradedSheetRecord = {
       ...rawRecord,
-      sbdClassPrefix,
-      sbdStudentOrder,
-      className: matchedClass ? matchedClass.className : activeClassGroup?.className || 'Chưa phân lớp',
-      studentName: matchedStudent ? matchedStudent.fullName : undefined,
+      sbdClassPrefix: isSbdComplete ? sbdClassPrefix : matchedClass?.sbdPrefix || '--',
+      sbdStudentOrder: matchedStudent ? sbdStudentOrder : null,
+      className: targetClassName,
+      studentName: displayStudentName,
       subjectName: selectedSubject,
       examPeriod: selectedExamPeriod,
     };
 
-    if (saveToRoster && matchedClass && sbdStudentOrder !== null) {
+    if (saveToRoster && matchedClass) {
       setClassRosters((prev) =>
         prev.map((cls) => {
           if (cls.id !== matchedClass!.id) return cls;
-          const exists = cls.students.some((st) => st.stt === sbdStudentOrder);
-          const updatedStudents = exists
-            ? cls.students.map((st) =>
-                st.stt === sbdStudentOrder
+
+          // Trường hợp 1: Khớp chính xác học sinh có sẵn trong danh sách lớp
+          if (matchedStudent && sbdStudentOrder !== null) {
+            return {
+              ...cls,
+              students: cls.students.map((st) =>
+                !st.isAppendedAtEnd && st.stt === sbdStudentOrder
                   ? {
                       ...st,
                       sbd: enriched.sbd,
@@ -405,26 +503,30 @@ export default function App() {
                       recordId: enriched.id,
                     }
                   : st
-              )
-            : [
-                ...cls.students,
-                {
-                  stt: sbdStudentOrder,
-                  fullName: `Học sinh STT ${sbdStudentOrder}`,
-                  sbd: enriched.sbd,
-                  examCode: enriched.examCode,
-                  p1Score: enriched.p1Score,
-                  p2Score: enriched.p2Score,
-                  p3Score: enriched.p3Score,
-                  totalScore: enriched.totalScore,
-                  gradedAt: enriched.timestamp,
-                  recordId: enriched.id,
-                },
-              ].sort((a, b) => a.stt - b.stt);
+              ),
+            };
+          }
+
+          // Trường hợp 2: SBD thiếu/lỗi hoặc không nằm trong danh sách lớp -> XUẤT VÀO ĐOẠN CUỐI CỦA DANH SÁCH LỚP ĐÓ
+          const maxExistingStt =
+            cls.students.length > 0 ? Math.max(...cls.students.map((s) => s.stt)) : 0;
+          const appendedItem: StudentRosterItem = {
+            stt: maxExistingStt + 1,
+            fullName: displayStudentName,
+            sbd: enriched.sbd,
+            examCode: enriched.examCode,
+            p1Score: enriched.p1Score,
+            p2Score: enriched.p2Score,
+            p3Score: enriched.p3Score,
+            totalScore: enriched.totalScore,
+            gradedAt: enriched.timestamp,
+            recordId: enriched.id,
+            isAppendedAtEnd: true,
+          };
 
           return {
             ...cls,
-            students: updatedStudents,
+            students: [...cls.students, appendedItem],
           };
         })
       );
@@ -433,13 +535,41 @@ export default function App() {
     return enriched;
   };
 
-  // Xử lý sau khi chấm xong 1 phiếu theo Chế Độ Chấm
+  // Xử lý sau khi chấm xong 1 phiếu:
+  // YÊU CẦU BẮT BUỘC: BÁO LỖI VÀ KHÔNG CHẤM KHI KHÔNG TÔ MÃ ĐỀ!
   const handleCompletedScanRecord = (rawRecord: interfaceGradedSheetRecord) => {
+    const isExamCodeMissing =
+      !rawRecord.examCode ||
+      rawRecord.examCode.includes('?') ||
+      rawRecord.examCode.trim() === '';
+
+    if (isExamCodeMissing) {
+      playErrorAlertBeep();
+      if (navigator.vibrate) navigator.vibrate([220, 80, 220, 80, 280]);
+      const errMsg = `BÁO LỖI & TỪ CHỐI CHẤM: Phiếu trả lời KHÔNG TÔ MÃ ĐỀ (hoặc tô thiếu chữ số Mã Đề: "${rawRecord.examCode || 'Trống'}"). Hệ thống không chấm và không ghi điểm phiếu này!`;
+      setMissingExamCodeAlert({
+        message: errMsg,
+        sbdRead: rawRecord.sbd,
+        imageUrl: rawRecord.annotatedImageDataUrl,
+      });
+      setInstantScoreBanner(null);
+      setStatusBanner({
+        type: 'warning',
+        message: `🚫 ${errMsg}`,
+      });
+      if (voiceReadout) {
+        speakTextVietnamese('Báo lỗi! Phiếu chưa tô đủ mã đề, hệ thống từ chối chấm bài này.');
+      }
+      return;
+    }
+
+    setMissingExamCodeAlert(null);
     playSuccessBeep();
     if (navigator.vibrate) navigator.vibrate([70, 40, 100]);
 
     if (gradingMode === 'verify') {
       const enriched = enrichAndSyncRecordWithRoster(rawRecord, false);
+      setInstantScoreBanner(enriched);
       setActiveHudRecord(enriched);
       if (voiceReadout) speakScoreVietnamese(enriched.totalScore, enriched.studentName);
       setStatusBanner({
@@ -450,7 +580,11 @@ export default function App() {
     }
 
     const enriched = enrichAndSyncRecordWithRoster(rawRecord, true);
-    setGradedRecords((prev) => [enriched, ...prev.filter((r) => r.sbd !== enriched.sbd || enriched.sbd.includes('?'))]);
+    setGradedRecords((prev) => [
+      enriched,
+      ...prev.filter((r) => r.sbd !== enriched.sbd || enriched.sbd.includes('?')),
+    ]);
+    setInstantScoreBanner(enriched);
 
     if (voiceReadout) {
       speakScoreVietnamese(enriched.totalScore, enriched.studentName);
@@ -459,9 +593,7 @@ export default function App() {
     if (gradingMode === 'continuous') {
       setStatusBanner({
         type: 'success',
-        message: `Đã chấm & lưu tự động: SBD ${enriched.sbd} ${
-          enriched.studentName ? `(${enriched.studentName} - Lớp ${enriched.className})` : ''
-        } • Mã đề ${enriched.examCode} • Tổng: ${enriched.totalScore.toFixed(2)}đ`,
+        message: `Đã nhận đủ 4 neo & tự động chấm: SBD ${enriched.sbd} (${enriched.studentName}) • Mã đề ${enriched.examCode} • ĐIỂM: ${enriched.totalScore.toFixed(2)}đ`,
       });
     } else {
       setActiveHudRecord(enriched);
@@ -760,9 +892,31 @@ export default function App() {
 
             const frameData = procCtx.getImageData(0, 0, vw, vh);
             const corners = detectFourCornerMarkers(frameData);
+            setAnchorLockState({
+              found: corners.found,
+              count: corners.anchorCount,
+              tl: corners.locks.tl,
+              tr: corners.locks.tr,
+              bl: corners.locks.bl,
+              br: corners.locks.br,
+            });
 
             const oCtx = overlay.getContext('2d')!;
             oCtx.clearRect(0, 0, vw, vh);
+
+            // Lớp mặt nạ giới hạn: Chỉ quét bên trong 4 neo cố định của bảng trả lời trắc nghiệm
+            oCtx.save();
+            oCtx.fillStyle = 'rgba(2, 6, 23, 0.42)';
+            oCtx.fillRect(0, 0, vw, vh);
+            oCtx.globalCompositeOperation = 'destination-out';
+            oCtx.beginPath();
+            oCtx.moveTo(corners.tl.x, corners.tl.y);
+            oCtx.lineTo(corners.tr.x, corners.tr.y);
+            oCtx.lineTo(corners.br.x, corners.br.y);
+            oCtx.lineTo(corners.bl.x, corners.bl.y);
+            oCtx.closePath();
+            oCtx.fill();
+            oCtx.restore();
 
             const polyColor = corners.found ? '#10b981' : '#f59e0b';
             oCtx.strokeStyle = polyColor;
@@ -775,16 +929,27 @@ export default function App() {
             oCtx.closePath();
             oCtx.stroke();
 
-            for (const pt of [corners.tl, corners.tr, corners.bl, corners.br]) {
-              oCtx.fillStyle = polyColor;
+            const cornerItems = [
+              { pt: corners.tl, locked: corners.locks.tl, label: 'NEO 1 (TL)' },
+              { pt: corners.tr, locked: corners.locks.tr, label: 'NEO 2 (TR)' },
+              { pt: corners.bl, locked: corners.locks.bl, label: 'NEO 3 (BL)' },
+              { pt: corners.br, locked: corners.locks.br, label: 'NEO 4 (BR)' },
+            ];
+            for (const item of cornerItems) {
+              const boxColor = item.locked ? '#10b981' : '#ef4444';
+              oCtx.strokeStyle = boxColor;
+              oCtx.lineWidth = 3;
+              oCtx.strokeRect(item.pt.x - 18, item.pt.y - 18, 36, 36);
+              oCtx.fillStyle = boxColor;
               oCtx.beginPath();
-              oCtx.arc(pt.x, pt.y, 10, 0, Math.PI * 2);
+              oCtx.arc(item.pt.x, item.pt.y, 7, 0, Math.PI * 2);
               oCtx.fill();
             }
 
+            // Khi nhận đủ 4/4 neo cố định thì tự động chấm và hiện điểm ngay
             if (corners.found && !cooldownRef.current && (!activeHudRecord || gradingMode === 'continuous')) {
               lockCounterRef.current += 1;
-              if (autoTriggerOmr && lockCounterRef.current >= 9) {
+              if (autoTriggerOmr && lockCounterRef.current >= 4) {
                 lockCounterRef.current = 0;
                 cooldownRef.current = true;
                 try {
@@ -804,7 +969,7 @@ export default function App() {
                 handleCompletedScanRecord(record);
                 setTimeout(() => {
                   cooldownRef.current = false;
-                }, 1800);
+                }, 1500);
               }
             } else {
               lockCounterRef.current = Math.max(0, lockCounterRef.current - 1);
@@ -851,16 +1016,10 @@ export default function App() {
     setTorchEnabled(applied);
   };
 
-  // Chụp thủ công từ Camera đang bật bằng hàm capturePhoto(video) chuẩn Base64 (image/jpeg)
+  // Chụp thủ công từ Camera đang bật — BẮT BUỘC PHẢI ĐỦ 4 NEO CỐ ĐỊNH, KHÔNG QUÉT SANG THỨ KHÁC
   const handleManualCaptureFromVideo = () => {
     const video = omrVideoRef.current;
     if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) return;
-    try {
-      const base64Jpeg = capturePhoto(video, 0.92);
-      setLastCapturedBase64Jpeg(base64Jpeg);
-    } catch {
-      // ignore
-    }
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -868,6 +1027,26 @@ export default function App() {
     ctx.drawImage(video, 0, 0);
     const frameData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     const corners = detectFourCornerMarkers(frameData);
+
+    if (!corners.found) {
+      playErrorAlertBeep();
+      setStatusBanner({
+        type: 'warning',
+        message: `⚠️ TỪ CHỐI QUÉT: Mới nhận diện được ${corners.anchorCount}/4 neo cố định. Hệ thống CHỈ quét bảng trả lời trắc nghiệm khi bắt đủ 4 neo cố định, không quét sang các vật thể khác!`,
+      });
+      if (voiceReadout) {
+        speakTextVietnamese('Chưa nhận đủ 4 neo cố định của bảng trả lời.');
+      }
+      return;
+    }
+
+    try {
+      const base64Jpeg = capturePhoto(video, 0.92);
+      setLastCapturedBase64Jpeg(base64Jpeg);
+    } catch {
+      // ignore
+    }
+
     const warped = warpPerspectiveTo1024x550(frameData, corners);
     const record = gradeWarpedSheet(
       warped,
@@ -879,7 +1058,7 @@ export default function App() {
     handleCompletedScanRecord(record);
   };
 
-  // Chấm từ file ảnh phiếu chụp sẵn
+  // Chấm từ file ảnh phiếu chụp sẵn — BẮT BUỘC KIỂM TRA 4 NEO CỐ ĐỊNH
   const handleGradeUploadedSheetImage = (file: File) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
@@ -891,6 +1070,17 @@ export default function App() {
       ctx.drawImage(img, 0, 0);
       const imgData = ctx.getImageData(0, 0, img.width, img.height);
       const corners = detectFourCornerMarkers(imgData);
+      URL.revokeObjectURL(url);
+
+      if (!corners.found) {
+        playErrorAlertBeep();
+        setStatusBanner({
+          type: 'warning',
+          message: `⚠️ ẢNH KHÔNG HỢP LỆ (${corners.anchorCount}/4 neo): Hệ thống CHỈ quét bảng trả lời trắc nghiệm theo 4 neo cố định, không quét sang các hình ảnh khác!`,
+        });
+        return;
+      }
+
       const warped = warpPerspectiveTo1024x550(imgData, corners);
       const record = gradeWarpedSheet(
         warped,
@@ -899,14 +1089,16 @@ export default function App() {
         omrSettings,
         currentScoring
       );
-      URL.revokeObjectURL(url);
       handleCompletedScanRecord(record);
     };
     img.src = url;
   };
 
-  // Tạo & Chấm ngay Phiếu Tô Mẫu Thực Tế (Simulator)
-  const handleRunSimulatedSheet = async (accuracy = 0.88) => {
+  // Tạo & Chấm ngay Phiếu Tô Mẫu Thực Tế (Hỗ trợ test đủ mã đề, test quên tô Mã Đề, test thiếu/ngoài SBD)
+  const handleRunSimulatedSheet = async (
+    accuracy = 0.88,
+    options?: { skipExamCode?: boolean; skipSbd?: boolean }
+  ) => {
     const targetKey =
       findMatchingAnswerKey(simExamCode, answerKeys) ||
       Object.values(answerKeys)[0] || {
@@ -922,8 +1114,18 @@ export default function App() {
       targetKey.examCode,
       targetKey,
       accuracy,
-      currentScoring
+      currentScoring,
+      options
     );
+
+    setAnchorLockState({
+      found: true,
+      count: 4,
+      tl: true,
+      tr: true,
+      bl: true,
+      br: true,
+    });
 
     const record = gradeWarpedSheet(
       simCanvas,
@@ -934,10 +1136,12 @@ export default function App() {
     );
     handleCompletedScanRecord(record);
 
-    const { sbdClassPrefix, sbdStudentOrder } = parseSbdToClassAndStt(simSbd);
-    if (sbdStudentOrder !== null) {
-      const nextOrder = String(sbdStudentOrder + 1).padStart(4, '0');
-      setSimSbd(`${sbdClassPrefix || '01'}${nextOrder}`);
+    if (!options?.skipExamCode && !options?.skipSbd) {
+      const { sbdClassPrefix, sbdStudentOrder } = parseSbdToClassAndStt(simSbd);
+      if (sbdStudentOrder !== null) {
+        const nextOrder = String(sbdStudentOrder + 1).padStart(4, '0');
+        setSimSbd(`${sbdClassPrefix || '01'}${nextOrder}`);
+      }
     }
   };
 
@@ -1256,16 +1460,16 @@ export default function App() {
         <p>Dùng Camera quét trực tiếp mã QR chung từ phần mềm trộn đề QM2025, tải ảnh mã QR hoặc nhập file Excel đáp án chuẩn (.xlsx).</p>
       </div>
       <div class="card-3d c-emerald">
-        <h3>Bước 4: Đưa Camera Quét Phiếu Học Sinh</h3>
-        <p>Chọn chế độ <strong>Chấm xem ngay</strong> hoặc <strong>Chấm liên tục tốc độ cao</strong>. Thuật toán tự động bắt 4 góc vuông đen, nắn phẳng Homography và đọc điểm bằng giọng nói Tiếng Việt.</p>
+        <h3>Bước 4: Chấm Full Màn Hình Theo 4 Neo Cố Định</h3>
+        <p>Nhấn nút <strong>Chấm Bài</strong> để kích hoạt <strong>Full Màn Hình</strong> trên mọi thiết bị. Hệ thống chỉ quét vùng bảng trả lời giới hạn bởi <strong>4 Neo Cố Định</strong> (không quét sang vật thể khác). Khi nhận đủ 4/4 neo sẽ <strong>tự động chấm và hiện điểm ngay</strong>. Nếu phiếu <strong>không tô Mã đề</strong>, hệ thống báo lỗi đỏ và <strong>không chấm</strong>.</p>
       </div>
       <div class="card-3d c-blue">
-        <h3>Bước 5: Xuất Excel & Lưu Hồ Sơ Minh Chứng</h3>
-        <p>Điểm tự động điền vào đúng STT học sinh trong Danh Sách Lớp. Tải bảng điểm Excel (.xlsx) và xuất Hồ sơ ảnh bài chấm minh chứng (.jpg / .html / PDF).</p>
+        <h3>Bước 5: Khóa Bảo Mật Kết Quả & Xuất Cuối DS Lớp</h3>
+        <p><strong>Số báo danh, Mã đề và toàn bộ đáp án</strong> được khóa bảo mật <strong>Read-Only (không được quyền can thiệp)</strong>. Các phiếu thiếu SBD hoặc ngoài danh sách sẽ tự động được <strong>xuất vào đoạn cuối của Danh Sách Lớp đó</strong>.</p>
       </div>
       <div class="card-3d c-violet">
-        <h3>Cơ Chế Tự Động Cập Nhật (Auto-Update)</h3>
-        <p>Ứng dụng trang bị cơ chế đồng bộ phiên bản thời gian thực trên nền tảng Web/Cloud, đảm bảo giáo viên luôn sử dụng thuật toán OMR và mẫu phiếu mới nhất của Bộ GD&ĐT.</p>
+        <h3>Cơ Chế Tự Động Cập Nhật (Auto-Update ${APP_VERSION})</h3>
+        <p>Ứng dụng trang bị cơ chế đồng bộ phiên bản thời gian thực trên nền tảng Web/PWA Offline, đảm bảo giáo viên luôn sử dụng thuật toán OMR 4 neo cố định và mẫu phiếu mới nhất của Bộ GD&ĐT.</p>
       </div>
     </div>
 
@@ -1533,7 +1737,7 @@ export default function App() {
               className="btn-3d btn-3d-amber px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white flex items-center gap-1.5"
             >
               <HelpCircle className="w-4 h-4" />
-              Hướng Dẫn
+              Hướng Dẫn Mới Nhất
             </button>
 
             <button
@@ -1559,7 +1763,10 @@ export default function App() {
         {/* THANH ĐIỀU HƯỚNG 3 BƯỚC CHÍNH NỔI BẬT NGAY ĐẦU TRANG */}
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
-            onClick={() => setActiveTab('keys')}
+            onClick={() => {
+              setIsScannerFullscreen(false);
+              setActiveTab('keys');
+            }}
             className={`py-3 px-4 rounded-2xl flex items-center justify-center gap-2.5 text-sm sm:text-base font-black transition-all ${
               activeTab === 'keys'
                 ? 'btn-3d btn-3d-blue text-white ring-2 ring-offset-2 ring-blue-500'
@@ -1571,15 +1778,15 @@ export default function App() {
           </button>
 
           <button
-            onClick={() => setActiveTab('scanner')}
+            onClick={() => enterScannerFullscreenMode(true)}
             className={`py-3 px-4 rounded-2xl flex items-center justify-center gap-2.5 text-sm sm:text-base font-black transition-all ${
               activeTab === 'scanner'
                 ? 'btn-3d btn-3d-emerald text-white ring-2 ring-offset-2 ring-emerald-500'
                 : 'btn-3d btn-3d-white text-slate-800'
             }`}
           >
-            <Camera className="w-5 h-5 shrink-0" />
-            <span>BƯỚC 2: CAMERA CHẤM BÀI</span>
+            <Maximize2 className="w-5 h-5 shrink-0" />
+            <span>BƯỚC 2: CHẤM BÀI (FULL MÀN HÌNH)</span>
           </button>
 
           <button
@@ -2445,11 +2652,11 @@ export default function App() {
                     Sẵn sàng chấm phiếu <strong className="text-blue-700">{currentTpl.shortName}</strong> cho lớp <strong className="text-emerald-700">{activeClassGroup?.className}</strong>
                   </span>
                   <button
-                    onClick={() => setActiveTab('scanner')}
+                    onClick={() => enterScannerFullscreenMode(true)}
                     className="btn-3d btn-3d-emerald px-5 py-3 rounded-xl text-white font-black text-sm flex items-center gap-2"
                   >
-                    <Camera className="w-5 h-5" />
-                    Chuyển Sang Quét Chấm Bài Ngay →
+                    <Maximize2 className="w-5 h-5" />
+                    Chấm Bài Ngay (Full Màn Hình) →
                   </button>
                 </div>
               </div>
@@ -2457,383 +2664,542 @@ export default function App() {
           </div>
         )}
 
-        {/* TAB 2: CAMERA QUÉT PHIẾU OMR & CHẤM TỰ ĐỘNG */}
+        {/* TAB 2: CAMERA QUÉT PHIẾU OMR THEO 4 NEO CỐ ĐỊNH & FULL MÀN HÌNH TRÊN MỌI THIẾT BỊ */}
         {activeTab === 'scanner' && (
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-            {/* Khung ngắm Camera & Điều khiển */}
-            <div className="lg:col-span-8 panel-3d-sky rounded-2xl p-4 space-y-3.5">
-              <div className="flex flex-wrap items-center justify-between gap-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-full bg-emerald-500 animate-ping" />
-                  <h2 className="text-sm sm:text-base font-black uppercase tracking-wider text-slate-900">
-                    Camera OMR — {currentTpl.shortName} ({selectedSubject} • Lớp {activeClassGroup?.className})
-                  </h2>
+          <div
+            className={
+              isScannerFullscreen
+                ? 'fixed inset-0 z-40 bg-slate-950/98 overflow-y-auto p-2.5 sm:p-4 safe-area-main'
+                : ''
+            }
+          >
+            <div className="max-w-7xl mx-auto space-y-3.5">
+              {/* THANH TRẠNG THÁI CHẾ ĐỘ FULL MÀN HÌNH & ĐÈN BÁO 4 NEO CỐ ĐỊNH */}
+              <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-emerald-950 border-2 border-emerald-400 rounded-2xl p-3 sm:p-4 text-white shadow-xl flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-400 flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                    <span className="text-xs sm:text-sm font-black uppercase tracking-wider text-emerald-300">
+                      CHẾ ĐỘ CHẤM FULL MÀN HÌNH • CHỈ QUÉT 4 NEO CỐ ĐỊNH
+                    </span>
+                  </div>
+
+                  {/* Đèn báo trạng thái 4 Neo Cố Định */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {[
+                      { key: 'tl', label: 'NEO 1 (Trái-Trên)', locked: anchorLockState.tl },
+                      { key: 'tr', label: 'NEO 2 (Phải-Trên)', locked: anchorLockState.tr },
+                      { key: 'bl', label: 'NEO 3 (Trái-Dưới)', locked: anchorLockState.bl },
+                      { key: 'br', label: 'NEO 4 (Phải-Dưới)', locked: anchorLockState.br },
+                    ].map((anchor) => (
+                      <span
+                        key={anchor.key}
+                        className={`px-2.5 py-1 rounded-lg text-[11px] font-mono font-black border transition-all ${
+                          anchor.locked
+                            ? 'bg-emerald-500 text-slate-950 border-emerald-200 shadow-sm'
+                            : 'bg-slate-800/90 text-slate-400 border-slate-700'
+                        }`}
+                      >
+                        {anchor.locked ? '✓ ' : '○ '}
+                        {anchor.label}
+                      </span>
+                    ))}
+                    <span className="px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 font-mono font-black text-xs">
+                      {anchorLockState.count}/4 NEO
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
                   <button
-                    onClick={() => setAutoTriggerOmr((v) => !v)}
-                    className={`btn-3d px-3 py-1.5 rounded-xl text-xs font-black ${
-                      autoTriggerOmr
-                        ? 'btn-3d-emerald text-white'
-                        : 'btn-3d-white text-slate-700'
-                    }`}
+                    onClick={() => setShowGuideModal(true)}
+                    className="btn-3d btn-3d-amber px-3 py-2 rounded-xl text-white font-black text-xs flex items-center gap-1.5"
                   >
-                    Tự động chụp: {autoTriggerOmr ? 'BẬT' : 'TẮT'}
+                    <HelpCircle className="w-4 h-4" />
+                    Hướng Dẫn Mới Nhất
                   </button>
 
-                  <button
-                    onClick={() => setShowGridOverlay((v) => !v)}
-                    className={`btn-3d px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 ${
-                      showGridOverlay
-                        ? 'btn-3d-blue text-white'
-                        : 'btn-3d-white text-slate-700'
-                    }`}
-                  >
-                    <Eye className="w-4 h-4" />
-                    Lưới tọa độ
-                  </button>
-
-                  <button
-                    onClick={() => setShowCalibration((v) => !v)}
-                    className={`btn-3d px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 ${
-                      showCalibration
-                        ? 'btn-3d-amber text-white'
-                        : 'btn-3d-white text-slate-700'
-                    }`}
-                  >
-                    <Sliders className="w-4 h-4" />
-                    Tinh chỉnh
-                  </button>
+                  {isScannerFullscreen ? (
+                    <button
+                      onClick={exitScannerFullscreenMode}
+                      className="btn-3d btn-3d-rose px-3.5 py-2 rounded-xl text-white font-black text-xs flex items-center gap-1.5"
+                    >
+                      <Minimize2 className="w-4 h-4" />
+                      Thu Nhỏ / Thoát Full Màn Hình
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => enterScannerFullscreenMode(true)}
+                      className="btn-3d btn-3d-emerald px-3.5 py-2 rounded-xl text-white font-black text-xs flex items-center gap-1.5"
+                    >
+                      <Maximize2 className="w-4 h-4" />
+                      Bật Full Màn Hình
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Thanh tinh chỉnh OMR */}
-              {showCalibration && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-xl bg-white border-2 border-amber-300 text-xs">
-                  <div>
-                    <div className="flex justify-between text-slate-700 font-extrabold mb-1">
-                      <span>Ngưỡng đậm chì:</span>
-                      <span className="font-mono text-amber-700">
-                        {Math.round(omrSettings.fillThreshold * 100)}%
-                      </span>
+              {/* BANNER BÁO LỖI NGHIÊM TRỌNG KHI HỌC SINH KHÔNG TÔ MÃ ĐỀ (KHÔNG CHẤM) */}
+              {missingExamCodeAlert && (
+                <div className="bg-rose-600 border-4 border-amber-300 rounded-2xl p-4 text-white shadow-2xl flex flex-wrap items-center justify-between gap-3 animate-pulse">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-white text-rose-600 flex items-center justify-center shrink-0 shadow-md">
+                      <AlertTriangle className="w-7 h-7" />
                     </div>
-                    <input
-                      type="range"
-                      min={0.2}
-                      max={0.55}
-                      step={0.01}
-                      value={omrSettings.fillThreshold}
-                      onChange={(e) =>
-                        setOmrSettings((s) => ({ ...s, fillThreshold: Number(e.target.value) }))
-                      }
-                      className="w-full accent-amber-500"
-                    />
+                    <div>
+                      <div className="text-sm sm:text-base font-black uppercase tracking-wide text-amber-200">
+                        ⚠️ BÁO LỖI TỪ CHỐI CHẤM BÀI — HỌC SINH KHÔNG TÔ MÃ ĐỀ!
+                      </div>
+                      <p className="text-xs sm:text-sm font-bold text-white mt-0.5">
+                        {missingExamCodeAlert}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <div className="flex justify-between text-slate-700 font-extrabold mb-1">
-                      <span>Dịch ngang (X):</span>
-                      <span className="font-mono text-amber-700">{omrSettings.offsetX}px</span>
+                  <button
+                    onClick={() => setMissingExamCodeAlert(null)}
+                    className="btn-3d btn-3d-white px-4 py-2 rounded-xl text-rose-700 font-black text-xs sm:text-sm"
+                  >
+                    Đã Hiểu & Quét Phiếu Tiếp Theo
+                  </button>
+                </div>
+              )}
+
+              {/* BANNER HIỆN ĐIỂM TỨC THÌ NGAY KHI NHẬN ĐỦ 4/4 NEO CỐ ĐỊNH */}
+              {instantScoreBanner && !missingExamCodeAlert && (
+                <div className="bg-gradient-to-r from-emerald-600 via-teal-600 to-blue-700 border-2 border-emerald-300 rounded-2xl p-3.5 sm:p-4 text-white shadow-xl flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3.5">
+                    <div className="px-4 py-2 rounded-2xl bg-white text-emerald-700 text-center shadow-lg">
+                      <div className="text-[10px] font-black uppercase tracking-wider">ĐIỂM BÀI CHẤM</div>
+                      <div className="text-2xl sm:text-3xl font-black font-mono tabular-nums">
+                        {instantScoreBanner.totalScore.toFixed(2)}
+                      </div>
                     </div>
-                    <input
-                      type="range"
-                      min={-15}
-                      max={15}
-                      step={0.5}
-                      value={omrSettings.offsetX}
-                      onChange={(e) =>
-                        setOmrSettings((s) => ({ ...s, offsetX: Number(e.target.value) }))
-                      }
-                      className="w-full accent-amber-500"
-                    />
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-400 text-slate-950 text-xs font-black">
+                          ✓ ĐÃ KHỚP 4/4 NEO CỐ ĐỊNH — TỰ ĐỘNG CHẤM
+                        </span>
+                        <span className="text-sm sm:text-base font-black">
+                          {instantScoreBanner.studentName} ({instantScoreBanner.className})
+                        </span>
+                      </div>
+                      <div className="text-xs sm:text-sm font-mono font-bold text-emerald-100 mt-1">
+                        SBD (Khóa Read-Only): <strong>{instantScoreBanner.sbd}</strong> • Mã đề: <strong>{instantScoreBanner.examCode}</strong> • P1: {instantScoreBanner.p1Score}đ | P2: {instantScoreBanner.p2Score}đ | P3: {instantScoreBanner.p3Score}đ
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <div className="flex justify-between text-slate-700 font-extrabold mb-1">
-                      <span>Dịch dọc (Y):</span>
-                      <span className="font-mono text-amber-700">{omrSettings.offsetY}px</span>
-                    </div>
-                    <input
-                      type="range"
-                      min={-15}
-                      max={15}
-                      step={0.5}
-                      value={omrSettings.offsetY}
-                      onChange={(e) =>
-                        setOmrSettings((s) => ({ ...s, offsetY: Number(e.target.value) }))
-                      }
-                      className="w-full accent-amber-500"
-                    />
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-slate-700 font-extrabold mb-1">
-                      <span>Bán kính ô (R):</span>
-                      <span className="font-mono text-amber-700">
-                        {Math.round(omrSettings.radiusScale * 100)}%
-                      </span>
-                    </div>
-                    <input
-                      type="range"
-                      min={0.75}
-                      max={1.25}
-                      step={0.02}
-                      value={omrSettings.radiusScale}
-                      onChange={(e) =>
-                        setOmrSettings((s) => ({ ...s, radiusScale: Number(e.target.value) }))
-                      }
-                      className="w-full accent-amber-500"
-                    />
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setActiveTab('results')}
+                      className="btn-3d btn-3d-white px-3.5 py-2 rounded-xl text-slate-900 font-black text-xs"
+                    >
+                      Xem Danh Sách Lớp
+                    </button>
+                    <button
+                      onClick={() => setInstantScoreBanner(null)}
+                      className="p-2 rounded-xl bg-white/20 hover:bg-white/30 text-white"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               )}
 
-              {/* Vùng hiển thị Camera hoặc Preview mẫu phiếu */}
-              <div className="relative rounded-2xl overflow-hidden border-2 border-sky-400 bg-slate-900 aspect-[1024/550] flex items-center justify-center">
-                {isOmrCameraOpen ? (
-                  <>
-                    <video
-                      ref={omrVideoRef}
-                      className="w-full h-full object-cover"
-                      autoPlay
-                      playsInline
-                      muted
-                    />
-                    <canvas
-                      ref={omrOverlayCanvasRef}
-                      className="absolute inset-0 w-full h-full pointer-events-none"
-                    />
-                    <div className="absolute top-3 right-3 flex items-center gap-2">
-                      {torchSupported && (
-                        <button
-                          onClick={handleToggleCameraTorch}
-                          className={`btn-3d px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg ${
-                            torchEnabled
-                              ? 'btn-3d-amber text-white ring-2 ring-yellow-300'
-                              : 'btn-3d-white text-slate-900'
-                          }`}
-                        >
-                          <Zap className="w-4 h-4" />
-                          {torchEnabled ? 'Tắt Flash (Torch)' : 'Bật Flash (Torch)'}
-                        </button>
-                      )}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                {/* Khung ngắm Camera & Điều khiển */}
+                <div className="lg:col-span-8 panel-3d-sky rounded-2xl p-4 space-y-3.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-full bg-emerald-500 animate-ping" />
+                      <h2 className="text-sm sm:text-base font-black uppercase tracking-wider text-slate-900">
+                        Camera OMR 4 Neo Cố Định — {currentTpl.shortName} ({selectedSubject} • Lớp {activeClassGroup?.className})
+                      </h2>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
                       <button
-                        onClick={() => setIsOmrCameraOpen(false)}
-                        className="btn-3d btn-3d-rose px-3 py-2 rounded-xl text-xs font-black text-white shadow-lg flex items-center gap-1"
+                        onClick={() => setAutoTriggerOmr((v) => !v)}
+                        className={`btn-3d px-3 py-1.5 rounded-xl text-xs font-black ${
+                          autoTriggerOmr
+                            ? 'btn-3d-emerald text-white'
+                            : 'btn-3d-white text-slate-700'
+                        }`}
                       >
-                        <X className="w-4 h-4" />
-                        Đóng Camera
+                        Đủ 4 neo tự chấm: {autoTriggerOmr ? 'BẬT' : 'TẮT'}
+                      </button>
+
+                      <button
+                        onClick={() => setShowGridOverlay((v) => !v)}
+                        className={`btn-3d px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 ${
+                          showGridOverlay
+                            ? 'btn-3d-blue text-white'
+                            : 'btn-3d-white text-slate-700'
+                        }`}
+                      >
+                        <Eye className="w-4 h-4" />
+                        Lưới tọa độ
+                      </button>
+
+                      <button
+                        onClick={() => setShowCalibration((v) => !v)}
+                        className={`btn-3d px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 ${
+                          showCalibration
+                            ? 'btn-3d-amber text-white'
+                            : 'btn-3d-white text-slate-700'
+                        }`}
+                      >
+                        <Sliders className="w-4 h-4" />
+                        Tinh chỉnh
                       </button>
                     </div>
-                    <div className="absolute bottom-3 inset-x-3 flex flex-wrap items-center justify-between gap-2">
-                      <span className="px-3 py-1.5 rounded-lg bg-slate-950/85 border border-slate-700 text-xs font-mono text-emerald-400">
-                        Canh 4 ô vuông đen ở 4 góc tờ phiếu vào khung xanh
-                      </span>
-                      <div className="flex items-center gap-2">
-                        {torchSupported && (
-                          <button
-                            onClick={handleToggleCameraTorch}
-                            className={`btn-3d px-3.5 py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-lg flex items-center gap-1.5 ${
-                              torchEnabled
-                                ? 'btn-3d-amber text-white'
-                                : 'btn-3d-white text-slate-900'
-                            }`}
-                          >
-                            <Zap className="w-4 h-4" />
-                            Bật/Tắt Flash
-                          </button>
-                        )}
-                        <button
-                          onClick={handleManualCaptureFromVideo}
-                          className="btn-3d btn-3d-emerald px-5 py-2.5 rounded-xl text-white font-black text-sm shadow-lg"
-                        >
-                          Chụp & Chấm Ngay (Base64 JPEG)
-                        </button>
+                  </div>
+
+                  {/* Thanh tinh chỉnh OMR */}
+                  {showCalibration && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3 rounded-xl bg-white border-2 border-amber-300 text-xs">
+                      <div>
+                        <div className="flex justify-between text-slate-700 font-extrabold mb-1">
+                          <span>Ngưỡng đậm chì:</span>
+                          <span className="font-mono text-amber-700">
+                            {Math.round(omrSettings.fillThreshold * 100)}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0.2}
+                          max={0.55}
+                          step={0.01}
+                          value={omrSettings.fillThreshold}
+                          onChange={(e) =>
+                            setOmrSettings((s) => ({ ...s, fillThreshold: Number(e.target.value) }))
+                          }
+                          className="w-full accent-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-slate-700 font-extrabold mb-1">
+                          <span>Dịch ngang (X):</span>
+                          <span className="font-mono text-amber-700">{omrSettings.offsetX}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={-15}
+                          max={15}
+                          step={0.5}
+                          value={omrSettings.offsetX}
+                          onChange={(e) =>
+                            setOmrSettings((s) => ({ ...s, offsetX: Number(e.target.value) }))
+                          }
+                          className="w-full accent-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-slate-700 font-extrabold mb-1">
+                          <span>Dịch dọc (Y):</span>
+                          <span className="font-mono text-amber-700">{omrSettings.offsetY}px</span>
+                        </div>
+                        <input
+                          type="range"
+                          min={-15}
+                          max={15}
+                          step={0.5}
+                          value={omrSettings.offsetY}
+                          onChange={(e) =>
+                            setOmrSettings((s) => ({ ...s, offsetY: Number(e.target.value) }))
+                          }
+                          className="w-full accent-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex justify-between text-slate-700 font-extrabold mb-1">
+                          <span>Bán kính ô (R):</span>
+                          <span className="font-mono text-amber-700">
+                            {Math.round(omrSettings.radiusScale * 100)}%
+                          </span>
+                        </div>
+                        <input
+                          type="range"
+                          min={0.75}
+                          max={1.25}
+                          step={0.02}
+                          value={omrSettings.radiusScale}
+                          onChange={(e) =>
+                            setOmrSettings((s) => ({ ...s, radiusScale: Number(e.target.value) }))
+                          }
+                          className="w-full accent-amber-500"
+                        />
                       </div>
                     </div>
-                  </>
-                ) : (
-                  <div className="relative w-full h-full flex flex-col items-center justify-center p-4 text-center">
-                    <img
-                      src={currentTpl.imageUrl}
-                      alt={currentTpl.name}
-                      className="absolute inset-0 w-full h-full object-contain opacity-25 pointer-events-none"
-                    />
-                    {showGridOverlay && (
-                      <TemplateCoordinatePreviewOverlay
-                        templateId={selectedTemplate}
-                        settings={omrSettings}
-                      />
-                    )}
-                    <div className="relative z-10 max-w-lg space-y-3.5 bg-white/95 backdrop-blur-md p-5 rounded-2xl border-2 border-sky-300 shadow-xl">
-                      <div className="w-12 h-12 rounded-2xl bg-blue-100 border-2 border-blue-300 flex items-center justify-center mx-auto text-blue-700">
-                        <Camera className="w-6 h-6" />
-                      </div>
-                      <h3 className="text-base sm:text-lg font-black text-slate-900">
-                        Bật Camera Quét Phiếu Hoặc Chấm Mô Phỏng 1 Chạm
-                      </h3>
-                      <p className="text-xs sm:text-sm font-semibold text-slate-600 leading-relaxed">
-                        Hệ thống tự động nhận diện 2 chữ số đầu của SBD (ví dụ{' '}
-                        <strong className="text-blue-700">{activeClassGroup?.sbdPrefix || '01'}</strong> = Lớp{' '}
-                        <strong className="text-blue-700">{activeClassGroup?.className || '12A1'}</strong>) và số thứ tự học sinh để xuất thẳng điểm vào Danh Sách Lớp.
-                      </p>
-                      <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
-                        <button
-                          onClick={() => setIsOmrCameraOpen(true)}
-                          className="btn-3d btn-3d-emerald px-5 py-3 rounded-xl text-white font-black text-sm flex items-center gap-2"
-                        >
-                          <Camera className="w-5 h-5" />
-                          Mở Camera Chấm Bài
-                        </button>
-
-                        <label className="btn-3d btn-3d-blue px-4 py-3 rounded-xl text-white font-black text-sm flex items-center gap-2 cursor-pointer">
-                          <Upload className="w-5 h-5" />
-                          Tải Ảnh Phiếu Đã Chụp
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={(e) => {
-                              const f = e.target.files?.[0];
-                              if (f) handleGradeUploadedSheetImage(f);
-                              e.target.value = '';
-                            }}
-                          />
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Cột phải: Bộ tạo Phiếu Tô Mẫu Thực Tế (Simulator) & Lịch sử quét nhanh */}
-            <div className="lg:col-span-4 space-y-4">
-              <div className="panel-3d-emerald rounded-2xl p-4 sm:p-5 space-y-3.5">
-                <div className="flex items-center justify-between border-b-2 border-emerald-200 pb-2">
-                  <div className="flex items-center gap-2">
-                    <Wand2 className="w-5 h-5 text-emerald-600" />
-                    <h3 className="text-sm font-black uppercase tracking-wider text-emerald-950">
-                      Mô Phỏng Chấm Thử
-                    </h3>
-                  </div>
-                  <span className="text-xs font-mono font-black px-2 py-0.5 rounded-md bg-emerald-200/80 text-emerald-950">
-                    Lớp {activeClassGroup?.className} (Mã {activeClassGroup?.sbdPrefix})
-                  </span>
-                </div>
-                <p className="text-xs sm:text-sm text-slate-700 font-semibold">
-                  Tạo tờ phiếu{' '}
-                  <span className="text-slate-950 font-black">{currentTpl.shortName}</span> đã tô chì thực tế với SBD thuộc lớp đang chọn để kiểm tra tốc độ chấm & tự động điền điểm vào Danh Sách Lớp:
-                </p>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="block text-xs text-slate-700 font-black uppercase mb-1">
-                      SBD (2 số đầu = Lớp)
-                    </label>
-                    <input
-                      type="text"
-                      maxLength={8}
-                      value={simSbd}
-                      onChange={(e) => setSimSbd(e.target.value)}
-                      className="w-full bg-white border-2 border-emerald-400 rounded-xl px-3 py-2 font-mono font-black text-sm text-slate-900"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-700 font-black uppercase mb-1">
-                      Mã đề ({currentTpl.maDeDigits} số)
-                    </label>
-                    <select
-                      value={simExamCode}
-                      onChange={(e) => setSimExamCode(e.target.value)}
-                      className="w-full bg-white border-2 border-emerald-400 rounded-xl px-3 py-2 font-mono font-black text-sm text-slate-900"
-                    >
-                      {Object.keys(answerKeys).map((c) => (
-                        <option key={c} value={c}>
-                          Mã đề {c}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5 pt-1">
-                  <button
-                    onClick={() => handleRunSimulatedSheet(0.9)}
-                    className="btn-3d btn-3d-emerald py-3 px-3 rounded-xl text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5"
-                  >
-                    <Zap className="w-4 h-4 shrink-0" />
-                    Chấm Thử Khá/Giỏi
-                  </button>
-                  <button
-                    onClick={() => handleRunSimulatedSheet(1.0)}
-                    className="btn-3d btn-3d-blue py-3 px-3 rounded-xl text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5"
-                  >
-                    <Award className="w-4 h-4 shrink-0" />
-                    Chấm Thử Điểm 10
-                  </button>
-                </div>
-              </div>
-
-              {/* Danh sách các bài vừa chấm gần nhất */}
-              <div className="panel-3d-violet rounded-2xl p-4 sm:p-5 space-y-3">
-                <div className="flex items-center justify-between border-b-2 border-violet-200 pb-2">
-                  <h3 className="text-sm font-black uppercase tracking-wider text-violet-950">
-                    Các Phiếu Vừa Quét ({gradedRecords.length})
-                  </h3>
-                  {gradedRecords.length > 0 && (
-                    <button
-                      onClick={() => setActiveTab('results')}
-                      className="text-xs text-violet-700 hover:text-violet-950 font-black underline"
-                    >
-                      Xem sổ điểm lớp →
-                    </button>
                   )}
-                </div>
 
-                {gradedRecords.length === 0 ? (
-                  <p className="text-sm text-slate-500 font-semibold py-5 text-center">
-                    Chưa có bài chấm nào trong phiên này.
-                  </p>
-                ) : (
-                  <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
-                    {gradedRecords.slice(0, 6).map((rec) => (
-                      <div
-                        key={rec.id}
-                        onClick={() => setActiveHudRecord(rec)}
-                        className="w-full text-left bg-white hover:bg-violet-50/70 border-2 border-violet-200 rounded-xl p-3 flex items-center justify-between transition-all cursor-pointer shadow-2xs"
-                      >
-                        <div>
-                          <div className="text-sm font-black text-slate-900 font-mono">
-                            SBD: {rec.sbd}{' '}
-                            <span className="text-violet-700">• Mã: {rec.examCode}</span>
-                          </div>
-                          <div className="text-xs font-bold text-slate-600 mt-0.5">
-                            {rec.studentName
-                              ? `${rec.studentName} (${rec.className})`
-                              : `Lớp ${rec.className || '--'} • STT ${rec.sbdStudentOrder ?? '--'}`}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2.5">
-                          <div className="text-right">
-                            <div className="text-lg font-black font-mono text-emerald-600 tabular-nums">
-                              {rec.totalScore.toFixed(2)}
-                            </div>
-                            <div className="text-[11px] font-bold text-slate-500">điểm</div>
-                          </div>
+                  {/* Vùng hiển thị Camera hoặc Preview mẫu phiếu */}
+                  <div className="relative rounded-2xl overflow-hidden border-2 border-sky-400 bg-slate-900 aspect-[1024/550] flex items-center justify-center">
+                    {isOmrCameraOpen ? (
+                      <>
+                        <video
+                          ref={omrVideoRef}
+                          className="w-full h-full object-cover"
+                          autoPlay
+                          playsInline
+                          muted
+                        />
+                        <canvas
+                          ref={omrOverlayCanvasRef}
+                          className="absolute inset-0 w-full h-full pointer-events-none"
+                        />
+                        <div className="absolute top-3 right-3 flex items-center gap-2">
+                          {torchSupported && (
+                            <button
+                              onClick={handleToggleCameraTorch}
+                              className={`btn-3d px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg ${
+                                torchEnabled
+                                  ? 'btn-3d-amber text-white ring-2 ring-yellow-300'
+                                  : 'btn-3d-white text-slate-900'
+                              }`}
+                            >
+                              <Zap className="w-4 h-4" />
+                              {torchEnabled ? 'Tắt Flash (Torch)' : 'Bật Flash (Torch)'}
+                            </button>
+                          )}
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleSaveEvidenceSheet(rec, false);
-                            }}
-                            title="Tải ảnh minh chứng bài chấm"
-                            className="btn-3d btn-3d-white p-2 rounded-lg text-slate-800"
+                            onClick={() => setIsOmrCameraOpen(false)}
+                            className="btn-3d btn-3d-rose px-3 py-2 rounded-xl text-xs font-black text-white shadow-lg flex items-center gap-1"
                           >
-                            <Download className="w-4 h-4" />
+                            <X className="w-4 h-4" />
+                            Đóng Camera
                           </button>
                         </div>
+                        <div className="absolute bottom-3 inset-x-3 flex flex-wrap items-center justify-between gap-2">
+                          <span className="px-3 py-1.5 rounded-lg bg-slate-950/90 border border-emerald-500/60 text-xs font-mono text-emerald-300">
+                            Chỉ quét vùng trong 4 Neo Cố Định ({anchorLockState.count}/4) — Nhận đủ 4 neo tự động chấm & hiện điểm
+                          </span>
+                          <div className="flex items-center gap-2">
+                            {torchSupported && (
+                              <button
+                                onClick={handleToggleCameraTorch}
+                                className={`btn-3d px-3.5 py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-lg flex items-center gap-1.5 ${
+                                  torchEnabled
+                                    ? 'btn-3d-amber text-white'
+                                    : 'btn-3d-white text-slate-900'
+                                }`}
+                              >
+                                <Zap className="w-4 h-4" />
+                                Bật/Tắt Flash
+                              </button>
+                            )}
+                            <button
+                              onClick={handleManualCaptureFromVideo}
+                              className="btn-3d btn-3d-emerald px-5 py-2.5 rounded-xl text-white font-black text-sm shadow-lg"
+                            >
+                              Chụp & Chấm Theo 4 Neo
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="relative w-full h-full flex flex-col items-center justify-center p-4 text-center">
+                        <img
+                          src={currentTpl.imageUrl}
+                          alt={currentTpl.name}
+                          className="absolute inset-0 w-full h-full object-contain opacity-25 pointer-events-none"
+                        />
+                        {showGridOverlay && (
+                          <TemplateCoordinatePreviewOverlay
+                            templateId={selectedTemplate}
+                            settings={omrSettings}
+                          />
+                        )}
+                        <div className="relative z-10 max-w-lg space-y-3.5 bg-white/95 backdrop-blur-md p-5 rounded-2xl border-2 border-sky-300 shadow-xl">
+                          <div className="w-12 h-12 rounded-2xl bg-blue-100 border-2 border-blue-300 flex items-center justify-center mx-auto text-blue-700">
+                            <Camera className="w-6 h-6" />
+                          </div>
+                          <h3 className="text-base sm:text-lg font-black text-slate-900">
+                            Quét Bảng Trả Lời Theo 4 Neo Cố Định (Full Màn Hình)
+                          </h3>
+                          <p className="text-xs sm:text-sm font-semibold text-slate-600 leading-relaxed">
+                            Hệ thống <strong>chỉ quét vùng bảng trả lời trong 4 neo cố định</strong>, tự động chấm và hiện điểm ngay khi nhận đủ 4 neo, <strong>báo lỗi và không chấm khi không tô Mã đề</strong>, đồng thời khóa bảo mật SBD & đáp án.
+                          </p>
+                          <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+                            <button
+                              onClick={() => enterScannerFullscreenMode(true)}
+                              className="btn-3d btn-3d-emerald px-5 py-3 rounded-xl text-white font-black text-sm flex items-center gap-2"
+                            >
+                              <Maximize2 className="w-5 h-5" />
+                              Mở Camera Chấm Bài (Full Màn Hình)
+                            </button>
+
+                            <label className="btn-3d btn-3d-blue px-4 py-3 rounded-xl text-white font-black text-sm flex items-center gap-2 cursor-pointer">
+                              <Upload className="w-5 h-5" />
+                              Tải Ảnh Phiếu Đã Chụp
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(e) => {
+                                  const f = e.target.files?.[0];
+                                  if (f) handleGradeUploadedSheetImage(f);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                          </div>
+                        </div>
                       </div>
-                    ))}
+                    )}
                   </div>
-                )}
+                </div>
+
+                {/* Cột phải: Bộ tạo Phiếu Tô Mẫu Thực Tế (Simulator) & Lịch sử quét nhanh */}
+                <div className="lg:col-span-4 space-y-4">
+                  <div className="panel-3d-emerald rounded-2xl p-4 sm:p-5 space-y-3.5">
+                    <div className="flex items-center justify-between border-b-2 border-emerald-200 pb-2">
+                      <div className="flex items-center gap-2">
+                        <Wand2 className="w-5 h-5 text-emerald-600" />
+                        <h3 className="text-sm font-black uppercase tracking-wider text-emerald-950">
+                          Mô Phỏng Quét 4 Neo & Kiểm Thử Quy Tắc
+                        </h3>
+                      </div>
+                      <span className="text-xs font-mono font-black px-2 py-0.5 rounded-md bg-emerald-200/80 text-emerald-950">
+                        Lớp {activeClassGroup?.className} (Mã {activeClassGroup?.sbdPrefix})
+                      </span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-700 font-semibold">
+                      Kiểm tra tức thì quy trình nhận đủ 4 neo cố định tự động chấm, báo lỗi khi không tô Mã đề, và xuất phiếu thiếu/ngoài SBD xuống cuối danh sách lớp:
+                    </p>
+
+                    <div className="grid grid-cols-2 gap-2.5">
+                      <div>
+                        <label className="block text-xs text-slate-700 font-black uppercase mb-1">
+                          SBD (2 số đầu = Lớp)
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={8}
+                          value={simSbd}
+                          onChange={(e) => setSimSbd(e.target.value)}
+                          className="w-full bg-white border-2 border-emerald-400 rounded-xl px-3 py-2 font-mono font-black text-sm text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-700 font-black uppercase mb-1">
+                          Mã đề ({currentTpl.maDeDigits} số)
+                        </label>
+                        <select
+                          value={simExamCode}
+                          onChange={(e) => setSimExamCode(e.target.value)}
+                          className="w-full bg-white border-2 border-emerald-400 rounded-xl px-3 py-2 font-mono font-black text-sm text-slate-900"
+                        >
+                          {Object.keys(answerKeys).map((c) => (
+                            <option key={c} value={c}>
+                              Mã đề {c}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2.5 pt-1">
+                      <button
+                        onClick={() => handleRunSimulatedSheet(0.9)}
+                        className="btn-3d btn-3d-emerald py-2.5 px-3 rounded-xl text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5"
+                      >
+                        <Zap className="w-4 h-4 shrink-0" />
+                        Đủ 4 Neo: Khá/Giỏi
+                      </button>
+                      <button
+                        onClick={() => handleRunSimulatedSheet(1.0)}
+                        className="btn-3d btn-3d-blue py-2.5 px-3 rounded-xl text-white font-black text-xs sm:text-sm flex items-center justify-center gap-1.5"
+                      >
+                        <Award className="w-4 h-4 shrink-0" />
+                        Đủ 4 Neo: Điểm 10
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-emerald-200">
+                      <button
+                        onClick={() => handleRunSimulatedSheet(0.9, { skipExamCode: true })}
+                        className="btn-3d btn-3d-rose py-2 px-2.5 rounded-xl text-white font-black text-xs flex items-center justify-center gap-1.5"
+                      >
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        Test Lỗi Không Tô Mã Đề
+                      </button>
+                      <button
+                        onClick={() => handleRunSimulatedSheet(0.9, { skipSbd: true })}
+                        className="btn-3d btn-3d-amber py-2 px-2.5 rounded-xl text-white font-black text-xs flex items-center justify-center gap-1.5"
+                      >
+                        <Users className="w-4 h-4 shrink-0" />
+                        Test SBD Xuất Cuối DS Lớp
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Danh sách các bài vừa chấm gần nhất */}
+                  <div className="panel-3d-violet rounded-2xl p-4 sm:p-5 space-y-3">
+                    <div className="flex items-center justify-between border-b-2 border-violet-200 pb-2">
+                      <h3 className="text-sm font-black uppercase tracking-wider text-violet-950">
+                        Các Phiếu Vừa Quét ({gradedRecords.length})
+                      </h3>
+                      {gradedRecords.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setIsScannerFullscreen(false);
+                            setActiveTab('results');
+                          }}
+                          className="text-xs text-violet-700 hover:text-violet-950 font-black underline"
+                        >
+                          Xem sổ điểm lớp →
+                        </button>
+                      )}
+                    </div>
+
+                    {gradedRecords.length === 0 ? (
+                      <p className="text-sm text-slate-500 font-semibold py-5 text-center">
+                        Chưa có bài chấm nào trong phiên này.
+                      </p>
+                    ) : (
+                      <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1">
+                        {gradedRecords.slice(0, 6).map((rec) => (
+                          <div
+                            key={rec.id}
+                            onClick={() => setActiveHudRecord(rec)}
+                            className="w-full text-left bg-white hover:bg-violet-50/70 border-2 border-violet-200 rounded-xl p-3 flex items-center justify-between transition-all cursor-pointer shadow-2xs"
+                          >
+                            <div>
+                              <div className="text-sm font-black text-slate-900 font-mono flex items-center gap-1.5">
+                                <Lock className="w-3.5 h-3.5 text-slate-500" />
+                                SBD: {rec.sbd}{' '}
+                                <span className="text-violet-700">• Mã: {rec.examCode}</span>
+                              </div>
+                              <div className="text-xs font-bold text-slate-600 mt-0.5">
+                                {rec.studentName
+                                  ? `${rec.studentName} (${rec.className})`
+                                  : `Lớp ${rec.className || '--'} • STT ${rec.sbdStudentOrder ?? '--'}`}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2.5">
+                              <div className="text-right">
+                                <div className="text-lg font-black font-mono text-emerald-600 tabular-nums">
+                                  {rec.totalScore.toFixed(2)}
+                                </div>
+                                <div className="text-[11px] font-bold text-slate-500">điểm</div>
+                              </div>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSaveEvidenceSheet(rec, false);
+                                }}
+                                title="Tải ảnh minh chứng bài chấm"
+                                className="btn-3d btn-3d-white p-2 rounded-lg text-slate-800"
+                              >
+                                <Download className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -2940,14 +3306,30 @@ export default function App() {
                           st.sbd || `${activeClassGroup.sbdPrefix}${String(st.stt).padStart(4, '0')}`;
                         const linkedRecord = gradedRecords.find((r) => r.id === st.recordId);
                         return (
-                          <tr key={st.stt} className="hover:bg-sky-50/70 transition-colors">
+                          <tr
+                            key={`${st.stt}-${st.recordId || 'init'}`}
+                            className={`transition-colors ${
+                              st.isAppendedAtEnd
+                                ? 'bg-amber-50/90 hover:bg-amber-100/80'
+                                : 'hover:bg-sky-50/70'
+                            }`}
+                          >
                             <td className="py-3 px-3.5 font-mono font-black text-slate-800">
                               {st.stt}
                             </td>
                             <td className="py-3 px-3.5 font-mono font-black text-blue-700">
                               {expectedSbd}
                             </td>
-                            <td className="py-3 px-3.5 font-bold text-slate-900">{st.fullName}</td>
+                            <td className="py-3 px-3.5 font-bold text-slate-900">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span>{st.fullName}</span>
+                                {st.isAppendedAtEnd && (
+                                  <span className="px-2 py-0.5 rounded-md bg-amber-200 text-amber-950 text-[11px] font-black">
+                                    Xuất cuối DS lớp (Không can thiệp SBD)
+                                  </span>
+                                )}
+                              </div>
+                            </td>
                             <td className="py-3 px-3.5 font-bold text-slate-600">
                               {activeClassGroup.className}
                             </td>
@@ -2987,11 +3369,11 @@ export default function App() {
                                 <button
                                   onClick={() => {
                                     setSimSbd(expectedSbd);
-                                    setActiveTab('scanner');
+                                    enterScannerFullscreenMode(true);
                                   }}
                                   className="btn-3d btn-3d-white px-3 py-1 rounded-lg text-xs font-black text-blue-700"
                                 >
-                                  Chấm ngay →
+                                  Chấm ngay (Full) →
                                 </button>
                               )}
                             </td>
@@ -3178,10 +3560,10 @@ export default function App() {
                       TÍNH NĂNG 06
                     </span>
                     <h5 className="text-sm font-black text-indigo-950">
-                      Thuật Toán OMR Nắn Phẳng Phối Cảnh 8-DOF
+                      Chỉ Quét Bảng Trả Lời Theo 4 Neo Cố Định & Tự Chấm
                     </h5>
                     <p className="text-xs text-slate-700 font-medium">
-                      Bắt 4 góc định vị bằng Integral Image Adaptive Threshold, tự động nắn phẳng tờ phiếu bị nghiêng và đo mật độ chì chống bóng râm.
+                      Loại bỏ hoàn toàn mọi vật thể ngoài 4 neo cố định. Ngay khi nhận đủ 4/4 neo cố định, hệ thống tự động chấm và hiện điểm tức thì trên màn hình Fullscreen.
                     </p>
                   </div>
 
@@ -3190,10 +3572,10 @@ export default function App() {
                       TÍNH NĂNG 07
                     </span>
                     <h5 className="text-sm font-black text-teal-950">
-                      Lưu Minh Chứng Bài Chấm & Chia Sẻ Lên Drive
+                      Báo Lỗi Không Tô Mã Đề & Khóa Bảo Mật Kết Quả
                     </h5>
                     <p className="text-xs text-slate-700 font-medium">
-                      Đóng dấu thông tin học sinh, lớp, môn, kỳ kiểm tra và điểm số lên ảnh phiếu đã khoanh đáp án; tải về máy hoặc chia sẻ lên Google Drive điện thoại.
+                      Tự động phát cảnh báo lỗi và từ chối chấm khi phiếu không tô Mã đề. Khóa bảo mật SBD và các đáp án (không cho phép can thiệp chỉnh sửa).
                     </p>
                   </div>
 
@@ -3202,26 +3584,26 @@ export default function App() {
                       TÍNH NĂNG 08
                     </span>
                     <h5 className="text-sm font-black text-blue-950">
-                      Tương Thích Mọi Hệ Điều Hành & Tự Cập Nhật
+                      Xuất Phiếu Thiếu/Ngoài SBD Vào Cuối Danh Sách Lớp
                     </h5>
                     <p className="text-xs text-slate-700 font-medium">
-                      Chạy mượt trên iOS Safari, Android Chrome, Windows, macOS, máy tính bảng và bảng tương tác thông minh mà không cần cài đặt.
+                      Các bài chấm thiếu SBD hoặc không khớp STT trong lớp được giữ nguyên hiện trạng và tự động xuất vào đoạn cuối của Danh Sách Lớp đó.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* PHẦN 3: HƯỚNG DẪN SỬ DỤNG 5 BƯỚC CHI TIẾT */}
+              {/* PHẦN 3: HƯỚNG DẪN SỬ DỤNG 5 BƯỚC MỚI NHẤT (${APP_VERSION}) */}
               <div className="feature-3d-card feature-3d-amber rounded-2xl p-5 space-y-3">
                 <h4 className="text-base sm:text-lg font-black uppercase tracking-wider text-amber-950 flex items-center gap-2">
                   <BookOpen className="w-5 h-5 text-amber-600" />
-                  4. Quy Trình Hướng Dẫn Sử Dụng Chuẩn 5 Bước Cho Giáo Viên
+                  4. Quy Trình Hướng Dẫn Sử Dụng Chuẩn 5 Bước Mới Nhất ({APP_VERSION})
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-xs sm:text-sm">
                   <div className="bg-white rounded-xl p-3 border-2 border-amber-200">
                     <div className="font-black text-amber-800 mb-1">BƯỚC 1: Chọn Môn & Lớp</div>
                     <p className="text-slate-700 font-medium">
-                      Chọn Môn học, Kỳ kiểm tra và Lớp học. Bấm <strong>Danh Sách Lớp</strong> để dán tên học sinh và đặt 2 chữ số đầu của SBD cho lớp.
+                      Chọn Môn học, Kỳ kiểm tra và Lớp học. Bấm <strong>Danh Sách Lớp (+ Thêm)</strong> ngay trên đầu trang để nạp tên học sinh và đặt 2 chữ số đầu SBD.
                     </p>
                   </div>
                   <div className="bg-white rounded-xl p-3 border-2 border-amber-200">
@@ -3237,15 +3619,15 @@ export default function App() {
                     </p>
                   </div>
                   <div className="bg-white rounded-xl p-3 border-2 border-amber-200">
-                    <div className="font-black text-amber-800 mb-1">BƯỚC 4: Quét Chấm Bài</div>
+                    <div className="font-black text-amber-800 mb-1">BƯỚC 4: Chấm Full Màn Hình</div>
                     <p className="text-slate-700 font-medium">
-                      Mở Camera hướng vào 4 ô vuông đen ở 4 góc tờ phiếu. Hệ thống tự chụp, chấm điểm và điền điểm vào đúng học sinh.
+                      Nhấn <strong>Chấm Bài</strong> để vào <strong>Full Màn Hình</strong>. Chỉ quét vùng trong <strong>4 neo cố định</strong>; đủ 4 neo tự chấm & hiện điểm; báo lỗi nếu không tô Mã đề.
                     </p>
                   </div>
                   <div className="bg-white rounded-xl p-3 border-2 border-amber-200">
-                    <div className="font-black text-amber-800 mb-1">BƯỚC 5: Xuất Điểm & Lưu</div>
+                    <div className="font-black text-amber-800 mb-1">BƯỚC 5: Bảo Mật & Xuất Lớp</div>
                     <p className="text-slate-700 font-medium">
-                      Bấm <strong>Xuất Điểm Excel (.XLSX)</strong> để lấy bảng điểm lớp và tải <strong>Hồ Sơ Minh Chứng</strong> để lưu trữ.
+                      SBD và đáp án được khóa không cho can thiệp; bài thiếu/ngoài SBD tự động xuất vào <strong>đoạn cuối của Danh Sách Lớp đó</strong>.
                     </p>
                   </div>
                 </div>
@@ -3484,49 +3866,18 @@ export default function App() {
                       Lớp {activeHudRecord.className || activeClassGroup?.className} (Mã đầu SBD: {activeHudRecord.sbdClassPrefix})
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 flex-wrap text-xs sm:text-sm mt-1.5">
-                    <label className="font-bold flex items-center gap-1.5">
-                      SBD:
-                      <input
-                        type="text"
-                        value={activeHudRecord.sbd}
-                        onChange={(e) => {
-                          const nextSbd = e.target.value;
-                          const recalc = recalculateRecordScore(
-                            { ...activeHudRecord, sbd: nextSbd },
-                            answerKeys,
-                            currentScoring
-                          );
-                          const synced = enrichAndSyncRecordWithRoster(recalc, gradingMode !== 'verify');
-                          setActiveHudRecord(synced);
-                          setGradedRecords((prev) =>
-                            prev.map((r) => (r.id === synced.id ? synced : r))
-                          );
-                        }}
-                        className="w-28 bg-white text-slate-900 rounded-lg px-2 py-0.5 font-mono font-black text-sm"
-                      />
-                    </label>
-                    <label className="font-bold flex items-center gap-1.5">
-                      Mã đề:
-                      <input
-                        type="text"
-                        value={activeHudRecord.examCode}
-                        onChange={(e) => {
-                          const nextCode = e.target.value;
-                          const recalc = recalculateRecordScore(
-                            { ...activeHudRecord, examCode: nextCode },
-                            answerKeys,
-                            currentScoring
-                          );
-                          const synced = enrichAndSyncRecordWithRoster(recalc, gradingMode !== 'verify');
-                          setActiveHudRecord(synced);
-                          setGradedRecords((prev) =>
-                            prev.map((r) => (r.id === synced.id ? synced : r))
-                          );
-                        }}
-                        className="w-20 bg-white text-slate-900 rounded-lg px-2 py-0.5 font-mono font-black text-sm"
-                      />
-                    </label>
+                  <div className="flex items-center gap-2.5 flex-wrap text-xs sm:text-sm mt-1.5">
+                    <span className="px-2.5 py-1 rounded-lg bg-slate-900/40 border border-white/30 font-mono font-black flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-amber-300" />
+                      SBD (Khóa): {activeHudRecord.sbd}
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-slate-900/40 border border-white/30 font-mono font-black flex items-center gap-1.5">
+                      <Lock className="w-3.5 h-3.5 text-amber-300" />
+                      Mã đề (Khóa): {activeHudRecord.examCode}
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 font-black text-xs">
+                      🔒 Đã khóa bảo mật (Không được quyền can thiệp SBD & Đáp án)
+                    </span>
                   </div>
                 </div>
               </div>
@@ -3561,7 +3912,7 @@ export default function App() {
               {/* Ảnh phiếu đã khoanh kết quả */}
               <div className="lg:col-span-7 space-y-2">
                 <div className="text-xs sm:text-sm font-black text-slate-800 flex items-center justify-between">
-                  <span>Ảnh Phiếu Đã Nắn Phẳng & Khoanh Vùng Đáp Án:</span>
+                  <span>Ảnh Phiếu Đã Nắn Phẳng Theo 4 Neo Cố Định:</span>
                   <span className="text-xs font-bold">
                     <span className="text-emerald-600">● Đúng</span> &nbsp;
                     <span className="text-rose-600">● Sai</span> &nbsp;
@@ -3577,41 +3928,27 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Chi tiết từng phần & Sửa nhanh */}
+              {/* Chi tiết từng phần — KHÓA READ-ONLY TUYỆT ĐỐI KHÔNG CHO CAN THIỆP */}
               <div className="lg:col-span-5 space-y-3 text-xs sm:text-sm">
+                <div className="p-2.5 rounded-xl bg-amber-50 border-2 border-amber-300 text-amber-950 text-xs font-bold flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span>
+                    Số báo danh và toàn bộ đáp án quét từ phiếu được <strong>khóa nguyên trạng (Read-Only)</strong>, không được quyền can thiệp chỉnh sửa. Nếu SBD thiếu hoặc ngoài danh sách, kết quả được tự động xuất vào <strong>cuối danh sách lớp</strong>.
+                  </span>
+                </div>
+
                 <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-3">
                   <div className="font-black text-blue-900 mb-2 flex items-center justify-between">
                     <span className="flex items-center gap-1.5">
-                      <Edit3 className="w-4 h-4 text-blue-600" />
-                      Phần I ({activeHudRecord.p1CorrectCount}/{activeHudRecord.p1TotalCount} câu = {activeHudRecord.p1Score}đ)
+                      <Lock className="w-4 h-4 text-blue-600" />
+                      Phần I ({activeHudRecord.p1CorrectCount}/{activeHudRecord.p1TotalCount} câu = {activeHudRecord.p1Score}đ) — Chỉ xem
                     </span>
                   </div>
                   <div className="grid grid-cols-6 gap-1.5 max-h-44 overflow-y-auto pr-1">
-                    {activeHudRecord.p1Details.map((q, idx) => (
-                      <button
+                    {activeHudRecord.p1Details.map((q) => (
+                      <div
                         key={q.qIndex}
-                        onClick={() => {
-                          const order = ['A', 'B', 'C', 'D', ''];
-                          const nextAns =
-                            order[(order.indexOf(q.studentAnswer) + 1) % order.length];
-                          const nextP1 = activeHudRecord.p1Details.map((item, i) =>
-                            i === idx ? { ...item, studentAnswer: nextAns } : item
-                          );
-                          const recalc = recalculateRecordScore(
-                            { ...activeHudRecord, p1Details: nextP1 },
-                            answerKeys,
-                            currentScoring
-                          );
-                          const synced = enrichAndSyncRecordWithRoster(
-                            recalc,
-                            gradingMode !== 'verify'
-                          );
-                          setActiveHudRecord(synced);
-                          setGradedRecords((prev) =>
-                            prev.map((r) => (r.id === synced.id ? synced : r))
-                          );
-                        }}
-                        className={`p-1.5 rounded-lg border text-center font-mono transition-all ${
+                        className={`p-1.5 rounded-lg border text-center font-mono select-none ${
                           q.isCorrect
                             ? 'bg-emerald-100 border-emerald-400 text-emerald-950 font-black'
                             : 'bg-rose-100 border-rose-400 text-rose-950 font-black'
@@ -3624,15 +3961,16 @@ export default function App() {
                             <span className="text-amber-700 text-[10px]">/{q.correctAnswer}</span>
                           )}
                         </div>
-                      </button>
+                      </div>
                     ))}
                   </div>
                 </div>
 
                 {activeHudRecord.p2Details.length > 0 && (
                   <div className="bg-emerald-50 border-2 border-emerald-200 rounded-xl p-3">
-                    <div className="font-black text-emerald-900 mb-2">
-                      Phần II — Đúng/Sai ({activeHudRecord.p2Score}đ)
+                    <div className="font-black text-emerald-900 mb-2 flex items-center gap-1.5">
+                      <Lock className="w-4 h-4 text-emerald-600" />
+                      Phần II — Đúng/Sai ({activeHudRecord.p2Score}đ) — Chỉ xem
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       {activeHudRecord.p2Details.map((q) => (
@@ -3664,11 +4002,12 @@ export default function App() {
 
                 {activeHudRecord.p3Details.length > 0 && (
                   <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-3">
-                    <div className="font-black text-purple-900 mb-2">
-                      Phần III — Trả lời ngắn ({activeHudRecord.p3Score}đ)
+                    <div className="font-black text-purple-900 mb-2 flex items-center gap-1.5">
+                      <Lock className="w-4 h-4 text-purple-600" />
+                      Phần III — Trả lời ngắn ({activeHudRecord.p3Score}đ) — Chỉ xem
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      {activeHudRecord.p3Details.map((q, idx) => (
+                      {activeHudRecord.p3Details.map((q) => (
                         <div
                           key={q.qIndex}
                           className={`p-2 rounded-lg border font-mono text-xs flex items-center justify-between ${
@@ -3678,30 +4017,9 @@ export default function App() {
                           }`}
                         >
                           <span className="font-extrabold">C.{q.qIndex}:</span>
-                          <input
-                            type="text"
-                            value={q.studentString}
-                            onChange={(e) => {
-                              const nextStr = e.target.value;
-                              const nextP3 = activeHudRecord.p3Details.map((item, i) =>
-                                i === idx ? { ...item, studentString: nextStr } : item
-                              );
-                              const recalc = recalculateRecordScore(
-                                { ...activeHudRecord, p3Details: nextP3 },
-                                answerKeys,
-                                currentScoring
-                              );
-                              const synced = enrichAndSyncRecordWithRoster(
-                                recalc,
-                                gradingMode !== 'verify'
-                              );
-                              setActiveHudRecord(synced);
-                              setGradedRecords((prev) =>
-                                prev.map((r) => (r.id === synced.id ? synced : r))
-                              );
-                            }}
-                            className="w-16 bg-white border border-slate-300 rounded px-1.5 py-0.5 text-right font-black"
-                          />
+                          <span className="px-2 py-0.5 bg-white/80 border border-slate-300 rounded font-black">
+                            {q.studentString || 'Trống'}
+                          </span>
                           <span className="text-[11px] text-amber-800 font-bold">
                             ({String(q.correctValue)})
                           </span>
@@ -3908,7 +4226,10 @@ export default function App() {
       <nav className="fixed bottom-0 inset-x-0 z-30 border-t-2 border-sky-300 bg-white/95 backdrop-blur-md shadow-lg safe-area-bottom-nav">
         <div className="max-w-3xl mx-auto grid grid-cols-5 gap-1.5 p-2">
           <button
-            onClick={() => setActiveTab('keys')}
+            onClick={() => {
+              setIsScannerFullscreen(false);
+              setActiveTab('keys');
+            }}
             className={`py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${
               activeTab === 'keys'
                 ? 'btn-3d btn-3d-blue text-white'
@@ -3920,19 +4241,22 @@ export default function App() {
           </button>
 
           <button
-            onClick={() => setActiveTab('scanner')}
+            onClick={() => enterScannerFullscreenMode(true)}
             className={`py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${
               activeTab === 'scanner'
                 ? 'btn-3d btn-3d-emerald text-white'
                 : 'btn-3d btn-3d-white text-slate-700'
             }`}
           >
-            <Camera className="w-4 h-4 shrink-0" />
+            <Maximize2 className="w-4 h-4 shrink-0" />
             <span className="truncate">2. Chấm Bài</span>
           </button>
 
           <button
-            onClick={() => setActiveTab('results')}
+            onClick={() => {
+              setIsScannerFullscreen(false);
+              setActiveTab('results');
+            }}
             className={`py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${
               activeTab === 'results'
                 ? 'btn-3d btn-3d-violet text-white'
