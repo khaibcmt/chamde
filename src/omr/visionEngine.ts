@@ -187,8 +187,8 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
   }
 
   const visited = new Uint8Array(size);
-  // Cho phép nhận diện ô vuông neo từ nhỏ (1.0% khung hình) đến vừa (18% khung hình)
-  const minSide = Math.max(5, Math.round(Math.min(width, height) * 0.009));
+  // Cho phép nhận diện mốc neo từ vạch chữ nhật góc Bộ GD (0.5% khung hình) đến ô vuông lớn (18% khung hình)
+  const minSide = Math.max(4, Math.round(Math.min(width, height) * 0.005));
   const maxSide = Math.round(Math.min(width, height) * 0.18);
 
   interface CandidateSquare {
@@ -252,17 +252,18 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
         const bboxArea = bw * bh;
         const fill = count / bboxArea;
 
-        // Ô vuông mốc neo đen trên phiếu in chuẩn: hình vuông hoặc gần vuông, độ đặc cao (fill >= 0.52)
+        // Trường hợp 1: Mốc neo độc lập (ô vuông chuẩn hoặc vạch mốc chữ nhật Bộ GD 2025)
         if (
           bw >= minSide &&
           bw <= maxSide &&
           bh >= minSide &&
           bh <= maxSide &&
-          aspect >= 0.55 &&
-          aspect <= 1.80 &&
+          Math.max(bw, bh) >= minSide * 1.8 &&
+          aspect >= 0.30 &&
+          aspect <= 3.35 &&
           fill >= 0.52
         ) {
-          const aspectDist = Math.abs(1 - aspect);
+          const aspectDist = Math.min(1, Math.abs(1 - aspect) * 0.35);
           const qualityScore = bboxArea * fill * (1 - aspectDist * 0.4);
           candidates.push({
             cx: (minX + maxX) / 2,
@@ -274,6 +275,44 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
             count,
             score: qualityScore,
           });
+        } else if (bw > width * 0.45 && bh > height * 0.45 && fill < 0.22) {
+          // Trường hợp 2: Phiếu Azota có 4 ô vuông đen ở 4 góc dính liền vào khung viền bao ngoài
+          const cWin = Math.max(16, Math.round(Math.min(width, height) * 0.048));
+          const cornerBoxes = [
+            { x0: minX, x1: Math.min(maxX, minX + cWin), y0: minY, y1: Math.min(maxY, minY + cWin) },
+            { x0: Math.max(minX, maxX - cWin), x1: maxX, y0: minY, y1: Math.min(maxY, minY + cWin) },
+            { x0: maxX - cWin, x1: maxX, y0: Math.max(minY, maxY - cWin), y1: maxY },
+            { x0: minX, x1: Math.min(maxX, minX + cWin), y0: Math.max(minY, maxY - cWin), y1: maxY },
+          ];
+          for (const cb of cornerBoxes) {
+            let sx = 0,
+              sy = 0,
+              darkCnt = 0;
+            for (let yy = cb.y0; yy <= cb.y1; yy++) {
+              for (let xx = cb.x0; xx <= cb.x1; xx++) {
+                if (gray[yy * width + xx] < 125) {
+                  sx += xx;
+                  sy += yy;
+                  darkCnt++;
+                }
+              }
+            }
+            const winArea = Math.max(1, (cb.x1 - cb.x0 + 1) * (cb.y1 - cb.y0 + 1));
+            const winFill = darkCnt / winArea;
+            if (darkCnt >= minSide * minSide * 2 && winFill >= 0.32) {
+              const sideEst = Math.round(Math.sqrt(darkCnt));
+              candidates.push({
+                cx: sx / darkCnt,
+                cy: sy / darkCnt,
+                bw: sideEst,
+                bh: sideEst,
+                area: darkCnt,
+                fill: Math.min(1, winFill * 1.35),
+                count: darkCnt,
+                score: darkCnt * 1.25,
+              });
+            }
+          }
         }
       }
     }
@@ -293,11 +332,50 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
     return defaultFallback;
   }
 
-  // Sắp xếp các ứng viên theo điểm chất lượng giảm dần
-  candidates.sort((a, b) => b.score - a.score);
+  // Sắp xếp các ứng viên theo điểm chất lượng kết hợp khoảng cách tới tâm khung hình
+  // (Ưu tiên các ô vuông mốc định vị nằm ở 4 góc ngoài của tờ phiếu hơn các vạch căn lề bên trong)
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const halfDiag = Math.max(1, Math.hypot(centerX, centerY));
 
-  // Lọc tập ứng viên sáng giá nhất (top 16)
-  const topPool = candidates.slice(0, 16);
+  candidates.sort((a, b) => {
+    const distA = Math.hypot(a.cx - centerX, a.cy - centerY) / halfDiag;
+    const distB = Math.hypot(b.cx - centerX, b.cy - centerY) / halfDiag;
+    return b.score * (0.55 + 0.75 * distB) - a.score * (0.55 + 0.75 * distA);
+  });
+
+  // Đảm bảo luôn giữ lại các ứng viên gần 4 góc khung hình nhất cùng top ứng viên tốt nhất (tối đa 22 điểm)
+  const cornerTargets = [
+    { x: 0, y: 0 },
+    { x: width, y: 0 },
+    { x: width, y: height },
+    { x: 0, y: height },
+  ];
+  const topPool: CandidateSquare[] = [];
+  const addCandidateToPool = (cand: CandidateSquare | undefined) => {
+    if (!cand) return;
+    if (!topPool.some((p) => Math.hypot(p.cx - cand.cx, p.cy - cand.cy) < minSide * 0.8)) {
+      topPool.push(cand);
+    }
+  };
+
+  for (const ct of cornerTargets) {
+    let bestCornerCand: CandidateSquare | undefined;
+    let bestDist = Infinity;
+    for (const c of candidates) {
+      const d = Math.hypot(c.cx - ct.x, c.cy - ct.y);
+      if (d < bestDist) {
+        bestDist = d;
+        bestCornerCand = c;
+      }
+    }
+    addCandidateToPool(bestCornerCand);
+  }
+
+  for (const c of candidates) {
+    if (topPool.length >= 22) break;
+    addCandidateToPool(c);
+  }
 
   // Helper tính diện tích tứ giác lồi bằng Shoelace Formula
   const computeQuadArea = (p0: Point2D, p1: Point2D, p2: Point2D, p3: Point2D) => {
@@ -333,6 +411,27 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
     return true;
   };
 
+  // Helper kiểm tra độ vuông góc của 4 đỉnh tứ giác (trả về max |cosTheta|)
+  const getMaxCornerCosine = (p0: Point2D, p1: Point2D, p2: Point2D, p3: Point2D): number => {
+    const pts = [p0, p1, p2, p3];
+    let maxAbsCos = 0;
+    for (let i = 0; i < 4; i++) {
+      const prev = pts[(i + 3) % 4];
+      const cur = pts[i];
+      const next = pts[(i + 1) % 4];
+      const v1x = prev.x - cur.x;
+      const v1y = prev.y - cur.y;
+      const v2x = next.x - cur.x;
+      const v2y = next.y - cur.y;
+      const l1 = Math.hypot(v1x, v1y);
+      const l2 = Math.hypot(v2x, v2y);
+      if (l1 < 1e-3 || l2 < 1e-3) return 1;
+      const cos = Math.abs((v1x * v2x + v1y * v2y) / (l1 * l2));
+      if (cos > maxAbsCos) maxAbsCos = cos;
+    }
+    return maxAbsCos;
+  };
+
   let bestQuad: {
     p0: Point2D;
     p1: Point2D;
@@ -340,7 +439,10 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
     p3: Point2D;
     score: number;
     area: number;
+    anchorCount: number;
   } | null = null;
+
+  const frameArea = width * height;
 
   // 1. Thử tất cả các bộ 4 đỉnh trong topPool
   const N = topPool.length;
@@ -366,9 +468,12 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
           if (!isConvexQuad(p0, p1, p2, p3)) continue;
 
           const quadArea = computeQuadArea(p0, p1, p2, p3);
-          const frameArea = width * height;
           // Tờ phiếu phải chiếm tối thiểu 10% khung hình camera
           if (quadArea < frameArea * 0.10) continue;
+
+          // Kiểm tra 4 góc gần vuông (góc từ ~70° đến ~110°, tức |cos| <= 0.34)
+          const maxCos = getMaxCornerCosine(p0, p1, p2, p3);
+          if (maxCos > 0.34) continue;
 
           const edge01 = Math.hypot(p1.x - p0.x, p1.y - p0.y);
           const edge12 = Math.hypot(p2.x - p1.x, p2.y - p1.y);
@@ -377,19 +482,22 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
 
           const wRatio = edge01 / Math.max(1, edge23);
           const hRatio = edge12 / Math.max(1, edge30);
-          if (wRatio < 0.55 || wRatio > 1.85 || hRatio < 0.55 || hRatio > 1.85) continue;
+          if (wRatio < 0.65 || wRatio > 1.55 || hRatio < 0.65 || hRatio > 1.55) continue;
 
           // Độ đồng đều diện tích của 4 ô vuông đen (phải tương đồng trên cùng 1 phiếu)
           const cAreas = [rawPts[0].area, rawPts[1].area, rawPts[2].area, rawPts[3].area];
           const minA = Math.min(...cAreas);
           const maxA = Math.max(...cAreas);
-          if (minA / Math.max(1, maxA) < 0.20) continue;
+          if (minA / Math.max(1, maxA) < 0.16) continue;
 
-          const combinedScore =
-            rawPts.reduce((acc, p) => acc + p.score, 0) + (quadArea / frameArea) * 600;
+          // Ưu tiên mạnh tứ giác bao ngoài có diện tích lớn và góc vuông vức nhất
+          const areaWeight = (quadArea / frameArea) * 5000;
+          const rectWeight = (1 - maxCos) * 800;
+          const markerWeight = Math.min(600, rawPts.reduce((acc, p) => acc + p.score, 0) * 0.25);
+          const combinedScore = areaWeight + rectWeight + markerWeight;
 
           if (!bestQuad || combinedScore > bestQuad.score) {
-            bestQuad = { p0, p1, p2, p3, score: combinedScore, area: quadArea };
+            bestQuad = { p0, p1, p2, p3, score: combinedScore, area: quadArea, anchorCount: 4 };
           }
         }
       }
@@ -398,81 +506,70 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
 
   // 2. Cơ chế suy luận hình bình hành khi chỉ thấy 3 mốc (3-out-of-4 Fallback Recovery)
   if (!bestQuad && topPool.length >= 3) {
-    const pA = topPool[0];
-    const pB = topPool[1];
-    const pC = topPool[2];
+    const M = Math.min(topPool.length, 12);
+    for (let i = 0; i < M - 2; i++) {
+      for (let j = i + 1; j < M - 1; j++) {
+        for (let k = j + 1; k < M; k++) {
+          const pA = topPool[i];
+          const pB = topPool[j];
+          const pC = topPool[k];
 
-    // Điểm thứ 4 dự đoán bằng tính chất vector hình bình hành
-    const pD_pred1 = { x: pA.cx + pC.cx - pB.cx, y: pA.cy + pC.cy - pB.cy };
-    const pD_pred2 = { x: pB.cx + pC.cx - pA.cx, y: pB.cy + pC.cy - pA.cy };
-    const pD_pred3 = { x: pA.cx + pB.cx - pC.cx, y: pA.cy + pB.cy - pC.cy };
+          const preds = [
+            { x: pA.cx + pC.cx - pB.cx, y: pA.cy + pC.cy - pB.cy },
+            { x: pB.cx + pC.cx - pA.cx, y: pB.cy + pC.cy - pA.cy },
+            { x: pA.cx + pB.cx - pC.cx, y: pA.cy + pB.cy - pC.cy },
+          ];
 
-    const validPredictions = [pD_pred1, pD_pred2, pD_pred3].filter(
-      (pt) => pt.x >= 0 && pt.x < width && pt.y >= 0 && pt.y < height
-    );
+          for (const pred of preds) {
+            if (pred.x < 4 || pred.x >= width - 4 || pred.y < 4 || pred.y >= height - 4) continue;
+            const pts = [
+              { x: pA.cx, y: pA.cy },
+              { x: pB.cx, y: pB.cy },
+              { x: pC.cx, y: pC.cy },
+              pred,
+            ];
+            const midX = (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4;
+            const midY = (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4;
+            pts.sort(
+              (a, b) => Math.atan2(a.y - midY, a.x - midX) - Math.atan2(b.y - midY, b.x - midX)
+            );
 
-    for (const pred of validPredictions) {
-      const pts = [
-        { x: pA.cx, y: pA.cy },
-        { x: pB.cx, y: pB.cy },
-        { x: pC.cx, y: pC.cy },
-        pred,
-      ];
-      const midX = (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4;
-      const midY = (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4;
-      pts.sort(
-        (a, b) => Math.atan2(a.y - midY, a.x - midX) - Math.atan2(b.y - midY, b.x - midX)
-      );
+            const p0 = pts[0],
+              p1 = pts[1],
+              p2 = pts[2],
+              p3 = pts[3];
+            if (!isConvexQuad(p0, p1, p2, p3)) continue;
+            const maxCos = getMaxCornerCosine(p0, p1, p2, p3);
+            if (maxCos > 0.28) continue;
 
-      const p0 = pts[0],
-        p1 = pts[1],
-        p2 = pts[2],
-        p3 = pts[3];
-      if (isConvexQuad(p0, p1, p2, p3)) {
-        const quadArea = computeQuadArea(p0, p1, p2, p3);
-        if (quadArea >= width * height * 0.10) {
-          bestQuad = { p0, p1, p2, p3, score: 300, area: quadArea };
-          break;
+            const quadArea = computeQuadArea(p0, p1, p2, p3);
+            if (quadArea >= frameArea * 0.14) {
+              const score = (quadArea / frameArea) * 4000 + (1 - maxCos) * 600;
+              if (!bestQuad || score > bestQuad.score) {
+                bestQuad = { p0, p1, p2, p3, score, area: quadArea, anchorCount: 3 };
+              }
+            }
+          }
         }
       }
     }
   }
 
-  // 3. Cơ chế suy luận khi chỉ thấy 2 mốc (2-out-of-4 Fallback Recovery)
-  if (!bestQuad && topPool.length >= 2) {
-    const pA = topPool[0];
-    const pB = topPool[1];
-    const dx = pB.cx - pA.cx;
-    const dy = pB.cy - pA.cy;
-    const dist = Math.hypot(dx, dy);
-    if (dist > width * 0.12) {
-      const cx = (pA.cx + pB.cx) / 2;
-      const cy = (pA.cy + pB.cy) / 2;
-      const halfW = Math.max(dist * 0.5, width * 0.35);
-      const halfH = halfW * 0.72;
-      const p0 = { x: cx - halfW, y: cy - halfH };
-      const p1 = { x: cx + halfW, y: cy - halfH };
-      const p2 = { x: cx + halfW, y: cy + halfH };
-      const p3 = { x: cx - halfW, y: cy + halfH };
-      bestQuad = { p0, p1, p2, p3, score: 200, area: computeQuadArea(p0, p1, p2, p3) };
-    }
-  }
-
   if (!bestQuad) {
     // Trả về số lượng mốc neo thực tế tìm thấy để thông báo giao diện
-    const count = Math.min(candidates.length, 3);
+    const count = Math.min(candidates.length, 2);
     return {
       found: false,
       anchorCount: count,
       locks: {
         tl: count >= 1,
         tr: count >= 2,
-        bl: count >= 3,
+        bl: false,
         br: false,
       },
       tl: candidates[0] ? { x: candidates[0].cx, y: candidates[0].cy } : defaultFallback.tl,
       tr: candidates[1] ? { x: candidates[1].cx, y: candidates[1].cy } : defaultFallback.tr,
-      bl: candidates[2] ? { x: candidates[2].cx, y: candidates[2].cy } : defaultFallback.bl,
+      bl: defaultFallback.bl,
       br: defaultFallback.br,
     };
   }
@@ -561,7 +658,7 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
 
   return {
     found: true,
-    anchorCount: 4,
+    anchorCount: bestQuad.anchorCount,
     locks: { tl: true, tr: true, bl: true, br: true },
     tl: mappedTL,
     tr: mappedTR,
@@ -855,6 +952,14 @@ export function gradeWarpedSheet(
         outCtx.stroke();
       } else {
         examCode += '?';
+      }
+    }
+    // Nếu phiếu có 4 cột Mã đề nhưng học sinh chỉ tô 3 cột đầu (101?) hoặc 3 cột cuối (?101)
+    if (maDeColCount === 4) {
+      if (examCode.endsWith('?') && !examCode.slice(0, 3).includes('?')) {
+        examCode = examCode.slice(0, 3);
+      } else if (examCode.startsWith('?') && !examCode.slice(1).includes('?')) {
+        examCode = examCode.slice(1);
       }
     }
   }

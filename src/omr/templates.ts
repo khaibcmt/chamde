@@ -1,3 +1,5 @@
+import jsQR from 'jsqr';
+
 export type TemplateId =
   | 'qm_toan'
   | 'qm_khtn_dia'
@@ -278,6 +280,11 @@ export interface AnswerKeyData {
     d: 'D' | 'S';
   }[]; // up to 16 questions
   p3: (number | string)[]; // up to 12 short answers
+  detectedCounts?: {
+    p1Count: number;
+    p2Count: number;
+    p3Count: number;
+  };
 }
 
 export interface CustomScoringConfig {
@@ -404,7 +411,7 @@ export function getDefaultScoringConfig(templateId: TemplateId): CustomScoringCo
 }
 
 export const SAMPLE_QR_IMAGE_URL =
-  './assets/aistudio/M_n_SINH_H_C_-_L_p_12_-_K__ki_m_tra_KI_M_TRA_CU_I_K__I_-_01-11-26_-_QR_Chung__M__101-104__-_1_-_App_QM_2025_e413d348.png';
+  './assets/aistudio/M_n_SINH_H_C_-_L_p_12_-_K__ki_m_tra_KI_M_TRA_CU_I_K__I_-_02-11-26_-_QR_Chung__M__101-104__-_1_-_App_QM_2025_ee25841d.png';
 
 /**
  * Chuỗi JSON thực tế đã giải mã từ mã QR Môn Sinh Học 12 - Kiểm tra cuối kì I (Mã 101-104 & hỗ trợ mã 4 số 0101-0104)
@@ -412,33 +419,151 @@ export const SAMPLE_QR_IMAGE_URL =
 export const DEFAULT_QR_JSON_RAW = JSON.stringify([
   [
     101,
-    'B', 'C', 'D', 'C', 'D', 'A', 'D', 'B', 'A', 'D', 'D', 'A', 'B', 'C', 'B', 'A', 'B', 'D',
-    'D', 'D', 'S', 'D', 'D', 'D', 'S', 'S', 'D', 'D', 'D', 'D', 'D', 'D', 'D', 'S',
-    16, 20, 28.125, 299, 88.9, 2700,
+    'C', 'C', 'B', 'A', 'D', 'A', 'A', 'A', 'C', 'A', 'B', 'B', 'D', 'A', 'C', 'D', 'B', 'D',
+    'D', 'D', 'D', 'S', 'D', 'D', 'S', 'D', 'D', 'D', 'S', 'D', 'S', 'D', 'D', 'D',
+    2700, 88.9, 299, 16, 28.1, 20,
   ],
   [
     102,
-    'A', 'A', 'C', 'C', 'D', 'A', 'C', 'D', 'D', 'C', 'C', 'A', 'C', 'A', 'C', 'C', 'C', 'A',
-    'D', 'S', 'D', 'D', 'D', 'D', 'S', 'D', 'S', 'D', 'D', 'D', 'S', 'D', 'D', 'D',
-    20, 88.9, 2700, 16, 28.125, 299,
+    'C', 'B', 'B', 'D', 'D', 'B', 'B', 'D', 'C', 'A', 'C', 'B', 'A', 'D', 'C', 'A', 'B', 'B',
+    'S', 'D', 'D', 'D', 'D', 'S', 'D', 'D', 'D', 'D', 'S', 'D', 'D', 'S', 'D', 'D',
+    299, 16, 28.1, 20, 2700, 88.9,
   ],
   [
     103,
-    'C', 'C', 'A', 'B', 'C', 'C', 'B', 'A', 'A', 'C', 'B', 'B', 'C', 'B', 'C', 'B', 'A', 'C',
-    'D', 'D', 'D', 'S', 'D', 'D', 'D', 'S', 'D', 'D', 'S', 'D', 'D', 'S', 'D', 'D',
-    2700, 16, 28.125, 299, 20, 88.9,
+    'D', 'B', 'A', 'D', 'D', 'A', 'B', 'D', 'D', 'B', 'A', 'C', 'A', 'A', 'D', 'B', 'A', 'D',
+    'S', 'D', 'D', 'D', 'D', 'D', 'D', 'S', 'D', 'S', 'D', 'D', 'D', 'S', 'D', 'D',
+    88.9, 20, 16, 2700, 299, 28.1,
   ],
   [
     104,
-    'B', 'A', 'B', 'D', 'D', 'A', 'D', 'B', 'C', 'D', 'A', 'B', 'D', 'A', 'D', 'C', 'A', 'C',
-    'D', 'D', 'S', 'D', 'D', 'D', 'S', 'D', 'D', 'D', 'S', 'D', 'D', 'S', 'D', 'D',
-    20, 16, 299, 88.9, 28.125, 2700,
+    'B', 'D', 'D', 'B', 'D', 'D', 'B', 'B', 'D', 'A', 'B', 'A', 'B', 'B', 'D', 'C', 'B', 'C',
+    'D', 'S', 'D', 'D', 'D', 'D', 'S', 'D', 'D', 'D', 'D', 'S', 'D', 'S', 'D', 'D',
+    28.1, 88.9, 299, 2700, 16, 20,
   ],
 ]);
 
 /**
- * Giải mã mảng JSON 2 chiều từ hệ thống trộn đề QM2025 sang cấu trúc AnswerKeyData
+ * Bộ giải mã QR đa tầng (Multi-Pass QR Decoder):
+ * Khắc phục triệt để các ảnh QR có dòng chữ tiêu đề bên dưới (QM2025, TNMaker, Azota)
+ * hoặc mã QR mật độ cao (Version 15-25) bị lệch lề / thiếu viền trắng quiet-zone.
+ */
+export function decodeQrFromImageData(imageData: ImageData): string | null {
+  const { data, width, height } = imageData;
+
+  // Pass 1: Quét trực tiếp bằng jsQR
+  const direct = jsQR(data, width, height, { inversionAttempts: 'attemptBoth' });
+  if (direct && direct.data) {
+    return direct.data;
+  }
+
+  // Pass 2: Cắt bỏ phần chữ chú thích dưới đáy (ví dụ "Chấm thi QM2025 (4 Mã đề)") và thêm viền trắng Quiet-Zone
+  for (const cropRatio of [1.0, 0.90, 0.86, 0.82]) {
+    const cropH = Math.floor(height * cropRatio);
+    const pad = 36;
+    const nw = width + pad * 2;
+    const nh = cropH + pad * 2;
+    const padded = new Uint8ClampedArray(nw * nh * 4);
+    padded.fill(255);
+
+    for (let y = 0; y < cropH; y++) {
+      for (let x = 0; x < width; x++) {
+        const si = (y * width + x) * 4;
+        const di = ((y + pad) * nw + (x + pad)) * 4;
+        const lum = 0.299 * data[si] + 0.587 * data[si + 1] + 0.114 * data[si + 2];
+        const v = lum < 150 ? 0 : 255;
+        padded[di] = v;
+        padded[di + 1] = v;
+        padded[di + 2] = v;
+        padded[di + 3] = 255;
+      }
+    }
+
+    const res = jsQR(padded, nw, nh, { inversionAttempts: 'dontInvert' });
+    if (res && res.data) {
+      return res.data;
+    }
+  }
+
+  // Pass 3: Tìm khung bao (Bounding Box) của lưới QR và lấy mẫu chuẩn hóa theo tâm từng module (Version 5 -> 25)
+  const maxScanY = Math.min(height, Math.floor(width * 0.94));
+  let minX = width;
+  let maxX = 0;
+  let minY = maxScanY;
+  let maxY = 0;
+
+  for (let y = 0; y < maxScanY; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      if (lum < 128) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  const qrW = maxX - minX + 1;
+  const qrHMeasured = maxY - minY + 1;
+  if (qrW > 40 && qrHMeasured > 40) {
+    const candidateHeights = Array.from(new Set([qrHMeasured, qrW]));
+    for (const qrH of candidateHeights) {
+      for (let v = 5; v <= 25; v++) {
+        const modules = 17 + v * 4;
+        const scale = 4;
+        const quiet = 4;
+        const totalM = modules + quiet * 2;
+        const outSize = totalM * scale;
+        const out = new Uint8ClampedArray(outSize * outSize * 4);
+        out.fill(255);
+
+        for (let my = 0; my < modules; my++) {
+          for (let mx = 0; mx < modules; mx++) {
+            const sx = Math.min(width - 1, Math.max(0, Math.round(minX + ((mx + 0.5) * qrW) / modules)));
+            const sy = Math.min(height - 1, Math.max(0, Math.round(minY + ((my + 0.5) * qrH) / modules)));
+            const si = (sy * width + sx) * 4;
+            const lum = 0.299 * data[si] + 0.587 * data[si + 1] + 0.114 * data[si + 2];
+            const val = lum < 128 ? 0 : 255;
+
+            for (let dy = 0; dy < scale; dy++) {
+              for (let dx = 0; dx < scale; dx++) {
+                const ox = (mx + quiet) * scale + dx;
+                const oy = (my + quiet) * scale + dy;
+                const oi = (oy * outSize + ox) * 4;
+                out[oi] = val;
+                out[oi + 1] = val;
+                out[oi + 2] = val;
+                out[oi + 3] = 255;
+              }
+            }
+          }
+        }
+
+        const code = jsQR(out, outSize, outSize, { inversionAttempts: 'dontInvert' });
+        if (code && code.data) {
+          return code.data;
+        }
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Chuẩn hóa ký tự Đúng / Sai ('Đ', 'D', 'TRUE', '1' -> 'D'; còn lại -> 'S')
+ */
+function normalizeDSChar(val: unknown): 'D' | 'S' {
+  const s = String(val ?? 'D').toUpperCase().trim();
+  return s === 'Đ' || s === 'D' || s === 'TRUE' || s === '1' ? 'D' : 'S';
+}
+
+/**
+ * Giải mã dữ liệu QR từ cả 3 phần mềm trộn đề phổ biến (QM2025, TNMaker, Azota) sang AnswerKeyData
  * Hỗ trợ tự động tương thích với toàn bộ 14 mẫu phiếu (cả mã đề 3 chữ số và 4 chữ số)
+ * và tự động nhận diện số câu thực tế của Phần I, Phần II, Phần III trong mã QR.
  */
 export function parseQM2025QrPayload(
   rawText: string,
@@ -448,7 +573,7 @@ export function parseQM2025QrPayload(
   let parsed: any;
   try {
     parsed = JSON.parse(cleaned);
-  } catch (e) {
+  } catch {
     throw new Error('Dữ liệu QR không phải JSON hợp lệ.');
   }
 
@@ -458,7 +583,16 @@ export function parseQM2025QrPayload(
   // 1. Trường hợp QR dạng Object dictionary (TNMaker / Azota {"101": "CCBAD...#ĐĐĐS_ĐĐSĐ_ĐĐSĐ_SĐĐĐ#2700_88.9...", ...})
   if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
     for (const [codeKey, valStr] of Object.entries(parsed)) {
-      if (codeKey === 'success' || codeKey === 'type' || codeKey === 'examId' || codeKey === 'title') continue;
+      if (
+        codeKey === 'success' ||
+        codeKey === 'type' ||
+        codeKey === 'examId' ||
+        codeKey === 'title' ||
+        typeof valStr !== 'string'
+      ) {
+        continue;
+      }
+
       let examCode = String(codeKey).trim();
       if (tpl.maDeDigits === 4 && examCode.length === 3) {
         examCode = examCode.padStart(4, '0');
@@ -470,56 +604,74 @@ export function parseQM2025QrPayload(
       const parts = strVal.split('#');
 
       // Phần I (Trắc nghiệm A, B, C, D)
-      const p1Raw = (parts[0] || '').toUpperCase().trim();
+      const p1Raw = (parts[0] || '')
+        .toUpperCase()
+        .replace(/[^A-D]/g, '');
+      const detectedP1Count = p1Raw.length;
       const choices = ['A', 'B', 'C', 'D'];
       const p1: string[] = [];
-      const p1TargetCount = Math.max(tpl.p1Count, p1Raw.length > 0 ? p1Raw.length : 18);
-      for (let i = 0; i < p1TargetCount; i++) {
+      const p1MaxLen = Math.max(tpl.p1Count, detectedP1Count, 40);
+      for (let i = 0; i < p1MaxLen; i++) {
         const char = p1Raw[i];
         p1.push(choices.includes(char) ? char : choices[i % 4]);
       }
 
-      // Phần II (Đúng / Sai: P2 answers, ví dụ "ĐĐĐS_ĐĐSĐ_ĐĐSĐ_SĐĐĐ")
+      // Phần II (Đúng / Sai: ví dụ "ĐĐĐS_ĐĐSĐ_ĐĐSĐ_SĐĐĐ")
       const p2Raw = (parts[1] || '').toUpperCase().trim();
-      let p2Tokens = p2Raw.includes('_') ? p2Raw.split('_') : p2Raw.split(',');
-      if (p2Tokens.length < 4 && p2Raw.length >= 16) {
-        p2Tokens = [];
+      let p2Tokens = p2Raw
+        ? p2Raw.includes('_')
+          ? p2Raw.split('_').filter(Boolean)
+          : p2Raw.includes(',')
+          ? p2Raw.split(',').filter(Boolean)
+          : []
+        : [];
+      if (p2Tokens.length === 0 && p2Raw.length >= 4) {
         for (let i = 0; i < p2Raw.length; i += 4) {
           p2Tokens.push(p2Raw.slice(i, i + 4));
         }
       }
-
+      const detectedP2Count = p2Tokens.length;
       const p2: AnswerKeyData['p2'] = [];
-      const p2TargetCount = Math.max(tpl.p2Count, 4);
-      for (let q = 0; q < p2TargetCount; q++) {
-        const token = p2Tokens[q] || 'DDDD';
-        const normDS = (char: string): 'D' | 'S' => {
-          const s = String(char || 'D').toUpperCase().trim();
-          return s === 'Đ' || s === 'D' || s === 'TRUE' || s === '1' ? 'D' : 'S';
-        };
+      const p2MaxLen = Math.max(tpl.p2Count, detectedP2Count, 16);
+      for (let q = 0; q < p2MaxLen; q++) {
+        const token = p2Tokens[q] || p2Tokens[q % Math.max(1, detectedP2Count)] || 'DDDD';
         p2.push({
-          a: normDS(token[0] || 'D'),
-          b: normDS(token[1] || 'D'),
-          c: normDS(token[2] || 'D'),
-          d: normDS(token[3] || 'D'),
+          a: normalizeDSChar(token[0] || 'D'),
+          b: normalizeDSChar(token[1] || 'D'),
+          c: normalizeDSChar(token[2] || 'D'),
+          d: normalizeDSChar(token[3] || 'D'),
         });
       }
 
-      // Phần III (Trả lời ngắn: P3 answers, ví dụ "2700_88.9_299_16_28.1_20")
+      // Phần III (Trả lời ngắn: ví dụ "2700_88.9_299_16_28.1_20")
       const p3Raw = (parts[2] || '').trim();
-      const p3Tokens = p3Raw.split(/[_,\s]+/);
+      const p3Tokens = p3Raw ? p3Raw.split(/[_;\s]+/).filter(Boolean) : [];
+      const detectedP3Count = p3Tokens.length;
       const p3: (number | string)[] = [];
-      const p3TargetCount = Math.max(tpl.p3Count, 6);
-      for (let i = 0; i < p3TargetCount; i++) {
-        const token = p3Tokens[i] ?? p3Tokens[i % p3Tokens.length] ?? '16';
-        p3.push(token);
+      const p3MaxLen = Math.max(tpl.p3Count, detectedP3Count, 12);
+      for (let i = 0; i < p3MaxLen; i++) {
+        const token =
+          p3Tokens[i] ??
+          (detectedP3Count > 0 ? p3Tokens[i % detectedP3Count] : '');
+        p3.push(String(token).replace('.', ','));
       }
 
-      result.push({ examCode, p1, p2, p3 });
+      result.push({
+        examCode,
+        p1,
+        p2,
+        p3,
+        detectedCounts: {
+          p1Count: detectedP1Count > 0 ? detectedP1Count : tpl.defaultActiveP1,
+          p2Count: detectedP2Count > 0 ? detectedP2Count : tpl.defaultActiveP2,
+          p3Count: detectedP3Count > 0 ? detectedP3Count : tpl.defaultActiveP3,
+        },
+      });
     }
     if (result.length > 0) return result;
   }
 
+  // 2. Trường hợp QR dạng Mảng 2 chiều (QM2025 & Azota: [[101, "C", ...], [102, ...]])
   const rows = Array.isArray(parsed[0]) ? parsed : [parsed];
 
   for (const row of rows) {
@@ -531,69 +683,110 @@ export function parseQM2025QrPayload(
       examCode = examCode.slice(1);
     }
 
-    if (row.length === 41) {
-      const p1Full = row.slice(1, 19).map((v: unknown) => String(v).toUpperCase().trim());
-      const choices = ['A', 'B', 'C', 'D'];
-      const p1: string[] = [];
-      for (let i = 0; i < Math.max(tpl.p1Count, 40); i++) {
-        p1.push(p1Full[i] || choices[i % 4]);
-      }
+    const items = row.slice(1);
 
-      const p2Raw = row.slice(19, 35).map((v: unknown) => {
-        const s = String(v).toUpperCase().trim();
-        return s === 'Đ' || s === 'D' || s === 'TRUE' || s === '1' ? 'D' : 'S';
-      });
-      const p2: AnswerKeyData['p2'] = [];
-      for (let q = 0; q < Math.max(tpl.p2Count, 16); q++) {
-        p2.push({
-          a: (p2Raw[(q % 4) * 4] || 'D') as 'D' | 'S',
-          b: (p2Raw[(q % 4) * 4 + 1] || 'D') as 'D' | 'S',
-          c: (p2Raw[(q % 4) * 4 + 2] || 'D') as 'D' | 'S',
-          d: (p2Raw[(q % 4) * 4 + 3] || 'D') as 'D' | 'S',
-        });
-      }
-      const p3Base = row.slice(35, 41).map((v: unknown) => v as number | string);
-      const p3: (number | string)[] = [];
-      for (let i = 0; i < Math.max(tpl.p3Count, 12); i++) {
-        p3.push(p3Base[i % p3Base.length] ?? 16);
-      }
-      result.push({ examCode, p1, p2, p3 });
-    } else {
-      const p1Count = Math.max(tpl.p1Count, 40);
-      const p2Count = Math.max(tpl.p2Count, 16);
-      const p3Count = Math.max(tpl.p3Count, 12);
-      const choices = ['A', 'B', 'C', 'D'];
+    // Tách tự động từ cuối mảng lên:
+    // - Phần III (Trả lời ngắn): Các phần tử ở cuối mảng là số hoặc chuỗi số (VD: 2700, 88.9, "88,9", "-1,5")
+    const isNumericP3Item = (v: unknown): boolean => {
+      if (typeof v === 'number') return true;
+      const s = String(v ?? '').trim();
+      if (!s) return false;
+      return /^-?\d+([.,]\d+)?$/.test(s);
+    };
 
-      const p1: string[] = [];
-      for (let i = 0; i < p1Count; i++) {
-        const val = row[1 + i];
-        const s = val !== undefined ? String(val).toUpperCase().trim() : '';
-        p1.push(choices.includes(s) ? s : choices[i % 4]);
-      }
-
-      const p2: AnswerKeyData['p2'] = [];
-      for (let q = 0; q < p2Count; q++) {
-        const base = 1 + Math.min(row.length - 1, 18) + (q % 4) * 4;
-        const normDS = (v: unknown): 'D' | 'S' => {
-          const s = String(v ?? 'D').toUpperCase().trim();
-          return s === 'Đ' || s === 'D' || s === 'TRUE' || s === '1' ? 'D' : 'S';
-        };
-        p2.push({
-          a: normDS(row[base]),
-          b: normDS(row[base + 1]),
-          c: normDS(row[base + 2]),
-          d: normDS(row[base + 3]),
-        });
-      }
-
-      const p3: (number | string)[] = [];
-      for (let i = 0; i < p3Count; i++) {
-        const val = row[1 + tpl.p1Count + tpl.p2Count * 4 + i];
-        p3.push(val !== undefined ? (val as number | string) : 16);
-      }
-
-      result.push({ examCode, p1, p2, p3 });
+    let p3StartIdx = items.length;
+    while (p3StartIdx > 0 && isNumericP3Item(items[p3StartIdx - 1])) {
+      p3StartIdx--;
     }
+
+    const p3ItemsRaw = items.slice(p3StartIdx);
+    const p1AndP2Items = items.slice(0, p3StartIdx);
+
+    // - Phần II (Đúng / Sai): Các phần tử ngay trước Phần III chỉ chứa 'D', 'Đ', 'S' (theo nhóm 4 ý a,b,c,d)
+    const isDSItem = (v: unknown): boolean => {
+      const s = String(v ?? '').toUpperCase().trim();
+      return s === 'D' || s === 'Đ' || s === 'S';
+    };
+
+    let dsTrailingCount = 0;
+    for (let i = p1AndP2Items.length - 1; i >= 0; i--) {
+      if (isDSItem(p1AndP2Items[i])) {
+        dsTrailingCount++;
+      } else {
+        break;
+      }
+    }
+
+    // Nếu row.length === 41 chuẩn (18 P1 + 16 P2 + 6 P3), cố định 18 câu P1 và 4 câu P2 (16 ý)
+    let p1ItemsRaw: unknown[];
+    let p2ItemsRaw: unknown[];
+
+    if (items.length === 40 && p3ItemsRaw.length === 6) {
+      p1ItemsRaw = items.slice(0, 18);
+      p2ItemsRaw = items.slice(18, 34);
+    } else if (items.length === 34 && p3ItemsRaw.length === 6) {
+      // Đề Toán: 12 P1 + 16 P2 + 6 P3 = 34 items
+      p1ItemsRaw = items.slice(0, 12);
+      p2ItemsRaw = items.slice(12, 28);
+    } else {
+      // Tự động suy luận số ý Phần II (bội số của 4, tối đa 32 ý = 8 câu, thường là 16 ý = 4 câu)
+      let p2SubCount = Math.min(dsTrailingCount - (dsTrailingCount % 4), 32);
+      // Đảm bảo giữ lại số câu Phần I hợp lý (ví dụ 12, 18, 24, 28, 36, 40)
+      const remainingP1 = p1AndP2Items.length - p2SubCount;
+      if (remainingP1 < 10 && p2SubCount > 16) {
+        p2SubCount = 16;
+      }
+      const p2StartIdx = p1AndP2Items.length - p2SubCount;
+      p1ItemsRaw = p1AndP2Items.slice(0, p2StartIdx);
+      p2ItemsRaw = p1AndP2Items.slice(p2StartIdx);
+    }
+
+    const detectedP1Count = p1ItemsRaw.length;
+    const detectedP2Count = Math.floor(p2ItemsRaw.length / 4);
+    const detectedP3Count = p3ItemsRaw.length;
+
+    const choices = ['A', 'B', 'C', 'D'];
+    const p1: string[] = [];
+    const p1MaxLen = Math.max(tpl.p1Count, detectedP1Count, 40);
+    for (let i = 0; i < p1MaxLen; i++) {
+      const val = p1ItemsRaw[i];
+      const s = val !== undefined ? String(val).toUpperCase().trim() : '';
+      p1.push(choices.includes(s) ? s : choices[i % 4]);
+    }
+
+    const p2: AnswerKeyData['p2'] = [];
+    const p2MaxLen = Math.max(tpl.p2Count, detectedP2Count, 16);
+    for (let q = 0; q < p2MaxLen; q++) {
+      const base =
+        detectedP2Count > 0 ? (q < detectedP2Count ? q * 4 : (q % detectedP2Count) * 4) : 0;
+      p2.push({
+        a: normalizeDSChar(p2ItemsRaw[base]),
+        b: normalizeDSChar(p2ItemsRaw[base + 1]),
+        c: normalizeDSChar(p2ItemsRaw[base + 2]),
+        d: normalizeDSChar(p2ItemsRaw[base + 3]),
+      });
+    }
+
+    const p3: (number | string)[] = [];
+    const p3MaxLen = Math.max(tpl.p3Count, detectedP3Count, 12);
+    for (let i = 0; i < p3MaxLen; i++) {
+      const rawVal =
+        p3ItemsRaw[i] ??
+        (detectedP3Count > 0 ? p3ItemsRaw[i % detectedP3Count] : '');
+      p3.push(String(rawVal).replace('.', ','));
+    }
+
+    result.push({
+      examCode,
+      p1,
+      p2,
+      p3,
+      detectedCounts: {
+        p1Count: detectedP1Count > 0 ? detectedP1Count : tpl.defaultActiveP1,
+        p2Count: detectedP2Count > 0 ? detectedP2Count : tpl.defaultActiveP2,
+        p3Count: detectedP3Count > 0 ? detectedP3Count : tpl.defaultActiveP3,
+      },
+    });
   }
 
   return result;

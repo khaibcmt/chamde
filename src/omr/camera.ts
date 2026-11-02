@@ -144,20 +144,35 @@ export function captureStandardFrameForOMR(
   standardHeight = 1754
 ): HTMLCanvasElement | null {
   // 1. Kiểm tra video đã sẵn sàng hay chưa để tránh gửi ảnh rỗng (0x0)
-  if (!videoEl || videoEl.videoWidth === 0 || videoEl.readyState < 2) {
+  if (!videoEl || videoEl.videoWidth === 0 || videoEl.videoHeight === 0 || videoEl.readyState < 2) {
     console.warn("Video camera chưa sẵn sàng.");
     return null;
   }
 
-  // 2. Tạo canvas trung gian chuẩn hóa
+  // 2. Chuẩn hóa kích thước theo đúng chiều xoay thực tế của video để không làm méo ô vuông mốc định vị
+  const vw = videoEl.videoWidth;
+  const vh = videoEl.videoHeight;
+  const targetLongEdge = Math.max(standardWidth, standardHeight);
+  const scale = targetLongEdge / Math.max(vw, vh);
+  const targetWidth = Math.max(320, Math.round(vw * scale));
+  const targetHeight = Math.max(320, Math.round(vh * scale));
+
   const normalizedCanvas = document.createElement('canvas');
-  normalizedCanvas.width = standardWidth;
-  normalizedCanvas.height = standardHeight;
+  normalizedCanvas.width = targetWidth;
+  normalizedCanvas.height = targetHeight;
   const ctx = normalizedCanvas.getContext('2d', { willReadFrequently: true });
   if (!ctx) return null;
 
-  // 3. Vẽ đè và ép tỉ lệ ảnh về đúng chuẩn của bộ OMR
-  ctx.drawImage(videoEl, 0, 0, standardWidth, standardHeight);
+  // 3. Vẽ ảnh chuẩn hóa vào bộ chấm OMR
+  ctx.drawImage(videoEl, 0, 0, targetWidth, targetHeight);
+
+  // 4. Cập nhật debugImgPreview nếu có trên DOM
+  if (typeof document !== 'undefined') {
+    const debugImg = document.getElementById('debugImgPreview') as HTMLImageElement | null;
+    if (debugImg) {
+      debugImg.src = normalizedCanvas.toDataURL('image/jpeg', 0.85);
+    }
+  }
 
   return normalizedCanvas;
 }

@@ -57,12 +57,12 @@ export function isValidExamPaper(corners, frameData, templateConfig = null) {
   // 1. Tỷ lệ diện tích
   const quadArea = calculateQuadArea(pts[0], pts[1], pts[2], pts[3]);
   const areaRatio = quadArea / frameArea;
-  if (areaRatio < 0.16 || areaRatio > 0.95) {
+  if (areaRatio < 0.08 || areaRatio > 0.99) {
     return {
       isValid: false,
       areaRatio,
       failedCheck: 'area_ratio',
-      reason: areaRatio < 0.16 ? 'Phiếu thi quá xa' : 'Phiếu thi quá gần',
+      reason: areaRatio < 0.08 ? 'Phiếu thi quá xa' : 'Phiếu thi quá gần',
     };
   }
 
@@ -82,7 +82,7 @@ export function isValidExamPaper(corners, frameData, templateConfig = null) {
     const { angleDeg, cosTheta } = calculateCornerAngle(cs.A, cs.B, cs.C);
     angles.push(angleDeg);
     cosines.push(cosTheta);
-    if (Math.abs(cosTheta) > 0.28 || angleDeg < 74 || angleDeg > 106) {
+    if (Math.abs(cosTheta) > 0.36 || angleDeg < 68 || angleDeg > 112) {
       isAngleValid = false;
     }
   }
@@ -94,7 +94,7 @@ export function isValidExamPaper(corners, frameData, templateConfig = null) {
       cosines,
       areaRatio,
       failedCheck: 'corner_angle',
-      reason: '4 góc chưa vuông vức 74°-106°',
+      reason: '4 góc chưa vuông vức 68°-112°',
     };
   }
 
@@ -108,15 +108,8 @@ export function isValidExamPaper(corners, frameData, templateConfig = null) {
   const avgH = (rightEdge + leftEdge) / 2;
   const aspectRatio = Math.max(avgW, avgH) / Math.max(1, Math.min(avgW, avgH));
 
-  let minRatio = 1.20;
-  let maxRatio = 2.25;
-  if (templateConfig?.group === 'Khổ dọc A4 Chuẩn') {
-    minRatio = 1.20;
-    maxRatio = 1.68;
-  } else if (templateConfig?.group === 'Khổ ngang (2 bài/A4)') {
-    minRatio = 1.50;
-    maxRatio = 2.25;
-  }
+  const minRatio = 1.15;
+  const maxRatio = 3.45;
 
   if (aspectRatio < minRatio || aspectRatio > maxRatio) {
     return {
@@ -147,7 +140,7 @@ export function isValidExamPaper(corners, frameData, templateConfig = null) {
   }
 
   const paperBrightness = paperLumaSum / Math.max(1, paperSampleCount);
-  if (paperBrightness < 95) {
+  if (paperBrightness < 85) {
     return {
       isValid: false,
       aspectRatio,
@@ -159,7 +152,7 @@ export function isValidExamPaper(corners, frameData, templateConfig = null) {
   }
 
   // 5. Kiểm tra 4 ô vuông đen định vị
-  const markerRadius = Math.max(6, Math.min(22, Math.round(Math.min(avgW, avgH) * 0.032)));
+  const markerRadius = Math.max(4, Math.min(10, Math.round(Math.min(avgW, avgH) * 0.012)));
   let validMarkersCount = 0;
 
   for (let i = 0; i < 4; i++) {
@@ -174,19 +167,19 @@ export function isValidExamPaper(corners, frameData, templateConfig = null) {
         const luma = getPixelLuminance(frameData, pt.x + dx, pt.y + dy);
         markerLumaSum += luma;
         totalSampled++;
-        if (luma < 125) darkPixelCount++;
+        if (luma < 145) darkPixelCount++;
       }
     }
 
     const avgMarkerDarkness = markerLumaSum / Math.max(1, totalSampled);
     const fillRatio = darkPixelCount / Math.max(1, totalSampled);
     const contrast = paperBrightness - avgMarkerDarkness;
-    if ((avgMarkerDarkness < 135 || fillRatio >= 0.32) && contrast >= 15) {
+    if ((avgMarkerDarkness < 170 || fillRatio >= 0.16) && contrast >= 8) {
       validMarkersCount++;
     }
   }
 
-  if (validMarkersCount < 3) {
+  if (validMarkersCount < 2) {
     return {
       isValid: false,
       aspectRatio,

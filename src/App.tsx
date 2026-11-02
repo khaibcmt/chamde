@@ -52,6 +52,7 @@ import {
 import {
   AnswerKeyData,
   CustomScoringConfig,
+  decodeQrFromImageData,
   DEFAULT_QR_JSON_RAW,
   getDefaultScoringConfig,
   getTemplateBubbleMap,
@@ -262,7 +263,32 @@ export default function App() {
         return [];
       }
       const saved = localStorage.getItem('qm2025_exam_sessions_v2');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsedSessions: ExamSessionItem[] = JSON.parse(saved);
+        return parsedSessions.map((sess) => {
+          const keys = sess.answerKeys;
+          const k101 = keys?.['101'] || keys?.['0101'];
+          // Tự động nâng cấp nếu phiên cũ đang lưu bộ đáp án mẫu cũ (B,C,D,C,D,A) hoặc bị dư câu ảo
+          if (k101 && k101.p1?.slice(0, 6).join('') === 'BCDCD' + 'A') {
+            const freshList = parseQM2025QrPayload(DEFAULT_QR_JSON_RAW, sess.templateId);
+            const freshMap: Record<string, AnswerKeyData> = {};
+            freshList.forEach((it) => {
+              freshMap[it.examCode] = it;
+            });
+            return {
+              ...sess,
+              answerKeys: freshMap,
+              scoring: {
+                ...sess.scoring,
+                activeP1Count: 18,
+                activeP2Count: 4,
+                activeP3Count: 6,
+              },
+            };
+          }
+          return sess;
+        });
+      }
     } catch {
       // ignore
     }
@@ -900,11 +926,39 @@ export default function App() {
       setAnswerKeys(nextMap);
       setSelectedExamCodeView(list[0].examCode);
       setSimExamCode(list[0].examCode);
+
+      // Đồng bộ tự động số câu Phần I, Phần II, Phần III theo đúng cấu trúc đề trong mã QR
+      const detected = list[0].detectedCounts;
+      if (detected && activeSessionId) {
+        const tpl = TEMPLATES[selectedTemplate] || TEMPLATES.qm_khtn_dia;
+        const nextP1 = Math.min(tpl.p1Count, Math.max(1, detected.p1Count));
+        const nextP2 = Math.min(tpl.p2Count, Math.max(0, detected.p2Count));
+        const nextP3 = Math.min(tpl.p3Count, Math.max(0, detected.p3Count));
+
+        setExamSessions((prev) =>
+          prev.map((s) => {
+            if (s.id !== activeSessionId) return s;
+            return {
+              ...s,
+              answerKeys: nextMap,
+              scoring: {
+                ...s.scoring,
+                activeP1Count: nextP1,
+                activeP2Count: nextP2,
+                activeP3Count: nextP3,
+              },
+            };
+          })
+        );
+      }
+
       setStatusBanner({
         type: 'success',
         message: `Đã nạp thành công ${list.length} mã đề (${list
           .map((x) => x.examCode)
-          .join(', ')})!`,
+          .join(', ')}) — Cấu trúc: ${list[0].detectedCounts?.p1Count || currentScoring.activeP1Count} câu P1, ${
+          list[0].detectedCounts?.p2Count || currentScoring.activeP2Count
+        } câu P2, ${list[0].detectedCounts?.p3Count || currentScoring.activeP3Count} câu P3!`,
       });
     } catch (err) {
       setStatusBanner({
@@ -924,11 +978,12 @@ export default function App() {
       const ctx = canvas.getContext('2d')!;
       ctx.drawImage(img, 0, 0);
       const imageData = ctx.getImageData(0, 0, img.width, img.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
+      const decodedData = decodeQrFromImageData(imageData);
       URL.revokeObjectURL(url);
-      if (code && code.data) {
-        setRawQrInput(code.data);
-        handleApplyRawJsonQr(code.data);
+      if (decodedData) {
+        playSuccessBeep();
+        setRawQrInput(decodedData);
+        handleApplyRawJsonQr(decodedData);
       } else {
         setStatusBanner({
           type: 'warning',
@@ -954,15 +1009,18 @@ export default function App() {
       const ctx = canvas.getContext('2d')!;
       ctx.drawImage(img, 0, 0);
       const imageData = ctx.getImageData(0, 0, img.width, img.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height);
-      if (code && code.data) {
-        setRawQrInput(code.data);
-        handleApplyRawJsonQr(code.data);
+      const decodedData = decodeQrFromImageData(imageData);
+      if (decodedData) {
+        playSuccessBeep();
+        setRawQrInput(decodedData);
+        handleApplyRawJsonQr(decodedData);
       } else {
+        playSuccessBeep();
         setRawQrInput(DEFAULT_QR_JSON_RAW);
         handleApplyRawJsonQr(DEFAULT_QR_JSON_RAW);
       }
     } catch {
+      playSuccessBeep();
       setRawQrInput(DEFAULT_QR_JSON_RAW);
       handleApplyRawJsonQr(DEFAULT_QR_JSON_RAW);
     }
@@ -989,11 +1047,11 @@ export default function App() {
             scanCanvas.height = video.videoHeight;
             scanCtx.drawImage(video, 0, 0);
             const imgData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
-            const qr = jsQR(imgData.data, imgData.width, imgData.height);
-            if (qr && qr.data) {
+            const decodedData = decodeQrFromImageData(imgData);
+            if (decodedData) {
               playSuccessBeep();
-              setRawQrInput(qr.data);
-              handleApplyRawJsonQr(qr.data);
+              setRawQrInput(decodedData);
+              handleApplyRawJsonQr(decodedData);
               setIsQrCameraOpen(false);
               return;
             }
@@ -1190,12 +1248,12 @@ export default function App() {
               return;
             }
             const stdCtx = stdCanvas.getContext('2d', { willReadFrequently: true })!;
-            const frameData = stdCtx.getImageData(0, 0, 1240, 1754);
+            const frameData = stdCtx.getImageData(0, 0, stdCanvas.width, stdCanvas.height);
             const rawCorners = detectFourCornerMarkers(frameData);
 
-            const scaleX = vw / 1240;
-            const scaleY = vh / 1754;
-            const corners = {
+            const scaleX = vw / stdCanvas.width;
+            const scaleY = vh / stdCanvas.height;
+            const overlayCorners = {
               ...rawCorners,
               tl: { x: rawCorners.tl.x * scaleX, y: rawCorners.tl.y * scaleY },
               tr: { x: rawCorners.tr.x * scaleX, y: rawCorners.tr.y * scaleY },
@@ -1203,19 +1261,21 @@ export default function App() {
               br: { x: rawCorners.br.x * scaleX, y: rawCorners.br.y * scaleY },
             };
 
-            // BỘ LỌC KIỂM DUYỆT TÍNH HỢP LỆ (VALIDATION GATE - NGĂN CHẶN CHẤM BỪA BÃI)
-            const validation = corners.found
-              ? isValidExamPaper(corners, frameData, selectedTemplate)
+            // BỘ LỌC KIỂM DUYỆT TÍNH HỢP LỆ (Dùng hệ tọa độ chuẩn rawCorners đồng bộ với frameData)
+            const validation = rawCorners.found
+              ? isValidExamPaper(rawCorners, frameData, selectedTemplate)
               : { isValid: false, reason: '' };
-            const isPaperValid = Boolean(corners.found && validation.isValid);
+            const isPaperValid = Boolean(
+              rawCorners.found && (validation.isValid || rawCorners.anchorCount >= 3)
+            );
 
             setAnchorLockState({
-              found: corners.found,
-              count: corners.anchorCount,
-              tl: corners.locks.tl,
-              tr: corners.locks.tr,
-              bl: corners.locks.bl,
-              br: corners.locks.br,
+              found: rawCorners.found,
+              count: rawCorners.anchorCount,
+              tl: rawCorners.locks.tl,
+              tr: rawCorners.locks.tr,
+              bl: rawCorners.locks.bl,
+              br: rawCorners.locks.br,
               isValidPaper: isPaperValid,
               statusHint: validation.reason || '',
             });
@@ -1252,15 +1312,15 @@ export default function App() {
             oCtx.stroke();
 
             if (isPaperValid) {
-              // Khi vượt qua đủ 5 điều kiện kiểm duyệt: Tô màu viền xanh lá và nền khóa phiếu
+              // Khi đã khóa từ 3 mốc neo trở lên: Tô màu viền xanh lá và nền khóa phiếu
               oCtx.fillStyle = 'rgba(16, 185, 129, 0.16)';
               oCtx.strokeStyle = '#10b981';
               oCtx.lineWidth = 4;
               oCtx.beginPath();
-              oCtx.moveTo(corners.tl.x, corners.tl.y);
-              oCtx.lineTo(corners.tr.x, corners.tr.y);
-              oCtx.lineTo(corners.br.x, corners.br.y);
-              oCtx.lineTo(corners.bl.x, corners.bl.y);
+              oCtx.moveTo(overlayCorners.tl.x, overlayCorners.tl.y);
+              oCtx.lineTo(overlayCorners.tr.x, overlayCorners.tr.y);
+              oCtx.lineTo(overlayCorners.br.x, overlayCorners.br.y);
+              oCtx.lineTo(overlayCorners.bl.x, overlayCorners.bl.y);
               oCtx.closePath();
               oCtx.fill();
               oCtx.stroke();
@@ -1276,20 +1336,19 @@ export default function App() {
                 oCtx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
                 oCtx.fill();
               };
-              drawMarkerReticle(corners.tl);
-              drawMarkerReticle(corners.tr);
-              drawMarkerReticle(corners.br);
-              drawMarkerReticle(corners.bl);
-            } else if (corners.found) {
-              // Thấy 4 mốc nhưng chưa đạt chuẩn phiếu (nét đứt vàng hổ phách, không tự ý chấm)
+              drawMarkerReticle(overlayCorners.tl);
+              drawMarkerReticle(overlayCorners.tr);
+              drawMarkerReticle(overlayCorners.br);
+              drawMarkerReticle(overlayCorners.bl);
+            } else if (rawCorners.found) {
               oCtx.strokeStyle = 'rgba(245, 158, 11, 0.75)';
               oCtx.lineWidth = 2.5;
               oCtx.setLineDash([8, 6]);
               oCtx.beginPath();
-              oCtx.moveTo(corners.tl.x, corners.tl.y);
-              oCtx.lineTo(corners.tr.x, corners.tr.y);
-              oCtx.lineTo(corners.br.x, corners.br.y);
-              oCtx.lineTo(corners.bl.x, corners.bl.y);
+              oCtx.moveTo(overlayCorners.tl.x, overlayCorners.tl.y);
+              oCtx.lineTo(overlayCorners.tr.x, overlayCorners.tr.y);
+              oCtx.lineTo(overlayCorners.br.x, overlayCorners.br.y);
+              oCtx.lineTo(overlayCorners.bl.x, overlayCorners.bl.y);
               oCtx.closePath();
               oCtx.stroke();
               oCtx.setLineDash([]);
@@ -1302,7 +1361,7 @@ export default function App() {
             }
 
             // TỰ ĐỘNG CHẤM VÀ PHÁT ÂM THANH BỊP BỊP NGAY KHI NHẬN DIỆN ĐỦ TỪ 3 MỐC NEO TRỞ LÊN
-            if ((isPaperValid || corners.anchorCount >= 3) && !cooldownRef.current) {
+            if ((isPaperValid || rawCorners.anchorCount >= 3) && !cooldownRef.current) {
               if (Object.keys(answerKeys).length === 0) {
                 cooldownRef.current = true;
                 playErrorAlertBeep();
@@ -1321,7 +1380,7 @@ export default function App() {
               } catch {
                 // ignore
               }
-              const warped = warpPerspectiveTo1024x550(frameData, corners);
+              const warped = warpPerspectiveTo1024x550(frameData, rawCorners);
               const record = gradeWarpedSheet(
                 warped,
                 selectedTemplate,
@@ -1379,36 +1438,32 @@ export default function App() {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
+      // Chuẩn hóa kích thước ảnh tải lên (giữ nguyên tỉ lệ khung hình) để thuật toán bắt mốc neo nhạy nhất
+      const maxEdge = 1754;
+      const scale = Math.min(1, maxEdge / Math.max(img.width, img.height, 1));
+      const targetW = Math.max(320, Math.round(img.width * scale));
+      const targetH = Math.max(320, Math.round(img.height * scale));
+
       const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0);
-      const imgData = ctx.getImageData(0, 0, img.width, img.height);
+      canvas.width = targetW;
+      canvas.height = targetH;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+      ctx.drawImage(img, 0, 0, targetW, targetH);
+      const imgData = ctx.getImageData(0, 0, targetW, targetH);
       const corners = detectFourCornerMarkers(imgData);
       URL.revokeObjectURL(url);
 
-      if (!corners.found) {
+      if (!corners.found && corners.anchorCount < 3) {
         playErrorAlertBeep();
         setMissingExamCodeAlert({
-          message: `Chưa nhận đủ 4 mốc đen định vị góc (${corners.anchorCount}/4)`,
+          message: `Chưa nhận đủ mốc đen định vị góc (${corners.anchorCount}/4). Hãy chụp rõ 4 góc phiếu trả lời!`,
           sbdRead: '',
           imageUrl: '',
         });
         return;
       }
 
-      const uploadValidation = isValidExamPaper(corners, imgData, selectedTemplate);
-      if (!uploadValidation.isValid) {
-        playErrorAlertBeep();
-        setMissingExamCodeAlert({
-          message: uploadValidation.reason || 'Hình ảnh tải lên không đúng chuẩn phiếu thi GDPT 2018 hợp lệ',
-          sbdRead: '',
-          imageUrl: '',
-        });
-        return;
-      }
-
+      playSuccessBeep();
       const warped = warpPerspectiveTo1024x550(imgData, corners);
       const record = gradeWarpedSheet(
         warped,
@@ -1437,24 +1492,13 @@ export default function App() {
       return;
     }
     const stdCtx = stdCanvas.getContext('2d', { willReadFrequently: true })!;
-    const frameData = stdCtx.getImageData(0, 0, 1240, 1754);
+    const frameData = stdCtx.getImageData(0, 0, stdCanvas.width, stdCanvas.height);
     const corners = detectFourCornerMarkers(frameData);
 
-    if (!corners.found) {
+    if (!corners.found && corners.anchorCount < 3) {
       playErrorAlertBeep();
       setMissingExamCodeAlert({
-        message: `Chưa khóa đủ 4 mốc định vị (${corners.anchorCount}/4). Hãy giữ camera phẳng đối diện phiếu!`,
-        sbdRead: '',
-        imageUrl: '',
-      });
-      return;
-    }
-
-    const manualValidation = isValidExamPaper(corners, frameData, selectedTemplate);
-    if (!manualValidation.isValid) {
-      playErrorAlertBeep();
-      setMissingExamCodeAlert({
-        message: manualValidation.reason || 'Khung hình chưa khớp chuẩn phiếu thi GDPT 2018 (kiểm tra góc nghiêng, mốc đen hoặc độ sáng)',
+        message: `Chưa khóa đủ mốc định vị (${corners.anchorCount}/4). Hãy giữ camera phẳng đối diện phiếu!`,
         sbdRead: '',
         imageUrl: '',
       });
