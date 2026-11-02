@@ -103,7 +103,7 @@ export function isValidExamPaper(
   const quadArea = calculateQuadArea(pts[0], pts[1], pts[2], pts[3]);
   const areaRatio = quadArea / frameArea;
 
-  if (areaRatio < 0.08 || areaRatio > 0.99) {
+  if (areaRatio < 0.14 || areaRatio > 0.98) {
     return {
       isValid: false,
       aspectRatio: 0,
@@ -114,12 +114,11 @@ export function isValidExamPaper(
       markerFillRatios: [],
       areaRatio,
       failedCheck: 'area_ratio',
-      reason: areaRatio < 0.08 ? 'Phiếu thi quá xa camera (diện tích < 8%)' : 'Phiếu thi quá sát camera',
+      reason: areaRatio < 0.14 ? 'Hãy đưa phiếu lại gần camera hơn' : 'Phiếu quá sát mép camera',
     };
   }
 
   // 2. KIỂM TRA ĐỘ VUÔNG VỨC 4 GÓC (Corner Angle Check - Cosine Threshold)
-  // Các góc tại TL (giữa BL-TL và TR-TL), TR (TL-TR và BR-TR), BR (TR-BR và BL-BR), BL (BR-BL và TL-BL)
   const cornerSpecs = [
     { name: 'TL', A: pts[3], B: pts[0], C: pts[1] },
     { name: 'TR', A: pts[0], B: pts[1], C: pts[2] },
@@ -136,8 +135,8 @@ export function isValidExamPaper(
     angles.push(angleDeg);
     cosines.push(cosTheta);
 
-    // Góc dao động trong khoảng [68°, 112°] tương ứng |cos| <= 0.36
-    if (Math.abs(cosTheta) > 0.36 || angleDeg < 68 || angleDeg > 112) {
+    // Góc dao động trong khoảng [70°, 110°] tương ứng |cos| <= 0.34
+    if (Math.abs(cosTheta) > 0.34 || angleDeg < 70 || angleDeg > 110) {
       isAngleValid = false;
     }
   }
@@ -153,7 +152,7 @@ export function isValidExamPaper(
       markerFillRatios: [],
       areaRatio,
       failedCheck: 'corner_angle',
-      reason: 'Góc nghiêng vượt mức cho phép (4 góc chưa vuông vức 68°-112°)',
+      reason: 'Hãy giữ camera thẳng góc với mặt phiếu trả lời',
     };
   }
 
@@ -167,8 +166,7 @@ export function isValidExamPaper(
   const avgH = (rightEdge + leftEdge) / 2;
   const aspectRatio = Math.max(avgW, avgH) / Math.max(1, Math.min(avgW, avgH));
 
-  // Hỗ trợ đầy đủ cả 14 mẫu phiếu: A4 dọc (~1.41), Khổ ngang 2 bài/A4 (~1.86), và Ôn tập TL ngắn (~3.21)
-  const minRatio = 1.15;
+  const minRatio = 1.18;
   const maxRatio = 3.45;
 
   if (aspectRatio < minRatio || aspectRatio > maxRatio) {
@@ -182,38 +180,43 @@ export function isValidExamPaper(
       markerFillRatios: [],
       areaRatio,
       failedCheck: 'aspect_ratio',
-      reason: `Tỷ lệ cạnh không khớp phiếu thi (${aspectRatio.toFixed(2)} nằm ngoài [${minRatio}-${maxRatio}])`,
+      reason: 'Khung hình chưa khớp tỷ lệ phiếu trả lời',
     };
   }
 
-  // 4. KIỂM TRA ĐỘ SÁNG VÙNG GIẤY BÊN TRONG (Paper Brightness & Contrast Check)
-  // Lấy mẫu tại các điểm bên trong ruột phiếu (tránh viền và bóng đổ ngoài mép)
-  // Tính trọng tâm G:
-  const gx = (pts[0].x + pts[1].x + pts[2].x + pts[3].x) / 4;
-  const gy = (pts[0].y + pts[1].y + pts[2].y + pts[3].y) / 4;
-
+  // 4. KIỂM TRA ĐỘ SÁNG GIẤY TRẮNG & CẤU TRÚC Ô TRẮC NGHIỆM BÊN TRONG PHIẾU
+  // Lấy mẫu lưới 8x8 bên trong lòng tứ giác bằng nội suy song tuyến tính (bilinear interpolation)
   let paperLumaSum = 0;
   let paperSampleCount = 0;
+  let brightWhiteCount = 0;
+  let minInteriorLuma = 255;
+  let maxInteriorLuma = 0;
 
-  // Lấy mẫu tại tâm và các điểm tỷ lệ 35%, 60% từ tâm hướng tới 4 đỉnh
-  const sampleFactors = [0, 0.35, 0.60];
-  for (const factor of sampleFactors) {
-    if (factor === 0) {
-      paperLumaSum += getPixelLuminance(frameData, gx, gy);
+  for (let iv = 1; iv <= 8; iv++) {
+    const v = iv / 9;
+    for (let iu = 1; iu <= 8; iu++) {
+      const u = iu / 9;
+      // Nội suy điểm (u, v) trong tứ giác [tl, tr, br, bl]
+      const topX = pts[0].x + (pts[1].x - pts[0].x) * u;
+      const topY = pts[0].y + (pts[1].y - pts[0].y) * u;
+      const botX = pts[3].x + (pts[2].x - pts[3].x) * u;
+      const botY = pts[3].y + (pts[2].y - pts[3].y) * u;
+      const sx = topX + (botX - topX) * v;
+      const sy = topY + (botY - topY) * v;
+
+      const luma = getPixelLuminance(frameData, sx, sy);
+      paperLumaSum += luma;
       paperSampleCount++;
-    } else {
-      for (const p of pts) {
-        const sx = gx + (p.x - gx) * factor;
-        const sy = gy + (p.y - gy) * factor;
-        paperLumaSum += getPixelLuminance(frameData, sx, sy);
-        paperSampleCount++;
-      }
+      if (luma >= 120) brightWhiteCount++;
+      if (luma < minInteriorLuma) minInteriorLuma = luma;
+      if (luma > maxInteriorLuma) maxInteriorLuma = luma;
     }
   }
 
   const paperBrightness = paperLumaSum / Math.max(1, paperSampleCount);
+  const brightWhiteRatio = brightWhiteCount / Math.max(1, paperSampleCount);
 
-  if (paperBrightness < 85) {
+  if (paperBrightness < 120 || brightWhiteRatio < 0.52 || maxInteriorLuma < 140) {
     return {
       isValid: false,
       aspectRatio,
@@ -224,17 +227,15 @@ export function isValidExamPaper(
       markerFillRatios: [],
       areaRatio,
       failedCheck: 'paper_brightness',
-      reason: `Độ sáng bề mặt quá thấp (${Math.round(paperBrightness)}/255) - không phải giấy trắng`,
+      reason: 'Chưa thấy nền giấy trắng của phiếu trả lời',
     };
   }
 
-  // 5. KIỂM TRA 4 Ô VUÔNG MỐC NEO ĐEN ĐỊNH VỊ (Fiducial Anchor Check - QUAN TRỌNG NHẤT)
+  // 5. KIỂM TRA 4 Ô VUÔNG MỐC NEO ĐEN ĐỊNH VỊ (Fiducial Anchor Check - BẮT BUỘC >= 3 MỐC ĐEN RÕ RÀNG)
   const markerDarkness: number[] = [];
   const markerFillRatios: number[] = [];
 
-  // Bán kính lấy mẫu gọn quanh tâm mốc đen (4px - 10px) để không lấy nhầm nền giấy trắng xung quanh
   const markerRadius = Math.max(4, Math.min(10, Math.round(Math.min(avgW, avgH) * 0.012)));
-
   let validMarkersCount = 0;
 
   for (let i = 0; i < 4; i++) {
@@ -249,7 +250,7 @@ export function isValidExamPaper(
         const luma = getPixelLuminance(frameData, pt.x + dx, pt.y + dy);
         markerLumaSum += luma;
         totalSampled++;
-        if (luma < 145) {
+        if (luma < 140) {
           darkPixelCount++;
         }
       }
@@ -262,13 +263,13 @@ export function isValidExamPaper(
     markerFillRatios.push(Number(fillRatio.toFixed(2)));
 
     const contrast = paperBrightness - avgMarkerDarkness;
-    if ((avgMarkerDarkness < 170 || fillRatio >= 0.16) && contrast >= 8) {
+    if (avgMarkerDarkness < 148 && fillRatio >= 0.22 && contrast >= 30) {
       validMarkersCount++;
     }
   }
 
-  // Cho phép từ 2/4 mốc định vị trở lên (hoặc khi 1 góc bị suy nội suy từ 3 mốc)
-  if (validMarkersCount < 2) {
+  // Bắt buộc phải xác nhận tối thiểu 3/4 mốc neo đen thực sự có độ tương phản cao trên nền giấy trắng
+  if (validMarkersCount < 3) {
     return {
       isValid: false,
       aspectRatio,
@@ -279,11 +280,10 @@ export function isValidExamPaper(
       markerFillRatios,
       areaRatio,
       failedCheck: 'fiducial_markers',
-      reason: `Chưa xác nhận đủ mốc đen định vị góc (${validMarkersCount}/4)`,
+      reason: `Đang căn chỉnh 4 góc neo đen (${validMarkersCount}/4)...`,
     };
   }
 
-  // TẤT CẢ 5 ĐIỀU KIỆN ĐỀU VƯỢT QUA -> XÁC NHẬN ĐÂY LÀ PHIẾU THI HỢP LỆ!
   return {
     isValid: true,
     aspectRatio,

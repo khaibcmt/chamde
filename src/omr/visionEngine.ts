@@ -252,6 +252,52 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
         const bboxArea = bw * bh;
         const fill = count / bboxArea;
 
+        // Kiểm tra tương phản cục bộ: Mốc neo thật phải là ô đen đậm nằm trên nền giấy trắng sáng
+        const verifyHighContrastMarker = (
+          x0: number,
+          y0: number,
+          x1: number,
+          y1: number
+        ): boolean => {
+          let darkSum = 0;
+          let darkN = 0;
+          for (let yy = y0; yy <= y1; yy += 2) {
+            for (let xx = x0; xx <= x1; xx += 2) {
+              const g = gray[yy * width + xx];
+              if (g < 148) {
+                darkSum += g;
+                darkN++;
+              }
+            }
+          }
+          if (darkN === 0) return false;
+          const darkMean = darkSum / darkN;
+          if (darkMean > 138) return false;
+
+          const pad = Math.max(6, Math.round(Math.max(x1 - x0, y1 - y0) * 0.55));
+          const rx0 = Math.max(0, x0 - pad);
+          const ry0 = Math.max(0, y0 - pad);
+          const rx1 = Math.min(width - 1, x1 + pad);
+          const ry1 = Math.min(height - 1, y1 + pad);
+
+          let brightSum = 0;
+          let brightN = 0;
+          const step = Math.max(1, Math.floor(pad / 3));
+          for (let yy = ry0; yy <= ry1; yy += step) {
+            for (let xx = rx0; xx <= rx1; xx += step) {
+              if (xx >= x0 && xx <= x1 && yy >= y0 && yy <= y1) continue;
+              const g = gray[yy * width + xx];
+              if (g >= 118) {
+                brightSum += g;
+                brightN++;
+              }
+            }
+          }
+          if (brightN < 4) return false;
+          const brightMean = brightSum / brightN;
+          return brightMean >= 125 && brightMean - darkMean >= 32;
+        };
+
         // Trường hợp 1: Mốc neo độc lập (ô vuông chuẩn hoặc vạch mốc chữ nhật Bộ GD 2025)
         if (
           bw >= minSide &&
@@ -261,7 +307,8 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
           Math.max(bw, bh) >= minSide * 1.6 &&
           aspect >= 0.28 &&
           aspect <= 3.5 &&
-          fill >= 0.42
+          fill >= 0.42 &&
+          verifyHighContrastMarker(minX, minY, maxX, maxY)
         ) {
           const aspectDist = Math.min(1, Math.abs(1 - aspect) * 0.35);
           const qualityScore = bboxArea * fill * (1 - aspectDist * 0.4);
@@ -299,7 +346,11 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
             }
             const winArea = Math.max(1, (cb.x1 - cb.x0 + 1) * (cb.y1 - cb.y0 + 1));
             const winFill = darkCnt / winArea;
-            if (darkCnt >= minSide * minSide * 2 && winFill >= 0.28) {
+            if (
+              darkCnt >= minSide * minSide * 2 &&
+              winFill >= 0.28 &&
+              verifyHighContrastMarker(cb.x0, cb.y0, cb.x1, cb.y1)
+            ) {
               const sideEst = Math.round(Math.sqrt(darkCnt));
               candidates.push({
                 cx: sx / darkCnt,
@@ -363,10 +414,10 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
     return best;
   };
 
-  const qTL = pickQuadrantAnchor((c) => c.cx < width * 0.52 && c.cy < height * 0.52, 0, 0);
-  const qTR = pickQuadrantAnchor((c) => c.cx >= width * 0.48 && c.cy < height * 0.52, width, 0);
-  const qBL = pickQuadrantAnchor((c) => c.cx < width * 0.52 && c.cy >= height * 0.48, 0, height);
-  const qBR = pickQuadrantAnchor((c) => c.cx >= width * 0.48 && c.cy >= height * 0.48, width, height);
+  const qTL = pickQuadrantAnchor((c) => c.cx < width * 0.46 && c.cy < height * 0.46, 0, 0);
+  const qTR = pickQuadrantAnchor((c) => c.cx >= width * 0.54 && c.cy < height * 0.46, width, 0);
+  const qBL = pickQuadrantAnchor((c) => c.cx < width * 0.46 && c.cy >= height * 0.54, 0, height);
+  const qBR = pickQuadrantAnchor((c) => c.cx >= width * 0.54 && c.cy >= height * 0.54, width, height);
 
   // Đảm bảo luôn giữ lại các ứng viên gần 4 góc khung hình nhất cùng top ứng viên tốt nhất (tối đa 24 điểm)
   const cornerTargets = [
@@ -498,10 +549,10 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
           if (!isConvexQuad(p0, p1, p2, p3)) continue;
 
           const quadArea = computeQuadArea(p0, p1, p2, p3);
-          if (quadArea < frameArea * 0.08) continue;
+          if (quadArea < frameArea * 0.14) continue;
 
           const maxCos = getMaxCornerCosine(p0, p1, p2, p3);
-          if (maxCos > 0.36) continue;
+          if (maxCos > 0.34) continue;
 
           const edge01 = Math.hypot(p1.x - p0.x, p1.y - p0.y);
           const edge12 = Math.hypot(p2.x - p1.x, p2.y - p1.y);
@@ -510,12 +561,12 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
 
           const wRatio = edge01 / Math.max(1, edge23);
           const hRatio = edge12 / Math.max(1, edge30);
-          if (wRatio < 0.60 || wRatio > 1.65 || hRatio < 0.60 || hRatio > 1.65) continue;
+          if (wRatio < 0.65 || wRatio > 1.54 || hRatio < 0.65 || hRatio > 1.54) continue;
 
           const cAreas = [rawPts[0].area, rawPts[1].area, rawPts[2].area, rawPts[3].area];
           const minA = Math.min(...cAreas);
           const maxA = Math.max(...cAreas);
-          if (minA / Math.max(1, maxA) < 0.14) continue;
+          if (minA / Math.max(1, maxA) < 0.16) continue;
 
           const areaWeight = (quadArea / frameArea) * 5000;
           const rectWeight = (1 - maxCos) * 800;
@@ -539,15 +590,21 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
     }
   }
 
-  // 2. Cơ chế suy luận hình bình hành khi thấy 3 mốc (3-out-of-4 Fallback Recovery)
-  if (!bestQuad && topPool.length >= 3) {
-    const M = Math.min(topPool.length, 16);
+  // 2. Cơ chế suy luận hình bình hành khi thấy đúng 3 mốc ở 3 góc phần tư (3-out-of-4 Quadrant Recovery)
+  const quadrantCandidates = [qTL, qTR, qBR, qBL].filter(
+    (c): c is CandidateSquare => Boolean(c)
+  );
+  if (!bestQuad && quadrantCandidates.length >= 3) {
+    const M = quadrantCandidates.length;
     for (let i = 0; i < M - 2; i++) {
       for (let j = i + 1; j < M - 1; j++) {
         for (let k = j + 1; k < M; k++) {
-          const pA = topPool[i];
-          const pB = topPool[j];
-          const pC = topPool[k];
+          const pA = quadrantCandidates[i];
+          const pB = quadrantCandidates[j];
+          const pC = quadrantCandidates[k];
+
+          const cAreas = [pA.area, pB.area, pC.area];
+          if (Math.min(...cAreas) / Math.max(1, Math.max(...cAreas)) < 0.25) continue;
 
           const preds = [
             { x: pA.cx + pC.cx - pB.cx, y: pA.cy + pC.cy - pB.cy },
@@ -556,7 +613,7 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
           ];
 
           for (const pred of preds) {
-            if (pred.x < 2 || pred.x >= width - 2 || pred.y < 2 || pred.y >= height - 2) continue;
+            if (pred.x < 4 || pred.x >= width - 4 || pred.y < 4 || pred.y >= height - 4) continue;
             const pts = [
               { x: pA.cx, y: pA.cy },
               { x: pB.cx, y: pB.cy },
@@ -575,10 +632,10 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
               p3 = pts[3];
             if (!isConvexQuad(p0, p1, p2, p3)) continue;
             const maxCos = getMaxCornerCosine(p0, p1, p2, p3);
-            if (maxCos > 0.36) continue;
+            if (maxCos > 0.26) continue;
 
             const quadArea = computeQuadArea(p0, p1, p2, p3);
-            if (quadArea >= frameArea * 0.08) {
+            if (quadArea >= frameArea * 0.18) {
               const score = (quadArea / frameArea) * 4000 + (1 - maxCos) * 600;
               if (!bestQuad || score > bestQuad.score) {
                 bestQuad = {

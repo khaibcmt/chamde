@@ -384,13 +384,13 @@ export default function App() {
 
   // Settings
   const [autoGradeDelaySeconds, setAutoGradeDelaySeconds] = useState<number>(1.5);
-  // Cài đặt đếm ngược tự chuyển bài khi dừng màn hình: 0 (Tắt / Thủ công), 3s, 5s, 7s
+  // Cài đặt đếm ngược tự chuyển bài khi dừng màn hình: Mặc định 0 (Dừng lại để giáo viên ghi điểm, bấm Chấm tiếp mới quét tiếp)
   const [autoNextDelaySeconds, setAutoNextDelaySeconds] = useState<number>(() => {
     try {
-      const s = localStorage.getItem('edu_cham_de_auto_next_delay');
-      return s !== null ? Number(s) : 3;
+      const s = localStorage.getItem('edu_cham_de_auto_next_delay_v2');
+      return s !== null ? Number(s) : 0;
     } catch {
-      return 3;
+      return 0;
     }
   });
   const [countdownRemaining, setCountdownRemaining] = useState<number>(0);
@@ -1396,6 +1396,10 @@ export default function App() {
         setTorchSupported(session.torchSupported);
         setTorchEnabled(false);
 
+        const streamStartTime = Date.now();
+        let stableValidFrames = 0;
+        let lastQuadCenter: { x: number; y: number } | null = null;
+
         const processFrame = () => {
           if (isCancelled) return;
           const video = omrVideoRef.current;
@@ -1414,6 +1418,14 @@ export default function App() {
             if (overlay.width !== vw || overlay.height !== vh) {
               overlay.width = vw;
               overlay.height = vh;
+            }
+
+            // Nếu đang hiển thị bảng điểm của bài vừa chấm thì TẠM DỪNG QUÉT để giáo viên ghi điểm
+            if (runtime.instantScoreBanner) {
+              stableValidFrames = 0;
+              lastQuadCenter = null;
+              animId = requestAnimationFrame(processFrame);
+              return;
             }
 
             const stdCanvas = captureStandardFrameForOMR(video, 1240, 1754);
@@ -1437,20 +1449,51 @@ export default function App() {
 
             const validation = rawCorners.found
               ? isValidExamPaper(rawCorners, frameData, runtime.selectedTemplate)
-              : { isValid: false, reason: '' };
+              : {
+                  isValid: false,
+                  reason: 'Đưa phiếu trả lời vào khung xanh (cần rõ ít nhất 3 góc neo đen)',
+                };
+
+            // BẮT BUỘC phải thỏa mãn đồng thời: tìm thấy tứ giác + vượt qua kiểm định tờ giấy trắng có mốc neo đen + tối thiểu 3 góc neo
             const isPaperValid = Boolean(
-              rawCorners.found && (validation.isValid || rawCorners.anchorCount >= 3)
+              rawCorners.found && validation.isValid && rawCorners.anchorCount >= 3
             );
 
+            if (isPaperValid) {
+              const cx =
+                (rawCorners.tl.x + rawCorners.tr.x + rawCorners.bl.x + rawCorners.br.x) * 0.25;
+              const cy =
+                (rawCorners.tl.y + rawCorners.tr.y + rawCorners.bl.y + rawCorners.br.y) * 0.25;
+              if (lastQuadCenter) {
+                const moveDist = Math.hypot(cx - lastQuadCenter.x, cy - lastQuadCenter.y);
+                if (moveDist <= 28) {
+                  stableValidFrames += 1;
+                } else {
+                  stableValidFrames = 1;
+                }
+              } else {
+                stableValidFrames = 1;
+              }
+              lastQuadCenter = { x: cx, y: cy };
+            } else {
+              stableValidFrames = 0;
+              lastQuadCenter = null;
+            }
+
             setAnchorLockState({
-              found: rawCorners.found,
-              count: rawCorners.anchorCount,
-              tl: rawCorners.locks.tl,
-              tr: rawCorners.locks.tr,
-              bl: rawCorners.locks.bl,
-              br: rawCorners.locks.br,
+              found: isPaperValid,
+              count: isPaperValid ? rawCorners.anchorCount : 0,
+              tl: isPaperValid ? rawCorners.locks.tl : false,
+              tr: isPaperValid ? rawCorners.locks.tr : false,
+              bl: isPaperValid ? rawCorners.locks.bl : false,
+              br: isPaperValid ? rawCorners.locks.br : false,
               isValidPaper: isPaperValid,
-              statusHint: validation.reason || '',
+              statusHint: isPaperValid
+                ? `Đã nhận phiếu hợp lệ (${rawCorners.anchorCount}/4 neo) — Giữ yên để chấm (${Math.min(
+                    stableValidFrames,
+                    4
+                  )}/4)`
+                : validation.reason || 'Đưa phiếu trả lời vào khung xanh',
             });
 
             const oCtx = overlay.getContext('2d')!;
@@ -1464,16 +1507,17 @@ export default function App() {
               isPaperValid
             );
 
-            // Nếu đang hiển thị bảng điểm của bài vừa chấm thì TẠM DỪNG QUÉT để giáo viên ghi điểm
-            if (runtime.instantScoreBanner) {
-              animId = requestAnimationFrame(processFrame);
-              return;
-            }
-
-            // TỰ ĐỘNG CHẤM VÀ PHÁT ÂM THANH BỊP BỊP NGAY KHI NHẬN DIỆN ĐỦ TỪ 3 MỐC NEO TRỞ LÊN
+            // CHỈ TỰ ĐỘNG CHẤM KHI:
+            // 1. Đã qua thời gian khởi động camera (>= 750ms)
+            // 2. Có phiếu thi thật hợp lệ (isPaperValid === true, đủ >= 3 neo đen trên nền giấy trắng)
+            // 3. Phiếu giữ ổn định liên tiếp >= 4 frame (stableValidFrames >= 4)
+            // 4. Kiểm tra sau khi nắn phẳng thực sự đọc được Mã đề hoặc các ô đáp án đã tô (không chấm nhầm mặt bàn / giấy trắng)
+            const isWarmUpDone = Date.now() - streamStartTime >= 750;
             if (
               runtime.autoTriggerOmr &&
-              (isPaperValid || rawCorners.anchorCount >= 3) &&
+              isWarmUpDone &&
+              isPaperValid &&
+              stableValidFrames >= 4 &&
               !cooldownRef.current
             ) {
               const activeKeys =
@@ -1481,16 +1525,6 @@ export default function App() {
                   ? runtime.answerKeys
                   : buildDefaultAnswerKeyMap(runtime.selectedTemplate);
 
-              cooldownRef.current = true;
-              setCountdownRemaining(0);
-              lockStartTimeRef.current = null;
-              playSuccessBeep(); // Phát tiếng bíp bíp ngay lập tức khi khóa đủ >= 3 neo
-
-              try {
-                capturePhoto(video, 0.92);
-              } catch {
-                // ignore
-              }
               const warped = warpPerspectiveTo1024x550(frameData, rawCorners);
               const record = gradeWarpedSheet(
                 warped,
@@ -1499,6 +1533,44 @@ export default function App() {
                 runtime.omrSettings,
                 runtime.currentScoring
               );
+
+              const hasValidExamCode = Boolean(record.examCode && !record.examCode.includes('?'));
+              const totalAnswered =
+                record.p1Details.filter((d) => d.studentAnswer !== '').length +
+                record.p2Details.reduce(
+                  (acc, q) =>
+                    acc +
+                    (q.studentAnswers.a ? 1 : 0) +
+                    (q.studentAnswers.b ? 1 : 0) +
+                    (q.studentAnswers.c ? 1 : 0) +
+                    (q.studentAnswers.d ? 1 : 0),
+                  0
+                ) +
+                record.p3Details.filter((d) => d.studentString !== '').length;
+
+              // Nếu vùng quét không có mã đề hợp lệ VÀ cũng có ít hơn 2 câu trả lời được tô -> không phải phiếu bài làm thật
+              if (!hasValidExamCode && totalAnswered < 2) {
+                stableValidFrames = 0;
+                setAnchorLockState((prev) => ({
+                  ...prev,
+                  isValidPaper: false,
+                  statusHint: 'Chưa nhận diện được ô tô trên phiếu — Hãy đưa đúng phiếu bài làm vào khung!',
+                }));
+                animId = requestAnimationFrame(processFrame);
+                return;
+              }
+
+              cooldownRef.current = true;
+              stableValidFrames = 0;
+              setCountdownRemaining(0);
+              lockStartTimeRef.current = null;
+              playSuccessBeep(); // Phát tiếng bíp bíp khi đã nhận diện đúng phiếu và chấm xong
+
+              try {
+                capturePhoto(video, 0.92);
+              } catch {
+                // ignore
+              }
               handleCompletedScanRecord(record);
             }
           }
@@ -1507,56 +1579,18 @@ export default function App() {
 
         animId = requestAnimationFrame(processFrame);
       } catch {
-        // Khi thiết bị không có camera vật lý (ví dụ trình duyệt máy tính / preview),
-        // hiển thị trực tiếp phiếu mẫu trên khung ngắm với 4 góc neo xanh lá tự động bắt neo!
+        // Khi thiết bị chưa cấp quyền camera hoặc không có camera vật lý, giữ trạng thái chờ 0/4 neo (không tự ý vẽ giả hoặc tự chấm)
         if (isCancelled) return;
-        const overlay = omrOverlayCanvasRef.current;
-        if (!overlay) return;
-        const runtime = scannerRuntimeRef.current;
-        const activeKeys =
-          Object.keys(runtime.answerKeys).length > 0
-            ? runtime.answerKeys
-            : buildDefaultAnswerKeyMap(runtime.selectedTemplate);
-        const targetKey =
-          findMatchingAnswerKey(runtime.simExamCode, activeKeys) ||
-          Object.values(activeKeys)[0];
-
-        const simCanvas = await generateSimulatedSheetCanvas(
-          runtime.selectedTemplate,
-          runtime.simSbd,
-          targetKey.examCode,
-          targetKey,
-          0.88,
-          runtime.currentScoring
-        );
-        if (isCancelled) return;
-
-        overlay.width = simCanvas.width;
-        overlay.height = simCanvas.height;
-        const oCtx = overlay.getContext('2d')!;
-        oCtx.drawImage(simCanvas, 0, 0);
-        const frameData = oCtx.getImageData(0, 0, simCanvas.width, simCanvas.height);
-        const rawCorners = detectFourCornerMarkers(frameData);
-
         setAnchorLockState({
-          found: rawCorners.found,
-          count: rawCorners.anchorCount,
-          tl: rawCorners.locks.tl,
-          tr: rawCorners.locks.tr,
-          bl: rawCorners.locks.bl,
-          br: rawCorners.locks.br,
-          isValidPaper: true,
-          statusHint: 'Đã khóa 4/4 mốc neo định vị chuẩn',
+          found: false,
+          count: 0,
+          tl: false,
+          tr: false,
+          bl: false,
+          br: false,
+          isValidPaper: false,
+          statusHint: 'Hãy cấp quyền Camera để đưa phiếu vào quét, hoặc bấm nút "Ảnh" để chọn ảnh phiếu trả lời',
         });
-
-        drawDetectedAnchorsOnOverlay(
-          oCtx,
-          simCanvas.width,
-          simCanvas.height,
-          rawCorners,
-          rawCorners,
-          true
-        );
       }
     };
 
@@ -1639,7 +1673,7 @@ export default function App() {
     img.src = url;
   };
 
-  // Chụp & Chấm Ngay Lập Tức (Thao tác 1 chạm cho giáo viên không muốn chờ bộ đếm)
+  // Chụp & Chấm Ngay Lập Tức (Yêu cầu phải có phiếu trả lời thật trước camera)
   const handleManualSnap = () => {
     const activeKeys =
       Object.keys(answerKeys).length > 0
@@ -1650,8 +1684,12 @@ export default function App() {
     }
     const video = omrVideoRef.current;
     if (!video || video.readyState < 2 || video.videoWidth === 0) {
-      // Nếu thiết bị không có camera vật lý thì tự động chạy chấm trên phiếu mô phỏng có đủ 4 neo
-      handleRunSimulatedSheet(0.88);
+      playErrorAlertBeep();
+      setMissingExamCodeAlert({
+        message: 'Camera chưa sẵn sàng! Hãy cấp quyền Camera hoặc bấm nút "Ảnh" ở góc trên để chọn ảnh phiếu.',
+        sbdRead: '',
+        imageUrl: '',
+      });
       return;
     }
     const stdCanvas = captureStandardFrameForOMR(video, 1240, 1754);
@@ -1662,11 +1700,16 @@ export default function App() {
     const stdCtx = stdCanvas.getContext('2d', { willReadFrequently: true })!;
     const frameData = stdCtx.getImageData(0, 0, stdCanvas.width, stdCanvas.height);
     const corners = detectFourCornerMarkers(frameData);
+    const validation = corners.found
+      ? isValidExamPaper(corners, frameData, selectedTemplate)
+      : { isValid: false, reason: '' };
 
-    if (!corners.found && corners.anchorCount < 3) {
+    if (!corners.found || !validation.isValid || corners.anchorCount < 3) {
       playErrorAlertBeep();
       setMissingExamCodeAlert({
-        message: `Chưa khóa đủ mốc định vị (${corners.anchorCount}/4). Hãy đưa ít nhất 3 góc phiếu vào khung xanh!`,
+        message:
+          validation.reason ||
+          `Chưa nhận diện được phiếu trả lời (${corners.anchorCount}/4 mốc neo). Hãy đưa phiếu vào đúng 4 góc khung xanh!`,
         sbdRead: '',
         imageUrl: '',
       });
@@ -2062,14 +2105,14 @@ export default function App() {
                     const val = parseInt(e.target.value, 10);
                     setAutoNextDelaySeconds(val);
                     try {
-                      localStorage.setItem('edu_cham_de_auto_next_delay', String(val));
+                      localStorage.setItem('edu_cham_de_auto_next_delay_v2', String(val));
                     } catch {
                       // ignore
                     }
                   }}
                   className="cursor-pointer"
                 >
-                  <option value={0}>Tắt (Bấm thủ công)</option>
+                  <option value={0}>Dừng ghi điểm (Bấm Chấm tiếp)</option>
                   <option value={3}>3 giây</option>
                   <option value={5}>5 giây</option>
                   <option value={7}>7 giây</option>
@@ -2270,20 +2313,21 @@ export default function App() {
               {instantScoreBanner ? (
                 <div className="bg-amber-600/95 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-xl border border-amber-300 flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                  <span>⏸ ĐÃ DỪNG ĐỂ GHI ĐIỂM · Bấm &quot;Chấm bài tiếp theo&quot; để quét tiếp</span>
+                  <span>⏸ ĐÃ DỪNG ĐỂ GHI ĐIỂM · Bấm &quot;CHẤM BÀI TIẾP THEO&quot; để quét tiếp</span>
                 </div>
-              ) : anchorLockState.count >= 3 ? (
+              ) : anchorLockState.isValidPaper && anchorLockState.count >= 3 ? (
                 <div className="bg-emerald-600/95 text-white px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold shadow-2xl border-2 border-[#00ff66] flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#00ff66] animate-ping" />
                   <span>
-                    🎯 ĐÃ NHẬN {anchorLockState.count}/4 NEO! Tự động chấm &amp; Bíp Bíp...
+                    🎯 {anchorLockState.statusHint || `ĐÃ NHẬN PHIẾU (${anchorLockState.count}/4 NEO) · Đang chấm...`}
                   </span>
                 </div>
               ) : (
-                <div className="bg-slate-900/90 backdrop-blur-xs text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg border border-emerald-400/40 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#00ff66] animate-pulse" />
+                <div className="bg-slate-900/90 backdrop-blur-xs text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg border border-emerald-400/40 flex items-center gap-2 text-center">
+                  <span className="w-2 h-2 rounded-full bg-[#00ff66] animate-pulse shrink-0" />
                   <span>
-                    🔍 Đang bắt 4 neo góc ({anchorLockState.count || 0}/4) · Đủ ≥ 3 neo tự chấm
+                    {anchorLockState.statusHint ||
+                      `🔍 Đưa phiếu trả lời vào khung 4 góc (${anchorLockState.count || 0}/4 neo)`}
                   </span>
                 </div>
               )}
@@ -2362,7 +2406,7 @@ export default function App() {
                   />
                 </div>
 
-                {/* Thanh footer: Nút to CHẤM TIẾP (Phím Space) + Lưu ảnh */}
+                {/* Thanh footer: Nút to CHẤM BÀI TIẾP THEO (Phím Space) + Lưu ảnh */}
                 <div className="review-footer safe-area-bottom-nav">
                   <button
                     type="button"
@@ -2379,7 +2423,7 @@ export default function App() {
                     className="btn-continue"
                   >
                     <Play className="w-5 h-5 fill-white" />
-                    <span>CHẤM TIẾP (Phím Space)</span>
+                    <span>CHẤM BÀI TIẾP THEO (CHẤM TIẾP)</span>
                   </button>
                 </div>
               </div>
