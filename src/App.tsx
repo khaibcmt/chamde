@@ -63,6 +63,13 @@ import {
   recalculateRecordScore,
   warpPerspectiveTo1024x550,
 } from './omr/visionEngine';
+import {
+  capturePhoto,
+  getFriendlyCameraPermissionError,
+  setCameraTorch,
+  startCrossPlatformCamera,
+} from './omr/camera';
+import { usePWAInstall } from './pwa/usePWAInstall';
 
 type ActiveTab = 'keys' | 'scanner' | 'results';
 type GradingMode = 'review' | 'continuous' | 'verify';
@@ -201,7 +208,12 @@ export default function App() {
 
   // Modal Hướng Dẫn, Sứ Mệnh & Cập Nhật Phiên Bản
   const [showGuideModal, setShowGuideModal] = useState(false);
+  const [showPwaModal, setShowPwaModal] = useState(false);
+  const [activePwaCodeTab, setActivePwaCodeTab] = useState<
+    'guide' | 'index.html' | 'style.css' | 'camera.js' | 'app.js' | 'manifest.json' | 'sw.js'
+  >('guide');
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const { isInstallable, isInstalled, isOnline, promptInstall } = usePWAInstall();
   const [lastUpdatedTime, setLastUpdatedTime] = useState<string>(() =>
     new Date().toLocaleDateString('vi-VN', {
       day: '2-digit',
@@ -265,6 +277,10 @@ export default function App() {
 
   const omrVideoRef = useRef<HTMLVideoElement | null>(null);
   const omrOverlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const omrVideoTrackRef = useRef<MediaStreamTrack | null>(null);
+  const [torchSupported, setTorchSupported] = useState<boolean>(false);
+  const [torchEnabled, setTorchEnabled] = useState<boolean>(false);
+  const [lastCapturedBase64Jpeg, setLastCapturedBase64Jpeg] = useState<string>('');
   const lockCounterRef = useRef<number>(0);
   const cooldownRef = useRef<boolean>(false);
 
@@ -533,7 +549,7 @@ export default function App() {
     }
   };
 
-  // Quét QR trực tiếp bằng Camera
+  // Quét QR trực tiếp bằng Camera (Đa nền tảng iOS Safari & Android Chrome)
   useEffect(() => {
     if (!isQrCameraOpen) return;
     let stream: MediaStream | null = null;
@@ -541,14 +557,9 @@ export default function App() {
 
     const startQrCamera = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-          audio: false,
-        });
-        if (qrVideoRef.current) {
-          qrVideoRef.current.srcObject = stream;
-          await qrVideoRef.current.play();
-        }
+        if (!qrVideoRef.current) return;
+        const session = await startCrossPlatformCamera(qrVideoRef.current);
+        stream = session.stream;
 
         const scanCanvas = document.createElement('canvas');
         const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true })!;
@@ -560,7 +571,7 @@ export default function App() {
             scanCanvas.height = video.videoHeight;
             scanCtx.drawImage(video, 0, 0);
             const imgData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
-            const qr = jsQR(imageData.data, imgData.width, imgData.height);
+            const qr = jsQR(imgData.data, imgData.width, imgData.height);
             if (qr && qr.data) {
               playSuccessBeep();
               setRawQrInput(qr.data);
@@ -572,10 +583,10 @@ export default function App() {
           animId = requestAnimationFrame(tick);
         };
         animId = requestAnimationFrame(tick);
-      } catch {
+      } catch (err) {
         setStatusBanner({
           type: 'warning',
-          message: 'Không thể truy cập Camera quét QR. Vui lòng cấp quyền Camera hoặc tải ảnh QR lên.',
+          message: getFriendlyCameraPermissionError(err),
         });
         setIsQrCameraOpen(false);
       }
@@ -709,26 +720,25 @@ export default function App() {
     }
   };
 
-  // 3. CAMERA QUÉT PHIẾU OMR THỜI GIAN THỰC
+  // 3. CAMERA QUÉT PHIẾU OMR THỜI GIAN THỰC (CHUẨN ĐA NỀN TẢNG iOS SAFARI & ANDROID CHROME + TORCH FLASH)
   useEffect(() => {
-    if (!isOmrCameraOpen || activeTab !== 'scanner') return;
+    if (!isOmrCameraOpen || activeTab !== 'scanner') {
+      setTorchEnabled(false);
+      setTorchSupported(false);
+      omrVideoTrackRef.current = null;
+      return;
+    }
     let stream: MediaStream | null = null;
     let animId = 0;
 
     const startOmrStream = async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-          },
-          audio: false,
-        });
-        if (omrVideoRef.current) {
-          omrVideoRef.current.srcObject = stream;
-          await omrVideoRef.current.play();
-        }
+        if (!omrVideoRef.current) return;
+        const session = await startCrossPlatformCamera(omrVideoRef.current);
+        stream = session.stream;
+        omrVideoTrackRef.current = session.videoTrack;
+        setTorchSupported(session.torchSupported);
+        setTorchEnabled(false);
 
         const procCanvas = document.createElement('canvas');
         const procCtx = procCanvas.getContext('2d', { willReadFrequently: true })!;
@@ -777,6 +787,12 @@ export default function App() {
               if (autoTriggerOmr && lockCounterRef.current >= 9) {
                 lockCounterRef.current = 0;
                 cooldownRef.current = true;
+                try {
+                  const base64Shot = capturePhoto(video, 0.92);
+                  setLastCapturedBase64Jpeg(base64Shot);
+                } catch {
+                  // ignore
+                }
                 const warped = warpPerspectiveTo1024x550(frameData, corners);
                 const record = gradeWarpedSheet(
                   warped,
@@ -798,11 +814,10 @@ export default function App() {
         };
 
         animId = requestAnimationFrame(processFrame);
-      } catch {
+      } catch (err) {
         setStatusBanner({
           type: 'warning',
-          message:
-            'Trình duyệt chưa cấp quyền Camera hoặc thiết bị không có Camera. Bạn có thể tải ảnh phiếu hoặc dùng nút Mô Phỏng Phiếu Tô Mẫu.',
+          message: getFriendlyCameraPermissionError(err),
         });
         setIsOmrCameraOpen(false);
       }
@@ -812,6 +827,8 @@ export default function App() {
     return () => {
       cancelAnimationFrame(animId);
       if (stream) stream.getTracks().forEach((t) => t.stop());
+      omrVideoTrackRef.current = null;
+      setTorchEnabled(false);
     };
   }, [
     isOmrCameraOpen,
@@ -825,10 +842,25 @@ export default function App() {
     gradingMode,
   ]);
 
-  // Chụp thủ công từ Camera đang bật
+  // Bật / Tắt đèn Flash (Torch) trên Android khi chấm bài thiếu sáng
+  const handleToggleCameraTorch = async () => {
+    const track = omrVideoTrackRef.current;
+    if (!track || !torchSupported) return;
+    const nextState = !torchEnabled;
+    const applied = await setCameraTorch(track, nextState);
+    setTorchEnabled(applied);
+  };
+
+  // Chụp thủ công từ Camera đang bật bằng hàm capturePhoto(video) chuẩn Base64 (image/jpeg)
   const handleManualCaptureFromVideo = () => {
     const video = omrVideoRef.current;
     if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+    try {
+      const base64Jpeg = capturePhoto(video, 0.92);
+      setLastCapturedBase64Jpeg(base64Jpeg);
+    } catch {
+      // ignore
+    }
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -1429,21 +1461,30 @@ export default function App() {
   }, [currentScoring]);
 
   return (
-    <div className="min-h-screen text-slate-900 flex flex-col select-none pb-28">
-      {/* TOP HEADER — BRIGHT PEDAGOGICAL THEME & 3D SHIMMER LOGO */}
-      <header className="sticky top-0 z-30 border-b-2 border-sky-300 bg-white/95 backdrop-blur-md px-4 py-3 shadow-md">
+    <div className="min-h-screen text-slate-900 flex flex-col select-none">
+      {/* TOP HEADER — BRIGHT PEDAGOGICAL THEME, SAFE AREA INSETS & 3D SHIMMER LOGO */}
+      <header className="sticky top-0 z-30 border-b-2 border-sky-300 bg-white/95 backdrop-blur-md px-4 py-2.5 shadow-md safe-area-header">
         <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl logo-badge-3d flex items-center justify-center text-white shrink-0">
               <GraduationCap className="w-7 h-7 drop-shadow" />
             </div>
             <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xl sm:text-3xl font-black tracking-tight logo-3d-shimmer">
                   Edu Chấm Đề 2025
                 </span>
                 <span className="text-xs font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-sm">
                   Chuẩn Bộ GD&ĐT • {APP_VERSION}
+                </span>
+                <span
+                  className={`text-[11px] font-black px-2 py-0.5 rounded-full border ${
+                    isOnline
+                      ? 'bg-emerald-50 border-emerald-400 text-emerald-800'
+                      : 'bg-amber-100 border-amber-500 text-amber-950'
+                  }`}
+                >
+                  {isOnline ? '● Sẵn sàng Offline Phòng Thi' : '⚡ Chế độ Offline Phòng Thi'}
                 </span>
               </div>
               <p className="text-xs sm:text-sm text-slate-700 font-bold mt-0.5">
@@ -1453,31 +1494,59 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {/* Cụm nút Danh Sách Lớp + Nút "+ Thêm" nằm ngay trên cùng theo đúng yêu cầu */}
+            <div className="flex items-center gap-1.5 bg-violet-50/90 p-1 rounded-2xl border-2 border-violet-300 shadow-2xs">
+              <button
+                onClick={() => setShowClassModal(true)}
+                className="btn-3d btn-3d-emerald px-3 py-2 rounded-xl text-xs sm:text-sm font-black text-white flex items-center gap-1.5"
+              >
+                <Users className="w-4 h-4" />
+                Danh Sách Lớp ({activeClassGroup?.className || '12A1'})
+              </button>
+              <button
+                onClick={() => setShowClassModal(true)}
+                title="Thêm Lớp mới hoặc Thêm Học sinh vào Danh Sách Lớp"
+                className="btn-3d btn-3d-violet px-3 py-2 rounded-xl text-xs sm:text-sm font-black text-white flex items-center gap-1 shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                Thêm
+              </button>
+            </div>
+
+            <button
+              onClick={async () => {
+                if (isInstallable) {
+                  const res = await promptInstall();
+                  if (res === 'manual') setShowPwaModal(true);
+                } else {
+                  setShowPwaModal(true);
+                }
+              }}
+              className="btn-3d btn-3d-rose px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white flex items-center gap-1.5"
+            >
+              <Smartphone className="w-4 h-4" />
+              {isInstalled ? 'Cài App & Mã Nguồn PWA' : 'Tạo Phím Tắt ĐT (iOS/Android)'}
+            </button>
+
             <button
               onClick={() => setShowGuideModal(true)}
-              className="btn-3d btn-3d-amber px-3.5 py-2.5 rounded-xl text-sm font-black text-white flex items-center gap-1.5"
+              className="btn-3d btn-3d-amber px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white flex items-center gap-1.5"
             >
               <HelpCircle className="w-4 h-4" />
-              Hướng Dẫn & Sứ Mệnh
+              Hướng Dẫn
             </button>
-            <button
-              onClick={() => setShowClassModal(true)}
-              className="btn-3d btn-3d-emerald px-3.5 py-2.5 rounded-xl text-sm font-black text-white flex items-center gap-1.5"
-            >
-              <Users className="w-4 h-4" />
-              Danh Sách Lớp ({activeClassGroup?.className || '12A1'})
-            </button>
+
             <button
               onClick={handleExportExcel}
-              className="btn-3d btn-3d-blue px-3.5 py-2.5 rounded-xl text-sm font-black text-white flex items-center gap-1.5"
+              className="btn-3d btn-3d-blue px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white flex items-center gap-1.5"
             >
               <Download className="w-4 h-4" />
-              Xuất Điểm Excel
+              Xuất Excel
             </button>
-            <div className="px-3 py-2 rounded-xl bg-amber-100 border-2 border-amber-400 text-sm font-extrabold text-amber-950 flex items-center gap-1.5 shadow-xs">
+
+            <div className="px-2.5 py-2 rounded-xl bg-amber-100 border-2 border-amber-400 text-xs sm:text-sm font-extrabold text-amber-950 flex items-center gap-1.5 shadow-xs">
               <Award className="w-4 h-4 text-amber-600" />
-              <span>Đã chấm:</span>
-              <span className="font-mono font-black text-base text-amber-800 tabular-nums">
+              <span className="font-mono font-black text-sm sm:text-base text-amber-800 tabular-nums">
                 {stats.count}
               </span>
             </div>
@@ -1486,7 +1555,7 @@ export default function App() {
       </header>
 
       {/* MAIN WORKSPACE */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-4 py-4 space-y-4">
+      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-4 py-4 space-y-4 safe-area-main">
         {/* THANH ĐIỀU HƯỚNG 3 BƯỚC CHÍNH NỔI BẬT NGAY ĐẦU TRANG */}
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
@@ -1564,30 +1633,30 @@ export default function App() {
             </div>
 
             <div>
-              <label className="block text-xs font-black uppercase tracking-wider text-violet-900 mb-1.5">
-                3. Lớp Học (2 Số Đầu SBD)
-              </label>
-              <div className="flex items-center gap-2">
-                <select
-                  value={activeClassId}
-                  onChange={(e) => setActiveClassId(e.target.value)}
-                  className="flex-1 px-3.5 py-2.5 rounded-xl bg-white border-2 border-violet-400 text-sm font-extrabold text-slate-900 focus:outline-none focus:border-violet-600 shadow-xs cursor-pointer"
-                >
-                  {classRosters.map((cls) => (
-                    <option key={cls.id} value={cls.id}>
-                      Lớp {cls.className} (Đầu SBD: {cls.sbdPrefix} • {cls.students.length} HS)
-                    </option>
-                  ))}
-                </select>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <label className="block text-xs font-black uppercase tracking-wider text-violet-900">
+                  3. Danh Sách Lớp (2 Số Đầu SBD)
+                </label>
                 <button
                   onClick={() => setShowClassModal(true)}
                   title="Thêm / Quản lý danh sách lớp"
-                  className="btn-3d btn-3d-violet px-3 py-2.5 rounded-xl text-white font-black text-xs flex items-center gap-1 shrink-0"
+                  className="btn-3d btn-3d-violet px-2.5 py-1 rounded-lg text-white font-black text-xs flex items-center gap-1 shrink-0"
                 >
-                  <Plus className="w-4 h-4" />
+                  <Plus className="w-3.5 h-3.5" />
                   Thêm
                 </button>
               </div>
+              <select
+                value={activeClassId}
+                onChange={(e) => setActiveClassId(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-white border-2 border-violet-400 text-sm font-extrabold text-slate-900 focus:outline-none focus:border-violet-600 shadow-xs cursor-pointer"
+              >
+                {classRosters.map((cls) => (
+                  <option key={cls.id} value={cls.id}>
+                    Lớp {cls.className} (Đầu SBD: {cls.sbdPrefix} • {cls.students.length} HS)
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div>
@@ -2524,6 +2593,7 @@ export default function App() {
                     <video
                       ref={omrVideoRef}
                       className="w-full h-full object-cover"
+                      autoPlay
                       playsInline
                       muted
                     />
@@ -2531,16 +2601,53 @@ export default function App() {
                       ref={omrOverlayCanvasRef}
                       className="absolute inset-0 w-full h-full pointer-events-none"
                     />
-                    <div className="absolute bottom-3 inset-x-3 flex items-center justify-between">
+                    <div className="absolute top-3 right-3 flex items-center gap-2">
+                      {torchSupported && (
+                        <button
+                          onClick={handleToggleCameraTorch}
+                          className={`btn-3d px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg ${
+                            torchEnabled
+                              ? 'btn-3d-amber text-white ring-2 ring-yellow-300'
+                              : 'btn-3d-white text-slate-900'
+                          }`}
+                        >
+                          <Zap className="w-4 h-4" />
+                          {torchEnabled ? 'Tắt Flash (Torch)' : 'Bật Flash (Torch)'}
+                        </button>
+                      )}
+                      <button
+                        onClick={() => setIsOmrCameraOpen(false)}
+                        className="btn-3d btn-3d-rose px-3 py-2 rounded-xl text-xs font-black text-white shadow-lg flex items-center gap-1"
+                      >
+                        <X className="w-4 h-4" />
+                        Đóng Camera
+                      </button>
+                    </div>
+                    <div className="absolute bottom-3 inset-x-3 flex flex-wrap items-center justify-between gap-2">
                       <span className="px-3 py-1.5 rounded-lg bg-slate-950/85 border border-slate-700 text-xs font-mono text-emerald-400">
                         Canh 4 ô vuông đen ở 4 góc tờ phiếu vào khung xanh
                       </span>
-                      <button
-                        onClick={handleManualCaptureFromVideo}
-                        className="btn-3d btn-3d-emerald px-5 py-2.5 rounded-xl text-white font-black text-sm shadow-lg"
-                      >
-                        Chụp & Chấm Ngay
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {torchSupported && (
+                          <button
+                            onClick={handleToggleCameraTorch}
+                            className={`btn-3d px-3.5 py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-lg flex items-center gap-1.5 ${
+                              torchEnabled
+                                ? 'btn-3d-amber text-white'
+                                : 'btn-3d-white text-slate-900'
+                            }`}
+                          >
+                            <Zap className="w-4 h-4" />
+                            Bật/Tắt Flash
+                          </button>
+                        )}
+                        <button
+                          onClick={handleManualCaptureFromVideo}
+                          className="btn-3d btn-3d-emerald px-5 py-2.5 rounded-xl text-white font-black text-sm shadow-lg"
+                        >
+                          Chụp & Chấm Ngay (Base64 JPEG)
+                        </button>
+                      </div>
                     </div>
                   </>
                 ) : (
@@ -2788,11 +2895,18 @@ export default function App() {
             {activeClassGroup && (
               <div className="panel-3d-sky rounded-2xl overflow-hidden">
                 <div className="px-4 py-3.5 bg-sky-100/90 border-b-2 border-sky-200 flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <UserCheck className="w-5 h-5 text-blue-700" />
                     <span className="text-sm sm:text-base font-black uppercase tracking-wider text-blue-950">
                       Danh Sách Học Sinh Lớp {activeClassGroup.className} (Mã đầu SBD: {activeClassGroup.sbdPrefix})
                     </span>
+                    <button
+                      onClick={() => setShowClassModal(true)}
+                      className="btn-3d btn-3d-violet px-3 py-1 rounded-xl text-white font-black text-xs flex items-center gap-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      Thêm
+                    </button>
                   </div>
                   <span className="text-sm font-extrabold text-slate-700">
                     Đã có điểm:{' '}
@@ -3602,12 +3716,200 @@ export default function App() {
         </div>
       )}
 
-      {/* BOTTOM NAVIGATION BAR */}
-      <nav className="fixed bottom-0 inset-x-0 z-30 border-t-2 border-sky-300 bg-white/95 backdrop-blur-md shadow-lg">
-        <div className="max-w-2xl mx-auto grid grid-cols-4 gap-2 p-2.5">
+      {/* MODAL CÀI ĐẶT PHÍM TẮT MÀN HÌNH CHÍNH (iOS SAFARI & ANDROID CHROME/SAMSUNG INTERNET) + BỘ MÃ NGUỒN PWA */}
+      {showPwaModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-50 border-2 border-rose-400 rounded-3xl max-w-5xl w-full overflow-hidden shadow-2xl my-6 flex flex-col max-h-[90vh]">
+            <div className="px-5 py-4 bg-gradient-to-r from-rose-600 via-violet-700 to-blue-700 text-white flex flex-wrap items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center">
+                  <Smartphone className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-xl font-black uppercase tracking-tight">
+                    Tạo Phím Tắt Màn Hình Điện Thoại (iPhone iOS & Android) — Chuẩn PWA Offline
+                  </h3>
+                  <p className="text-xs sm:text-sm text-white/90 font-semibold">
+                    Chạy độc lập toàn màn hình (Standalone), xử lý tai thỏ Dynamic Island, bật Flash Android & chấm bài ngay cả khi mất mạng trong phòng thi
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {isInstallable && (
+                  <button
+                    onClick={promptInstall}
+                    className="btn-3d btn-3d-emerald px-4 py-2 rounded-xl text-white font-black text-xs sm:text-sm flex items-center gap-1.5"
+                  >
+                    <Download className="w-4 h-4" />
+                    Cài Đặt Tự Động Ngay
+                  </button>
+                )}
+                <button
+                  onClick={() => setShowPwaModal(false)}
+                  className="btn-3d btn-3d-white px-3 py-2 rounded-xl text-slate-900 font-black text-xs sm:text-sm flex items-center gap-1"
+                >
+                  <X className="w-4 h-4" />
+                  Đóng
+                </button>
+              </div>
+            </div>
+
+            {/* Thanh chuyển tab giữa Hướng dẫn cài đặt và 6 File mã nguồn PWA */}
+            <div className="px-4 py-2.5 bg-white border-b-2 border-slate-200 flex items-center gap-2 overflow-x-auto shrink-0">
+              {(
+                [
+                  { id: 'guide', label: '📱 Hướng Dẫn Cài Trên iPhone & Android' },
+                  { id: 'index.html', label: '1. index.html' },
+                  { id: 'style.css', label: '2. style.css' },
+                  { id: 'camera.js', label: '3. camera.js' },
+                  { id: 'app.js', label: '4. app.js' },
+                  { id: 'manifest.json', label: '5. manifest.json' },
+                  { id: 'sw.js', label: '6. sw.js' },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActivePwaCodeTab(tab.id)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all ${
+                    activePwaCodeTab === tab.id
+                      ? 'btn-3d btn-3d-blue text-white'
+                      : 'btn-3d btn-3d-white text-slate-700'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="p-4 sm:p-6 overflow-y-auto space-y-5">
+              {activePwaCodeTab === 'guide' ? (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Cột 1: iPhone / iPad (iOS Safari) */}
+                    <div className="feature-3d-card feature-3d-blue rounded-2xl p-5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-black uppercase">
+                          Hệ Điều Hành 1 • iPhone / iPad (iOS Safari)
+                        </span>
+                        <span className="text-xs font-mono font-bold text-blue-800">
+                          Hỗ trợ Dynamic Island & Tai thỏ
+                        </span>
+                      </div>
+                      <h4 className="text-base sm:text-lg font-black text-blue-950">
+                        4 Bước Tạo Phím Tắt Toàn Màn Hình Trên iPhone (Safari)
+                      </h4>
+                      <ol className="space-y-2.5 text-xs sm:text-sm text-slate-800 font-medium list-decimal pl-5">
+                        <li>
+                          <strong>Bước 1:</strong> Mở đường dẫn trang web <strong>Edu Chấm Đề 2025</strong> bằng trình duyệt <strong>Safari</strong> mặc định trên iPhone hoặc iPad.
+                        </li>
+                        <li>
+                          <strong>Bước 2:</strong> Nhấn vào biểu tượng <strong>Chia sẻ (Share)</strong> <span className="inline-block px-1.5 py-0.5 bg-blue-100 text-blue-900 rounded font-mono font-bold">[↑]</span> nằm ở thanh công cụ dưới cùng màn hình Safari.
+                        </li>
+                        <li>
+                          <strong>Bước 3:</strong> Cuộn menu xuống dưới và nhấn chọn dòng <strong>&ldquo;Thêm vào MH chính&rdquo; (Add to Home Screen [+])</strong>.
+                        </li>
+                        <li>
+                          <strong>Bước 4:</strong> Nhấn nút <strong>&ldquo;Thêm&rdquo; (Add)</strong> ở góc trên bên phải. Biểu tượng <strong>EduChấmĐề</strong> sẽ xuất hiện ngay trên màn hình chính như một ứng dụng gốc (không còn thanh địa chỉ Safari).
+                        </li>
+                      </ol>
+                      <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-950 font-semibold">
+                        <strong>Cấu hình kỹ thuật iOS đã kích hoạt:</strong> <code>apple-mobile-web-app-capable=&quot;yes&quot;</code>, <code>apple-mobile-web-app-status-bar-style=&quot;black-translucent&quot;</code>, <code>playsinline=&quot;true&quot;</code> (không bị văng sang trình phát video toàn màn hình) và <code>apple-touch-icon.png</code> 180×180.
+                      </div>
+                    </div>
+
+                    {/* Cột 2: Android (Google Chrome / Samsung Internet) */}
+                    <div className="feature-3d-card feature-3d-emerald rounded-2xl p-5 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-black uppercase">
+                          Hệ Điều Hành 2 • Android (Chrome / Samsung)
+                        </span>
+                        <span className="text-xs font-mono font-bold text-emerald-800">
+                          Hỗ trợ Đèn Flash (Torch)
+                        </span>
+                      </div>
+                      <h4 className="text-base sm:text-lg font-black text-emerald-950">
+                        4 Bước Cài Đặt Ứng Dụng PWA Trên Điện Thoại Android
+                      </h4>
+                      <ol className="space-y-2.5 text-xs sm:text-sm text-slate-800 font-medium list-decimal pl-5">
+                        <li>
+                          <strong>Bước 1:</strong> Mở trang web bằng trình duyệt <strong>Google Chrome</strong> hoặc <strong>Samsung Internet</strong> trên điện thoại Android.
+                        </li>
+                        <li>
+                          <strong>Bước 2:</strong> Nhấn nút <strong>&ldquo;Cài Đặt Tự Động Ngay&rdquo;</strong> trên thanh thông báo hoặc nhấn vào biểu tượng <strong>Menu 3 chấm (⋮)</strong> ở góc phải thanh địa chỉ.
+                        </li>
+                        <li>
+                          <strong>Bước 3:</strong> Chọn mục <strong>&ldquo;Cài đặt ứng dụng&rdquo; (Install App)</strong> hoặc <strong>&ldquo;Thêm vào màn hình chính&rdquo; (Add to Home screen)</strong>.
+                        </li>
+                        <li>
+                          <strong>Bước 4:</strong> Nhấn xác nhận <strong>&ldquo;Cài đặt&rdquo;</strong>. Ứng dụng sẽ được đóng gói chuẩn APK/WebAPK độc lập trên màn hình chính và ngăn kéo ứng dụng.
+                        </li>
+                      </ol>
+                      <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 font-semibold">
+                        <strong>Cấu hình kỹ thuật Android đã kích hoạt:</strong> <code>manifest.json</code> chuẩn <code>display: standalone</code>, icon <code>maskable</code> 512×512, tự động kiểm tra phần cứng đèn Flash (Torch) qua <code>MediaTrackCapabilities / ImageCapture</code> để hiện nút <strong>Bật/Tắt Flash</strong> khi thiếu sáng.
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Khung kiểm tra trạng thái Offline & Base64 Capture */}
+                  <div className="feature-3d-card feature-3d-violet rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="text-sm sm:text-base font-black text-violet-950 uppercase flex items-center gap-2">
+                        <ShieldCheck className="w-5 h-5 text-violet-600" />
+                        Trạng Thái Bộ Nhớ Đệm Phòng Thi (Service Worker sw.js) & Chụp Ảnh Base64
+                      </div>
+                      <p className="text-xs sm:text-sm text-slate-700 font-medium">
+                        Toàn bộ tài nguyên HTML, CSS, JS, Icon và thuật toán chấm OMR đã được lưu vào Cache trình duyệt để giáo viên mở và chấm bài ngay cả khi tắt Wi-Fi / 4G trong phòng thi.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <a
+                        href="./manifest.json"
+                        download="manifest.json"
+                        className="btn-3d btn-3d-white px-3 py-2 rounded-xl text-xs font-black text-violet-900"
+                      >
+                        Tải manifest.json
+                      </a>
+                      <a
+                        href="./sw.js"
+                        download="sw.js"
+                        className="btn-3d btn-3d-white px-3 py-2 rounded-xl text-xs font-black text-violet-900"
+                      >
+                        Tải sw.js
+                      </a>
+                      <a
+                        href="./camera.js"
+                        download="camera.js"
+                        className="btn-3d btn-3d-white px-3 py-2 rounded-xl text-xs font-black text-violet-900"
+                      >
+                        Tải camera.js
+                      </a>
+                      {lastCapturedBase64Jpeg && (
+                        <a
+                          href={lastCapturedBase64Jpeg}
+                          download="Anh_Chup_Camera_Base64.jpg"
+                          className="btn-3d btn-3d-emerald px-3 py-2 rounded-xl text-xs font-black text-white"
+                        >
+                          Tải Ảnh Base64 Vừa Chụp
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <PwaSourceCodePreview fileKey={activePwaCodeTab} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BOTTOM NAVIGATION BAR WITH SAFE-AREA INSETS */}
+      <nav className="fixed bottom-0 inset-x-0 z-30 border-t-2 border-sky-300 bg-white/95 backdrop-blur-md shadow-lg safe-area-bottom-nav">
+        <div className="max-w-3xl mx-auto grid grid-cols-5 gap-1.5 p-2">
           <button
             onClick={() => setActiveTab('keys')}
-            className={`py-2.5 px-2.5 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${
+            className={`py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${
               activeTab === 'keys'
                 ? 'btn-3d btn-3d-blue text-white'
                 : 'btn-3d btn-3d-white text-slate-700'
@@ -3619,7 +3921,7 @@ export default function App() {
 
           <button
             onClick={() => setActiveTab('scanner')}
-            className={`py-2.5 px-2.5 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${
+            className={`py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${
               activeTab === 'scanner'
                 ? 'btn-3d btn-3d-emerald text-white'
                 : 'btn-3d btn-3d-white text-slate-700'
@@ -3631,7 +3933,7 @@ export default function App() {
 
           <button
             onClick={() => setActiveTab('results')}
-            className={`py-2.5 px-2.5 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${
+            className={`py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${
               activeTab === 'results'
                 ? 'btn-3d btn-3d-violet text-white'
                 : 'btn-3d btn-3d-white text-slate-700'
@@ -3642,8 +3944,16 @@ export default function App() {
           </button>
 
           <button
+            onClick={() => setShowPwaModal(true)}
+            className="btn-3d btn-3d-rose py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black text-white"
+          >
+            <Smartphone className="w-4 h-4 shrink-0" />
+            <span className="truncate">Cài App ĐT</span>
+          </button>
+
+          <button
             onClick={() => setShowGuideModal(true)}
-            className="btn-3d btn-3d-amber py-2.5 px-2.5 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black text-white"
+            className="btn-3d btn-3d-amber py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black text-white"
           >
             <HelpCircle className="w-4 h-4 shrink-0" />
             <span className="truncate">Hướng Dẫn</span>
@@ -3707,3 +4017,71 @@ function TemplateCoordinatePreviewOverlay({
     />
   );
 }
+
+/**
+ * Component hiển thị & tải về trực tiếp 6 file mã nguồn PWA chuẩn (index.html, style.css, camera.js, app.js, manifest.json, sw.js)
+ */
+function PwaSourceCodePreview({
+  fileKey,
+}: {
+  fileKey: 'index.html' | 'style.css' | 'camera.js' | 'app.js' | 'manifest.json' | 'sw.js';
+}) {
+  const [content, setContent] = useState<string>('Đang tải mã nguồn...');
+  const [copied, setCopied] = useState<boolean>(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setContent('Đang tải mã nguồn...');
+    fetch(`./${fileKey}`)
+      .then((res) => res.text())
+      .then((txt) => {
+        if (!cancelled) setContent(txt);
+      })
+      .catch(() => {
+        if (!cancelled) setContent(`// Không thể đọc trực tiếp ./${fileKey}`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fileKey]);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // ignore
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-900 text-white px-4 py-3 rounded-2xl">
+        <div className="font-mono font-black text-sm text-sky-300">
+          📄 File cấu hình PWA độc lập: ./{fileKey}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCopy}
+            className="btn-3d btn-3d-blue px-3 py-1.5 rounded-xl text-xs font-black text-white"
+          >
+            {copied ? '✓ Đã sao chép mã nguồn' : 'Sao chép mã nguồn'}
+          </button>
+          <a
+            href={`./${fileKey}`}
+            download={fileKey}
+            className="btn-3d btn-3d-emerald px-3 py-1.5 rounded-xl text-xs font-black text-white flex items-center gap-1"
+          >
+            <Download className="w-3.5 h-3.5" />
+            Tải file {fileKey}
+          </a>
+        </div>
+      </div>
+      <pre className="p-4 rounded-2xl bg-slate-950 text-emerald-300 font-mono text-xs overflow-x-auto max-h-[55vh] leading-relaxed border-2 border-slate-800 select-text">
+        <code>{content}</code>
+      </pre>
+    </div>
+  );
+}
+

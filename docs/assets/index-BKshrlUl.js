@@ -49012,6 +49012,24 @@ var SlidersVertical = createLucideIcon("sliders-vertical", [
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var Smartphone = createLucideIcon("smartphone", [["rect", {
+	width: "14",
+	height: "20",
+	x: "5",
+	y: "2",
+	rx: "2",
+	ry: "2",
+	key: "1yt0o3"
+}], ["path", {
+	d: "M12 18h.01",
+	key: "mhygvu"
+}]]);
+/**
+* @license lucide-react v0.546.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var Sparkles = createLucideIcon("sparkles", [
 	["path", {
 		d: "M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z",
@@ -51026,6 +51044,169 @@ async function generateSimulatedSheetCanvas(templateId, sbd, examCode, answerKey
 	}
 	return sheetCanvas;
 }
+// src/omr/camera.ts
+/**
+* Nhận diện nền tảng thiết bị (iOS Safari / Android Chrome / Desktop)
+*/
+function detectMobilePlatform() {
+	if (typeof navigator === "undefined") return {
+		isIOS: false,
+		isAndroid: false
+	};
+	const ua = navigator.userAgent || navigator.vendor || window.opera || "";
+	return {
+		isIOS: /iPad|iPhone|iPod/.test(ua) || navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1,
+		isAndroid: /android/i.test(ua)
+	};
+}
+/**
+* Khởi tạo Camera sau chuẩn đa nền tảng:
+* - Gắn đầy đủ autoplay, muted, playsinline="true" (bắt buộc cho iOS Safari để không bật fullscreen player)
+* - Kích hoạt Camera sau với facingMode: { ideal: "environment" }
+* - Tự động kiểm tra tính năng Đèn Flash (torch) trên Android qua MediaTrackCapabilities / ImageCapture
+*/
+async function startCrossPlatformCamera(videoElement) {
+	videoElement.setAttribute("autoplay", "");
+	videoElement.setAttribute("muted", "");
+	videoElement.setAttribute("playsinline", "true");
+	videoElement.setAttribute("webkit-playsinline", "true");
+	videoElement.muted = true;
+	videoElement.playsInline = true;
+	let stream;
+	try {
+		stream = await navigator.mediaDevices.getUserMedia({
+			audio: false,
+			video: {
+				facingMode: { ideal: "environment" },
+				width: { ideal: 1920 },
+				height: { ideal: 1080 }
+			}
+		});
+	} catch (err) {
+		throw new Error(getFriendlyCameraPermissionError(err));
+	}
+	videoElement.srcObject = stream;
+	await videoElement.play();
+	const videoTrack = stream.getVideoTracks()[0] || null;
+	const torchSupported = await checkTrackTorchSupport(videoTrack);
+	return {
+		stream,
+		videoTrack,
+		torchSupported
+	};
+}
+/**
+* Kiểm tra tính năng Đèn Flash (torch) thông qua MediaTrackCapabilities hoặc ImageCapture API
+*/
+async function checkTrackTorchSupport(track) {
+	if (!track) return false;
+	try {
+		if (typeof track.getCapabilities === "function") {
+			const caps = track.getCapabilities();
+			if (caps && Boolean(caps.torch)) return true;
+		}
+		const WinWithImageCapture = window;
+		if (WinWithImageCapture.ImageCapture) {
+			const imageCapture = new WinWithImageCapture.ImageCapture(track);
+			if (typeof imageCapture.getPhotoCapabilities === "function") {
+				const photoCaps = await imageCapture.getPhotoCapabilities();
+				if (photoCaps?.fillLightMode && (photoCaps.fillLightMode.includes("flash") || photoCaps.fillLightMode.includes("torch"))) return true;
+			}
+		}
+	} catch {}
+	return false;
+}
+/**
+* Bật / Tắt đèn Flash (Torch) trên thiết bị hỗ trợ
+*/
+async function setCameraTorch(track, enabled) {
+	if (!track) return false;
+	try {
+		await track.applyConstraints({ advanced: [{ torch: enabled }] });
+		return enabled;
+	} catch {
+		return false;
+	}
+}
+/**
+* Hàm capturePhoto(video):
+* Chụp khung hình hiện tại từ <video> sang <canvas> ẩn và xuất ra định dạng ảnh Base64 (image/jpeg)
+* sẵn sàng để gửi đi chấm điểm hoặc lưu trữ minh chứng.
+*/
+function capturePhoto(videoElement, quality = .92) {
+	if (!videoElement || !videoElement.videoWidth || !videoElement.videoHeight) throw new Error("Camera chưa sẵn sàng để chụp ảnh.");
+	const hiddenCanvas = document.createElement("canvas");
+	hiddenCanvas.width = videoElement.videoWidth;
+	hiddenCanvas.height = videoElement.videoHeight;
+	const ctx = hiddenCanvas.getContext("2d");
+	if (!ctx) throw new Error("Không thể khởi tạo Canvas ẩn.");
+	ctx.drawImage(videoElement, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
+	return hiddenCanvas.toDataURL("image/jpeg", quality);
+}
+/**
+* Hiển thị thông báo lỗi thân thiện hướng dẫn giáo viên mở lại quyền Camera trong Cài đặt của từng hệ điều hành
+*/
+function getFriendlyCameraPermissionError(error) {
+	const { isIOS, isAndroid } = detectMobilePlatform();
+	const errObj = error;
+	const errName = errObj?.name || "";
+	if (errName === "NotAllowedError" || errName === "PermissionDeniedError") {
+		if (isIOS) return "Quyền truy cập Camera bị từ chối trên iPhone/iPad. Vui lòng mở: Cài đặt (Settings) ➔ Safari ➔ Camera ➔ Chọn \"Cho phép\" (Allow), sau đó mở lại ứng dụng.";
+		if (isAndroid) return "Quyền truy cập Camera bị từ chối trên Android. Vui lòng nhấn biểu tượng Ổ khóa trên thanh địa chỉ Chrome (hoặc Cài đặt ➔ Ứng dụng ➔ Chrome ➔ Quyền ➔ Máy ảnh) ➔ Chọn \"Cho phép\".";
+		return "Quyền truy cập Camera bị từ chối. Vui lòng vào Cài đặt trình duyệt ➔ Quyền riêng tư & Bảo mật ➔ Cho phép quyền Máy ảnh (Camera) rồi thử lại.";
+	}
+	if (errName === "NotFoundError" || errName === "DevicesNotFoundError") return "Không tìm thấy Camera trên thiết bị của bạn. Bạn vẫn có thể chọn ảnh phiếu trả lời từ Thư viện ảnh.";
+	if (errName === "NotReadableError" || errName === "TrackStartError") return "Camera đang bận hoặc đang được mở bởi một ứng dụng khác. Hãy đóng các ứng dụng dùng Camera khác và thử lại.";
+	return errObj?.message || "Không thể kết nối Camera. Vui lòng kiểm tra quyền truy cập Máy ảnh trong phần Cài đặt của điện thoại.";
+}
+// src/pwa/usePWAInstall.ts
+function usePWAInstall() {
+	const [deferredPrompt, setDeferredPrompt] = (0, import_react.useState)(null);
+	const [isInstallable, setIsInstallable] = (0, import_react.useState)(false);
+	const [isInstalled, setIsInstalled] = (0, import_react.useState)(false);
+	const [isOnline, setIsOnline] = (0, import_react.useState)(typeof navigator !== "undefined" ? navigator.onLine : true);
+	(0, import_react.useEffect)(() => {
+		if (window.matchMedia("(display-mode: standalone)").matches || Boolean(window.navigator.standalone)) setIsInstalled(true);
+		const handleBeforeInstallPrompt = (e) => {
+			e.preventDefault();
+			setDeferredPrompt(e);
+			setIsInstallable(true);
+		};
+		const handleAppInstalled = () => {
+			setIsInstalled(true);
+			setIsInstallable(false);
+			setDeferredPrompt(null);
+		};
+		const handleOnline = () => setIsOnline(true);
+		const handleOffline = () => setIsOnline(false);
+		window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+		window.addEventListener("appinstalled", handleAppInstalled);
+		window.addEventListener("online", handleOnline);
+		window.addEventListener("offline", handleOffline);
+		return () => {
+			window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+			window.removeEventListener("appinstalled", handleAppInstalled);
+			window.removeEventListener("online", handleOnline);
+			window.removeEventListener("offline", handleOffline);
+		};
+	}, []);
+	const promptInstall = async () => {
+		if (!deferredPrompt) return "manual";
+		await deferredPrompt.prompt();
+		const { outcome } = await deferredPrompt.userChoice;
+		if (outcome === "accepted") {
+			setIsInstallable(false);
+			setDeferredPrompt(null);
+		}
+		return outcome;
+	};
+	return {
+		isInstallable,
+		isInstalled,
+		isOnline,
+		promptInstall
+	};
+}
 // node_modules/react/cjs/react-jsx-runtime.production.js
 /**
 * @license React
@@ -51200,7 +51381,10 @@ function App() {
 	const [activeClassId, setActiveClassId] = (0, import_react.useState)("cls-12a1");
 	const [showClassModal, setShowClassModal] = (0, import_react.useState)(false);
 	const [showGuideModal, setShowGuideModal] = (0, import_react.useState)(false);
+	const [showPwaModal, setShowPwaModal] = (0, import_react.useState)(false);
+	const [activePwaCodeTab, setActivePwaCodeTab] = (0, import_react.useState)("guide");
 	const [isCheckingUpdate, setIsCheckingUpdate] = (0, import_react.useState)(false);
+	const { isInstallable, isInstalled, isOnline, promptInstall } = usePWAInstall();
 	const [lastUpdatedTime, setLastUpdatedTime] = (0, import_react.useState)(() => (/* @__PURE__ */ new Date()).toLocaleDateString("vi-VN", {
 		day: "2-digit",
 		month: "2-digit",
@@ -51246,6 +51430,10 @@ function App() {
 	});
 	const omrVideoRef = (0, import_react.useRef)(null);
 	const omrOverlayCanvasRef = (0, import_react.useRef)(null);
+	const omrVideoTrackRef = (0, import_react.useRef)(null);
+	const [torchSupported, setTorchSupported] = (0, import_react.useState)(false);
+	const [torchEnabled, setTorchEnabled] = (0, import_react.useState)(false);
+	const [lastCapturedBase64Jpeg, setLastCapturedBase64Jpeg] = (0, import_react.useState)("");
 	const lockCounterRef = (0, import_react.useRef)(0);
 	const cooldownRef = (0, import_react.useRef)(false);
 	const [gradedRecords, setGradedRecords] = (0, import_react.useState)(() => {
@@ -51453,18 +51641,8 @@ function App() {
 		let animId = 0;
 		const startQrCamera = async () => {
 			try {
-				stream = await navigator.mediaDevices.getUserMedia({
-					video: {
-						facingMode: { ideal: "environment" },
-						width: { ideal: 1280 },
-						height: { ideal: 720 }
-					},
-					audio: false
-				});
-				if (qrVideoRef.current) {
-					qrVideoRef.current.srcObject = stream;
-					await qrVideoRef.current.play();
-				}
+				if (!qrVideoRef.current) return;
+				stream = (await startCrossPlatformCamera(qrVideoRef.current)).stream;
 				const scanCanvas = document.createElement("canvas");
 				const scanCtx = scanCanvas.getContext("2d", { willReadFrequently: true });
 				const tick = () => {
@@ -51474,7 +51652,7 @@ function App() {
 						scanCanvas.height = video.videoHeight;
 						scanCtx.drawImage(video, 0, 0);
 						const imgData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
-						const qr = (0, import_jsQR.default)(imageData.data, imgData.width, imgData.height);
+						const qr = (0, import_jsQR.default)(imgData.data, imgData.width, imgData.height);
 						if (qr && qr.data) {
 							playSuccessBeep();
 							setRawQrInput(qr.data);
@@ -51486,10 +51664,10 @@ function App() {
 					animId = requestAnimationFrame(tick);
 				};
 				animId = requestAnimationFrame(tick);
-			} catch {
+			} catch (err) {
 				setStatusBanner({
 					type: "warning",
-					message: "Không thể truy cập Camera quét QR. Vui lòng cấp quyền Camera hoặc tải ảnh QR lên."
+					message: getFriendlyCameraPermissionError(err)
 				});
 				setIsQrCameraOpen(false);
 			}
@@ -51606,23 +51784,22 @@ function App() {
 		}
 	};
 	(0, import_react.useEffect)(() => {
-		if (!isOmrCameraOpen || activeTab !== "scanner") return;
+		if (!isOmrCameraOpen || activeTab !== "scanner") {
+			setTorchEnabled(false);
+			setTorchSupported(false);
+			omrVideoTrackRef.current = null;
+			return;
+		}
 		let stream = null;
 		let animId = 0;
 		const startOmrStream = async () => {
 			try {
-				stream = await navigator.mediaDevices.getUserMedia({
-					video: {
-						facingMode: { ideal: "environment" },
-						width: { ideal: 1920 },
-						height: { ideal: 1080 }
-					},
-					audio: false
-				});
-				if (omrVideoRef.current) {
-					omrVideoRef.current.srcObject = stream;
-					await omrVideoRef.current.play();
-				}
+				if (!omrVideoRef.current) return;
+				const session = await startCrossPlatformCamera(omrVideoRef.current);
+				stream = session.stream;
+				omrVideoTrackRef.current = session.videoTrack;
+				setTorchSupported(session.torchSupported);
+				setTorchEnabled(false);
 				const procCanvas = document.createElement("canvas");
 				const procCtx = procCanvas.getContext("2d", { willReadFrequently: true });
 				const processFrame = () => {
@@ -51668,6 +51845,10 @@ function App() {
 							if (autoTriggerOmr && lockCounterRef.current >= 9) {
 								lockCounterRef.current = 0;
 								cooldownRef.current = true;
+								try {
+									const base64Shot = capturePhoto(video, .92);
+									setLastCapturedBase64Jpeg(base64Shot);
+								} catch {}
 								const record = gradeWarpedSheet(warpPerspectiveTo1024x550(frameData, corners), selectedTemplate, answerKeys, omrSettings, currentScoring);
 								handleCompletedScanRecord(record);
 								setTimeout(() => {
@@ -51679,10 +51860,10 @@ function App() {
 					animId = requestAnimationFrame(processFrame);
 				};
 				animId = requestAnimationFrame(processFrame);
-			} catch {
+			} catch (err) {
 				setStatusBanner({
 					type: "warning",
-					message: "Trình duyệt chưa cấp quyền Camera hoặc thiết bị không có Camera. Bạn có thể tải ảnh phiếu hoặc dùng nút Mô Phỏng Phiếu Tô Mẫu."
+					message: getFriendlyCameraPermissionError(err)
 				});
 				setIsOmrCameraOpen(false);
 			}
@@ -51691,6 +51872,8 @@ function App() {
 		return () => {
 			cancelAnimationFrame(animId);
 			if (stream) stream.getTracks().forEach((t) => t.stop());
+			omrVideoTrackRef.current = null;
+			setTorchEnabled(false);
 		};
 	}, [
 		isOmrCameraOpen,
@@ -51703,9 +51886,19 @@ function App() {
 		activeHudRecord,
 		gradingMode
 	]);
+	const handleToggleCameraTorch = async () => {
+		const track = omrVideoTrackRef.current;
+		if (!track || !torchSupported) return;
+		const applied = await setCameraTorch(track, !torchEnabled);
+		setTorchEnabled(applied);
+	};
 	const handleManualCaptureFromVideo = () => {
 		const video = omrVideoRef.current;
 		if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) return;
+		try {
+			const base64Jpeg = capturePhoto(video, .92);
+			setLastCapturedBase64Jpeg(base64Jpeg);
+		} catch {}
 		const canvas = document.createElement("canvas");
 		canvas.width = video.videoWidth;
 		canvas.height = video.videoHeight;
@@ -52205,10 +52398,10 @@ function App() {
 		return Math.round((p1Max + p2Max + p3Max) * 100) / 100;
 	}, [currentScoring]);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "min-h-screen text-slate-900 flex flex-col select-none pb-28",
+		className: "min-h-screen text-slate-900 flex flex-col select-none",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("header", {
-				className: "sticky top-0 z-30 border-b-2 border-sky-300 bg-white/95 backdrop-blur-md px-4 py-3 shadow-md",
+				className: "sticky top-0 z-30 border-b-2 border-sky-300 bg-white/95 backdrop-blur-md px-4 py-2.5 shadow-md safe-area-header",
 				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 					className: "max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-3",
 					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -52217,14 +52410,21 @@ function App() {
 							className: "w-12 h-12 rounded-2xl logo-badge-3d flex items-center justify-center text-white shrink-0",
 							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(GraduationCap, { className: "w-7 h-7 drop-shadow" })
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-							className: "flex items-center gap-2.5 flex-wrap",
-							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-								className: "text-xl sm:text-3xl font-black tracking-tight logo-3d-shimmer",
-								children: "Edu Chấm Đề 2025"
-							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-								className: "text-xs font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-sm",
-								children: ["Chuẩn Bộ GD&ĐT • ", APP_VERSION]
-							})]
+							className: "flex items-center gap-2 flex-wrap",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "text-xl sm:text-3xl font-black tracking-tight logo-3d-shimmer",
+									children: "Edu Chấm Đề 2025"
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+									className: "text-xs font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-lg bg-gradient-to-r from-violet-600 to-blue-600 text-white shadow-sm",
+									children: ["Chuẩn Bộ GD&ĐT • ", APP_VERSION]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: `text-[11px] font-black px-2 py-0.5 rounded-full border ${isOnline ? "bg-emerald-50 border-emerald-400 text-emerald-800" : "bg-amber-100 border-amber-500 text-amber-950"}`,
+									children: isOnline ? "● Sẵn sàng Offline Phòng Thi" : "⚡ Chế độ Offline Phòng Thi"
+								})
+							]
 						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 							className: "text-xs sm:text-sm text-slate-700 font-bold mt-0.5",
 							children: [
@@ -52239,43 +52439,56 @@ function App() {
 					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 						className: "flex items-center gap-2 flex-wrap",
 						children: [
-							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								onClick: () => setShowGuideModal(true),
-								className: "btn-3d btn-3d-amber px-3.5 py-2.5 rounded-xl text-sm font-black text-white flex items-center gap-1.5",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleQuestionMark, { className: "w-4 h-4" }), "Hướng Dẫn & Sứ Mệnh"]
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center gap-1.5 bg-violet-50/90 p-1 rounded-2xl border-2 border-violet-300 shadow-2xs",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									onClick: () => setShowClassModal(true),
+									className: "btn-3d btn-3d-emerald px-3 py-2 rounded-xl text-xs sm:text-sm font-black text-white flex items-center gap-1.5",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Users, { className: "w-4 h-4" }),
+										"Danh Sách Lớp (",
+										activeClassGroup?.className || "12A1",
+										")"
+									]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									onClick: () => setShowClassModal(true),
+									title: "Thêm Lớp mới hoặc Thêm Học sinh vào Danh Sách Lớp",
+									className: "btn-3d btn-3d-violet px-3 py-2 rounded-xl text-xs sm:text-sm font-black text-white flex items-center gap-1 shrink-0",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "w-4 h-4" }), "Thêm"]
+								})]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
-								onClick: () => setShowClassModal(true),
-								className: "btn-3d btn-3d-emerald px-3.5 py-2.5 rounded-xl text-sm font-black text-white flex items-center gap-1.5",
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Users, { className: "w-4 h-4" }),
-									"Danh Sách Lớp (",
-									activeClassGroup?.className || "12A1",
-									")"
-								]
+								onClick: async () => {
+									if (isInstallable) {
+										if (await promptInstall() === "manual") setShowPwaModal(true);
+									} else setShowPwaModal(true);
+								},
+								className: "btn-3d btn-3d-rose px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white flex items-center gap-1.5",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Smartphone, { className: "w-4 h-4" }), isInstalled ? "Cài App & Mã Nguồn PWA" : "Tạo Phím Tắt ĐT (iOS/Android)"]
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+								onClick: () => setShowGuideModal(true),
+								className: "btn-3d btn-3d-amber px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white flex items-center gap-1.5",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleQuestionMark, { className: "w-4 h-4" }), "Hướng Dẫn"]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 								onClick: handleExportExcel,
-								className: "btn-3d btn-3d-blue px-3.5 py-2.5 rounded-xl text-sm font-black text-white flex items-center gap-1.5",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "w-4 h-4" }), "Xuất Điểm Excel"]
+								className: "btn-3d btn-3d-blue px-3 py-2.5 rounded-xl text-xs sm:text-sm font-black text-white flex items-center gap-1.5",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "w-4 h-4" }), "Xuất Excel"]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "px-3 py-2 rounded-xl bg-amber-100 border-2 border-amber-400 text-sm font-extrabold text-amber-950 flex items-center gap-1.5 shadow-xs",
-								children: [
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Award, { className: "w-4 h-4 text-amber-600" }),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Đã chấm:" }),
-									/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-										className: "font-mono font-black text-base text-amber-800 tabular-nums",
-										children: stats.count
-									})
-								]
+								className: "px-2.5 py-2 rounded-xl bg-amber-100 border-2 border-amber-400 text-xs sm:text-sm font-extrabold text-amber-950 flex items-center gap-1.5 shadow-xs",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Award, { className: "w-4 h-4 text-amber-600" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+									className: "font-mono font-black text-sm sm:text-base text-amber-800 tabular-nums",
+									children: stats.count
+								})]
 							})
 						]
 					})]
 				})
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("main", {
-				className: "flex-1 max-w-6xl w-full mx-auto px-3 sm:px-4 py-4 space-y-4",
+				className: "flex-1 max-w-6xl w-full mx-auto px-3 sm:px-4 py-4 space-y-4 safe-area-main",
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 						className: "grid grid-cols-1 sm:grid-cols-3 gap-3",
@@ -52330,33 +52543,33 @@ function App() {
 										children: p
 									}, p))
 								})] }),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
-									className: "block text-xs font-black uppercase tracking-wider text-violet-900 mb-1.5",
-									children: "3. Lớp Học (2 Số Đầu SBD)"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-center gap-2",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
-										value: activeClassId,
-										onChange: (e) => setActiveClassId(e.target.value),
-										className: "flex-1 px-3.5 py-2.5 rounded-xl bg-white border-2 border-violet-400 text-sm font-extrabold text-slate-900 focus:outline-none focus:border-violet-600 shadow-xs cursor-pointer",
-										children: classRosters.map((cls) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
-											value: cls.id,
-											children: [
-												"Lớp ",
-												cls.className,
-												" (Đầu SBD: ",
-												cls.sbdPrefix,
-												" • ",
-												cls.students.length,
-												" HS)"
-											]
-										}, cls.id))
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex items-center justify-between gap-2 mb-1.5",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
+										className: "block text-xs font-black uppercase tracking-wider text-violet-900",
+										children: "3. Danh Sách Lớp (2 Số Đầu SBD)"
 									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 										onClick: () => setShowClassModal(true),
 										title: "Thêm / Quản lý danh sách lớp",
-										className: "btn-3d btn-3d-violet px-3 py-2.5 rounded-xl text-white font-black text-xs flex items-center gap-1 shrink-0",
-										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "w-4 h-4" }), "Thêm"]
+										className: "btn-3d btn-3d-violet px-2.5 py-1 rounded-lg text-white font-black text-xs flex items-center gap-1 shrink-0",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "w-3.5 h-3.5" }), "Thêm"]
 									})]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("select", {
+									value: activeClassId,
+									onChange: (e) => setActiveClassId(e.target.value),
+									className: "w-full px-3.5 py-2.5 rounded-xl bg-white border-2 border-violet-400 text-sm font-extrabold text-slate-900 focus:outline-none focus:border-violet-600 shadow-xs cursor-pointer",
+									children: classRosters.map((cls) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("option", {
+										value: cls.id,
+										children: [
+											"Lớp ",
+											cls.className,
+											" (Đầu SBD: ",
+											cls.sbdPrefix,
+											" • ",
+											cls.students.length,
+											" HS)"
+										]
+									}, cls.id))
 								})] }),
 								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("label", {
 									className: "block text-xs font-black uppercase tracking-wider text-amber-900 mb-1.5",
@@ -53238,6 +53451,7 @@ function App() {
 										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("video", {
 											ref: omrVideoRef,
 											className: "w-full h-full object-cover",
+											autoPlay: true,
 											playsInline: true,
 											muted: true
 										}),
@@ -53246,14 +53460,33 @@ function App() {
 											className: "absolute inset-0 w-full h-full pointer-events-none"
 										}),
 										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-											className: "absolute bottom-3 inset-x-3 flex items-center justify-between",
+											className: "absolute top-3 right-3 flex items-center gap-2",
+											children: [torchSupported && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												onClick: handleToggleCameraTorch,
+												className: `btn-3d px-3.5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-lg ${torchEnabled ? "btn-3d-amber text-white ring-2 ring-yellow-300" : "btn-3d-white text-slate-900"}`,
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Zap, { className: "w-4 h-4" }), torchEnabled ? "Tắt Flash (Torch)" : "Bật Flash (Torch)"]
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+												onClick: () => setIsOmrCameraOpen(false),
+												className: "btn-3d btn-3d-rose px-3 py-2 rounded-xl text-xs font-black text-white shadow-lg flex items-center gap-1",
+												children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "w-4 h-4" }), "Đóng Camera"]
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "absolute bottom-3 inset-x-3 flex flex-wrap items-center justify-between gap-2",
 											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 												className: "px-3 py-1.5 rounded-lg bg-slate-950/85 border border-slate-700 text-xs font-mono text-emerald-400",
 												children: "Canh 4 ô vuông đen ở 4 góc tờ phiếu vào khung xanh"
-											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-												onClick: handleManualCaptureFromVideo,
-												className: "btn-3d btn-3d-emerald px-5 py-2.5 rounded-xl text-white font-black text-sm shadow-lg",
-												children: "Chụp & Chấm Ngay"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: "flex items-center gap-2",
+												children: [torchSupported && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+													onClick: handleToggleCameraTorch,
+													className: `btn-3d px-3.5 py-2.5 rounded-xl font-black text-xs sm:text-sm shadow-lg flex items-center gap-1.5 ${torchEnabled ? "btn-3d-amber text-white" : "btn-3d-white text-slate-900"}`,
+													children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Zap, { className: "w-4 h-4" }), "Bật/Tắt Flash"]
+												}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+													onClick: handleManualCaptureFromVideo,
+													className: "btn-3d btn-3d-emerald px-5 py-2.5 rounded-xl text-white font-black text-sm shadow-lg",
+													children: "Chụp & Chấm Ngay (Base64 JPEG)"
+												})]
 											})]
 										})
 									] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
@@ -53525,17 +53758,25 @@ function App() {
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 								className: "px-4 py-3.5 bg-sky-100/90 border-b-2 border-sky-200 flex flex-wrap items-center justify-between gap-2",
 								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex items-center gap-2",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(UserCheck, { className: "w-5 h-5 text-blue-700" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
-										className: "text-sm sm:text-base font-black uppercase tracking-wider text-blue-950",
-										children: [
-											"Danh Sách Học Sinh Lớp ",
-											activeClassGroup.className,
-											" (Mã đầu SBD: ",
-											activeClassGroup.sbdPrefix,
-											")"
-										]
-									})]
+									className: "flex items-center gap-2 flex-wrap",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(UserCheck, { className: "w-5 h-5 text-blue-700" }),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+											className: "text-sm sm:text-base font-black uppercase tracking-wider text-blue-950",
+											children: [
+												"Danh Sách Học Sinh Lớp ",
+												activeClassGroup.className,
+												" (Mã đầu SBD: ",
+												activeClassGroup.sbdPrefix,
+												")"
+											]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+											onClick: () => setShowClassModal(true),
+											className: "btn-3d btn-3d-violet px-3 py-1 rounded-xl text-white font-black text-xs flex items-center gap-1",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Plus, { className: "w-3.5 h-3.5" }), "Thêm"]
+										})
+									]
 								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 									className: "text-sm font-extrabold text-slate-700",
 									children: [
@@ -54528,14 +54769,274 @@ function App() {
 					})]
 				})
 			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("nav", {
-				className: "fixed bottom-0 inset-x-0 z-30 border-t-2 border-sky-300 bg-white/95 backdrop-blur-md shadow-lg",
+			showPwaModal && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto",
 				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-					className: "max-w-2xl mx-auto grid grid-cols-4 gap-2 p-2.5",
+					className: "bg-slate-50 border-2 border-rose-400 rounded-3xl max-w-5xl w-full overflow-hidden shadow-2xl my-6 flex flex-col max-h-[90vh]",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "px-5 py-4 bg-gradient-to-r from-rose-600 via-violet-700 to-blue-700 text-white flex flex-wrap items-center justify-between gap-3 shrink-0",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center gap-3",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+									className: "w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center",
+									children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Smartphone, { className: "w-6 h-6 text-white" })
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+									className: "text-base sm:text-xl font-black uppercase tracking-tight",
+									children: "Tạo Phím Tắt Màn Hình Điện Thoại (iPhone iOS & Android) — Chuẩn PWA Offline"
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+									className: "text-xs sm:text-sm text-white/90 font-semibold",
+									children: "Chạy độc lập toàn màn hình (Standalone), xử lý tai thỏ Dynamic Island, bật Flash Android & chấm bài ngay cả khi mất mạng trong phòng thi"
+								})] })]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "flex items-center gap-2",
+								children: [isInstallable && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									onClick: promptInstall,
+									className: "btn-3d btn-3d-emerald px-4 py-2 rounded-xl text-white font-black text-xs sm:text-sm flex items-center gap-1.5",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "w-4 h-4" }), "Cài Đặt Tự Động Ngay"]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									onClick: () => setShowPwaModal(false),
+									className: "btn-3d btn-3d-white px-3 py-2 rounded-xl text-slate-900 font-black text-xs sm:text-sm flex items-center gap-1",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "w-4 h-4" }), "Đóng"]
+								})]
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "px-4 py-2.5 bg-white border-b-2 border-slate-200 flex items-center gap-2 overflow-x-auto shrink-0",
+							children: [
+								{
+									id: "guide",
+									label: "📱 Hướng Dẫn Cài Trên iPhone & Android"
+								},
+								{
+									id: "index.html",
+									label: "1. index.html"
+								},
+								{
+									id: "style.css",
+									label: "2. style.css"
+								},
+								{
+									id: "camera.js",
+									label: "3. camera.js"
+								},
+								{
+									id: "app.js",
+									label: "4. app.js"
+								},
+								{
+									id: "manifest.json",
+									label: "5. manifest.json"
+								},
+								{
+									id: "sw.js",
+									label: "6. sw.js"
+								}
+							].map((tab) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+								onClick: () => setActivePwaCodeTab(tab.id),
+								className: `px-3 py-1.5 rounded-xl text-xs font-black whitespace-nowrap transition-all ${activePwaCodeTab === tab.id ? "btn-3d btn-3d-blue text-white" : "btn-3d btn-3d-white text-slate-700"}`,
+								children: tab.label
+							}, tab.id))
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "p-4 sm:p-6 overflow-y-auto space-y-5",
+							children: activePwaCodeTab === "guide" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "grid grid-cols-1 md:grid-cols-2 gap-4",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "feature-3d-card feature-3d-blue rounded-2xl p-5 space-y-3",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center justify-between",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "px-3 py-1 rounded-lg bg-blue-600 text-white text-xs font-black uppercase",
+												children: "Hệ Điều Hành 1 • iPhone / iPad (iOS Safari)"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "text-xs font-mono font-bold text-blue-800",
+												children: "Hỗ trợ Dynamic Island & Tai thỏ"
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", {
+											className: "text-base sm:text-lg font-black text-blue-950",
+											children: "4 Bước Tạo Phím Tắt Toàn Màn Hình Trên iPhone (Safari)"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("ol", {
+											className: "space-y-2.5 text-xs sm:text-sm text-slate-800 font-medium list-decimal pl-5",
+											children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 1:" }),
+													" Mở đường dẫn trang web ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Edu Chấm Đề 2025" }),
+													" bằng trình duyệt ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Safari" }),
+													" mặc định trên iPhone hoặc iPad."
+												] }),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 2:" }),
+													" Nhấn vào biểu tượng ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Chia sẻ (Share)" }),
+													" ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+														className: "inline-block px-1.5 py-0.5 bg-blue-100 text-blue-900 rounded font-mono font-bold",
+														children: "[↑]"
+													}),
+													" nằm ở thanh công cụ dưới cùng màn hình Safari."
+												] }),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 3:" }),
+													" Cuộn menu xuống dưới và nhấn chọn dòng ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Thêm vào MH chính” (Add to Home Screen [+])" }),
+													"."
+												] }),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 4:" }),
+													" Nhấn nút ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Thêm” (Add)" }),
+													" ở góc trên bên phải. Biểu tượng ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "EduChấmĐề" }),
+													" sẽ xuất hiện ngay trên màn hình chính như một ứng dụng gốc (không còn thanh địa chỉ Safari)."
+												] })
+											]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "p-3 rounded-xl bg-blue-50 border border-blue-200 text-xs text-blue-950 font-semibold",
+											children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Cấu hình kỹ thuật iOS đã kích hoạt:" }),
+												" ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "apple-mobile-web-app-capable=\"yes\"" }),
+												", ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "apple-mobile-web-app-status-bar-style=\"black-translucent\"" }),
+												", ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "playsinline=\"true\"" }),
+												" (không bị văng sang trình phát video toàn màn hình) và ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "apple-touch-icon.png" }),
+												" 180×180."
+											]
+										})
+									]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "feature-3d-card feature-3d-emerald rounded-2xl p-5 space-y-3",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex items-center justify-between",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "px-3 py-1 rounded-lg bg-emerald-600 text-white text-xs font-black uppercase",
+												children: "Hệ Điều Hành 2 • Android (Chrome / Samsung)"
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+												className: "text-xs font-mono font-bold text-emerald-800",
+												children: "Hỗ trợ Đèn Flash (Torch)"
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h4", {
+											className: "text-base sm:text-lg font-black text-emerald-950",
+											children: "4 Bước Cài Đặt Ứng Dụng PWA Trên Điện Thoại Android"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("ol", {
+											className: "space-y-2.5 text-xs sm:text-sm text-slate-800 font-medium list-decimal pl-5",
+											children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 1:" }),
+													" Mở trang web bằng trình duyệt ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Google Chrome" }),
+													" hoặc ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Samsung Internet" }),
+													" trên điện thoại Android."
+												] }),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 2:" }),
+													" Nhấn nút ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Cài Đặt Tự Động Ngay”" }),
+													" trên thanh thông báo hoặc nhấn vào biểu tượng ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Menu 3 chấm (⋮)" }),
+													" ở góc phải thanh địa chỉ."
+												] }),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 3:" }),
+													" Chọn mục ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Cài đặt ứng dụng” (Install App)" }),
+													" hoặc ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Thêm vào màn hình chính” (Add to Home screen)" }),
+													"."
+												] }),
+												/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", { children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bước 4:" }),
+													" Nhấn xác nhận ",
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "“Cài đặt”" }),
+													". Ứng dụng sẽ được đóng gói chuẩn APK/WebAPK độc lập trên màn hình chính và ngăn kéo ứng dụng."
+												] })
+											]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 font-semibold",
+											children: [
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Cấu hình kỹ thuật Android đã kích hoạt:" }),
+												" ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "manifest.json" }),
+												" chuẩn ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "display: standalone" }),
+												", icon ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "maskable" }),
+												" 512×512, tự động kiểm tra phần cứng đèn Flash (Torch) qua ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: "MediaTrackCapabilities / ImageCapture" }),
+												" để hiện nút ",
+												/* @__PURE__ */ (0, import_jsx_runtime.jsx)("strong", { children: "Bật/Tắt Flash" }),
+												" khi thiếu sáng."
+											]
+										})
+									]
+								})]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+								className: "feature-3d-card feature-3d-violet rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "space-y-1",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+										className: "text-sm sm:text-base font-black text-violet-950 uppercase flex items-center gap-2",
+										children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ShieldCheck, { className: "w-5 h-5 text-violet-600" }), "Trạng Thái Bộ Nhớ Đệm Phòng Thi (Service Worker sw.js) & Chụp Ảnh Base64"]
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+										className: "text-xs sm:text-sm text-slate-700 font-medium",
+										children: "Toàn bộ tài nguyên HTML, CSS, JS, Icon và thuật toán chấm OMR đã được lưu vào Cache trình duyệt để giáo viên mở và chấm bài ngay cả khi tắt Wi-Fi / 4G trong phòng thi."
+									})]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex items-center gap-2 flex-wrap",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+											href: "./manifest.json",
+											download: "manifest.json",
+											className: "btn-3d btn-3d-white px-3 py-2 rounded-xl text-xs font-black text-violet-900",
+											children: "Tải manifest.json"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+											href: "./sw.js",
+											download: "sw.js",
+											className: "btn-3d btn-3d-white px-3 py-2 rounded-xl text-xs font-black text-violet-900",
+											children: "Tải sw.js"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+											href: "./camera.js",
+											download: "camera.js",
+											className: "btn-3d btn-3d-white px-3 py-2 rounded-xl text-xs font-black text-violet-900",
+											children: "Tải camera.js"
+										}),
+										lastCapturedBase64Jpeg && /* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+											href: lastCapturedBase64Jpeg,
+											download: "Anh_Chup_Camera_Base64.jpg",
+											className: "btn-3d btn-3d-emerald px-3 py-2 rounded-xl text-xs font-black text-white",
+											children: "Tải Ảnh Base64 Vừa Chụp"
+										})
+									]
+								})]
+							})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PwaSourceCodePreview, { fileKey: activePwaCodeTab })
+						})
+					]
+				})
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("nav", {
+				className: "fixed bottom-0 inset-x-0 z-30 border-t-2 border-sky-300 bg-white/95 backdrop-blur-md shadow-lg safe-area-bottom-nav",
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "max-w-3xl mx-auto grid grid-cols-5 gap-1.5 p-2",
 					children: [
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => setActiveTab("keys"),
-							className: `py-2.5 px-2.5 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${activeTab === "keys" ? "btn-3d btn-3d-blue text-white" : "btn-3d btn-3d-white text-slate-700"}`,
+							className: `py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${activeTab === "keys" ? "btn-3d btn-3d-blue text-white" : "btn-3d btn-3d-white text-slate-700"}`,
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(QrCode, { className: "w-4 h-4 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "truncate",
 								children: "1. Đáp Án"
@@ -54543,7 +55044,7 @@ function App() {
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => setActiveTab("scanner"),
-							className: `py-2.5 px-2.5 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${activeTab === "scanner" ? "btn-3d btn-3d-emerald text-white" : "btn-3d btn-3d-white text-slate-700"}`,
+							className: `py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${activeTab === "scanner" ? "btn-3d btn-3d-emerald text-white" : "btn-3d btn-3d-white text-slate-700"}`,
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "w-4 h-4 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "truncate",
 								children: "2. Chấm Bài"
@@ -54551,7 +55052,7 @@ function App() {
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => setActiveTab("results"),
-							className: `py-2.5 px-2.5 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${activeTab === "results" ? "btn-3d btn-3d-violet text-white" : "btn-3d btn-3d-white text-slate-700"}`,
+							className: `py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black transition-all ${activeTab === "results" ? "btn-3d btn-3d-violet text-white" : "btn-3d btn-3d-white text-slate-700"}`,
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FileSpreadsheet, { className: "w-4 h-4 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 								className: "truncate",
 								children: [
@@ -54562,8 +55063,16 @@ function App() {
 							})]
 						}),
 						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							onClick: () => setShowPwaModal(true),
+							className: "btn-3d btn-3d-rose py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black text-white",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Smartphone, { className: "w-4 h-4 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "truncate",
+								children: "Cài App ĐT"
+							})]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
 							onClick: () => setShowGuideModal(true),
-							className: "btn-3d btn-3d-amber py-2.5 px-2.5 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black text-white",
+							className: "btn-3d btn-3d-amber py-2.5 px-2 rounded-xl flex items-center justify-center gap-1.5 text-xs sm:text-sm font-black text-white",
 							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CircleQuestionMark, { className: "w-4 h-4 shrink-0" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 								className: "truncate",
 								children: "Hướng Dẫn"
@@ -54616,6 +55125,61 @@ function TemplateCoordinatePreviewOverlay({ templateId, settings }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("canvas", {
 		ref: canvasRef,
 		className: "absolute inset-0 w-full h-full object-contain pointer-events-none z-0"
+	});
+}
+/**
+* Component hiển thị & tải về trực tiếp 6 file mã nguồn PWA chuẩn (index.html, style.css, camera.js, app.js, manifest.json, sw.js)
+*/
+function PwaSourceCodePreview({ fileKey }) {
+	const [content, setContent] = (0, import_react.useState)("Đang tải mã nguồn...");
+	const [copied, setCopied] = (0, import_react.useState)(false);
+	(0, import_react.useEffect)(() => {
+		let cancelled = false;
+		setContent("Đang tải mã nguồn...");
+		fetch(`./${fileKey}`).then((res) => res.text()).then((txt) => {
+			if (!cancelled) setContent(txt);
+		}).catch(() => {
+			if (!cancelled) setContent(`// Không thể đọc trực tiếp ./${fileKey}`);
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [fileKey]);
+	const handleCopy = async () => {
+		try {
+			await navigator.clipboard.writeText(content);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 1800);
+		} catch {}
+	};
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "space-y-3",
+		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			className: "flex flex-wrap items-center justify-between gap-2 bg-slate-900 text-white px-4 py-3 rounded-2xl",
+			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "font-mono font-black text-sm text-sky-300",
+				children: ["📄 File cấu hình PWA độc lập: ./", fileKey]
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex items-center gap-2",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					onClick: handleCopy,
+					className: "btn-3d btn-3d-blue px-3 py-1.5 rounded-xl text-xs font-black text-white",
+					children: copied ? "✓ Đã sao chép mã nguồn" : "Sao chép mã nguồn"
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("a", {
+					href: `./${fileKey}`,
+					download: fileKey,
+					className: "btn-3d btn-3d-emerald px-3 py-1.5 rounded-xl text-xs font-black text-white flex items-center gap-1",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Download, { className: "w-3.5 h-3.5" }),
+						"Tải file ",
+						fileKey
+					]
+				})]
+			})]
+		}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("pre", {
+			className: "p-4 rounded-2xl bg-slate-950 text-emerald-300 font-mono text-xs overflow-x-auto max-h-[55vh] leading-relaxed border-2 border-slate-800 select-text",
+			children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("code", { children: content })
+		})]
 	});
 }
 // src/main.tsx

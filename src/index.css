@@ -2,17 +2,40 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
-  body {
+  html, body {
     font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     background: linear-gradient(145deg, #e8f3ff 0%, #f4f8fc 48%, #e8fbf2 100%);
     color: #0f172a;
+    /* Vô hiệu hóa hiệu ứng nảy cuộn trang (rubber-band bounce) trên iOS Safari & Android */
+    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
   }
 
   code, pre, .font-mono {
     font-family: 'JetBrains Mono', monospace;
     font-variant-numeric: tabular-nums;
   }
+}
+
+/* Safe Area Inset Utilities cho Tai thỏ / Dynamic Island (iPhone) & Camera đục lỗ / Navigation Bar (Android) */
+.safe-area-header {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+.safe-area-bottom-nav {
+  padding-bottom: max(0.65rem, env(safe-area-inset-bottom));
+  padding-left: max(0.65rem, env(safe-area-inset-left));
+  padding-right: max(0.65rem, env(safe-area-inset-right));
+}
+
+.safe-area-main {
+  padding-left: max(0.75rem, env(safe-area-inset-left));
+  padding-right: max(0.75rem, env(safe-area-inset-right));
 }
 
 .tabular-nums {
