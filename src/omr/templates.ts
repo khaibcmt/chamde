@@ -76,7 +76,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     imageUrl: './assets/sheets/phieu_goc_qm_khtn_dia.jpg',
     note: 'Dành cho Vật lí, Hoá học, Sinh học, Địa lí (Mã đề 3 số)',
     defaultP1Point: 0.25,
-    defaultP3Point: 0.25,
+    defaultP3Point: 0.5,
   },
   {
     id: 'qm_khxh_tin_cn',
@@ -138,7 +138,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     imageUrl: './assets/sheets/phieu_goc_qm_2025_a4.jpg',
     note: 'Phiếu tổng hợp A4 chuẩn mã đề 3 số (40 P1, 8 P2, 6 P3)',
     defaultP1Point: 0.25,
-    defaultP3Point: 0.25,
+    defaultP3Point: 0.5,
   },
   {
     id: 'qm_cv1239',
@@ -153,7 +153,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     imageUrl: './assets/sheets/phieu_goc_qm_cv1239.jpg',
     note: 'Chuẩn Công văn 1239 Bộ GD&ĐT (Mã đề 4 chữ số, 40 P1, 8 P2, 6 P3)',
     defaultP1Point: 0.25,
-    defaultP3Point: 0.25,
+    defaultP3Point: 0.5,
   },
   {
     id: 'bogd_2025_a4',
@@ -168,7 +168,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     imageUrl: './assets/sheets/phieu_goc_bogd_2025_a4.jpg',
     note: 'Phiếu Bộ GD viền hồng định vị sườn chuẩn (Mã đề 3 số)',
     defaultP1Point: 0.25,
-    defaultP3Point: 0.25,
+    defaultP3Point: 0.5,
   },
   {
     id: 'bogd_cv1239',
@@ -183,7 +183,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     imageUrl: './assets/sheets/phieu_goc_bogd_cv1239.jpg',
     note: 'Phiếu Bộ GD theo CV 1239 viền hồng (Mã đề 4 số)',
     defaultP1Point: 0.25,
-    defaultP3Point: 0.25,
+    defaultP3Point: 0.5,
   },
   {
     id: 'cv1239_mo_rong',
@@ -198,7 +198,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     imageUrl: './assets/sheets/phieu_goc_cv1239_mo_rong.jpg',
     note: 'Bản mở rộng dung lượng lớn (40 P1, 16 P2, 12 P3, Mã đề 4 số)',
     defaultP1Point: 0.25,
-    defaultP3Point: 0.25,
+    defaultP3Point: 0.5,
   },
 
   // --- NHÓM 3: PHIẾU HỆ SINH THÁI TƯƠNG THÍCH NGOÀI ---
@@ -215,7 +215,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     imageUrl: './assets/sheets/phieu_goc_tnmaker_2025_a4.jpg',
     note: 'Tương thích phiếu TNmaker mã đề 3 số (40 P1, 8 P2, 6 P3)',
     defaultP1Point: 0.25,
-    defaultP3Point: 0.25,
+    defaultP3Point: 0.5,
   },
   {
     id: 'tnmaker_cv1239',
@@ -230,7 +230,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     imageUrl: './assets/sheets/phieu_goc_tnmaker_cv1239.jpg',
     note: 'Tương thích TNmaker chuẩn CV 1239 (Mã đề 4 số, 40 P1, 8 P2, 6 P3)',
     defaultP1Point: 0.25,
-    defaultP3Point: 0.25,
+    defaultP3Point: 0.5,
   },
   {
     id: 'azota_2025_a4',
@@ -245,7 +245,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     imageUrl: './assets/sheets/phieu_goc_azota_2025_a4.jpg',
     note: 'Tương thích Azota v15.0 có vạch mã chân trang (Mã đề 3 số)',
     defaultP1Point: 0.25,
-    defaultP3Point: 0.25,
+    defaultP3Point: 0.5,
   },
   {
     id: 'azota_cv1239',
@@ -260,7 +260,7 @@ export const SHEET_DATABASE: SheetDatabaseItem[] = [
     imageUrl: './assets/sheets/phieu_goc_azota_cv1239.jpg',
     note: 'Tương thích Azota v31.0 chuẩn CV 1239 (Mã đề 4 số)',
     defaultP1Point: 0.25,
-    defaultP3Point: 0.25,
+    defaultP3Point: 0.5,
   },
 ];
 
@@ -405,8 +405,7 @@ export function getDefaultScoringConfig(templateId: TemplateId): CustomScoringCo
     activeP2Count: activeP2,
     p2PointsMap: [0.1, 0.25, 0.5, 1.0],
     activeP3Count: activeP3,
-    p3PointsPerQ:
-      activeP3 > 0 ? Number((tpl.p3TotalPoints / activeP3).toFixed(3)) : 0.25,
+    p3PointsPerQ: 0.5,
   };
 }
 

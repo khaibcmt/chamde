@@ -159,8 +159,11 @@ const DEFAULT_EXAM_SESSIONS: ExamSessionItem[] = [
     scoring: {
       ...getDefaultScoringConfig('qm_khtn_dia'),
       activeP1Count: 18,
+      p1PointsPerQ: 0.25,
       activeP2Count: 4,
+      p2PointsMap: [0.1, 0.25, 0.5, 1.0],
       activeP3Count: 6,
+      p3PointsPerQ: 0.5,
     },
     classId: 'cls-12a1',
     answerKeys: buildDefaultAnswerKeyMap('qm_khtn_dia'),
@@ -295,10 +298,15 @@ export default function App() {
       if (saved) {
         const parsedSessions: ExamSessionItem[] = JSON.parse(saved);
         if (Array.isArray(parsedSessions) && parsedSessions.length > 0) {
+          const upgradedP3 = localStorage.getItem('edu_cham_de_p3_05_upgraded_v1');
+          if (!upgradedP3) {
+            localStorage.setItem('edu_cham_de_p3_05_upgraded_v1', 'true');
+          }
           return parsedSessions.map((sess) => {
             const keys = sess.answerKeys;
             const hasKeys = keys && Object.keys(keys).length > 0;
             const k101 = keys?.['101'] || keys?.['0101'];
+            const nextP3Points = !upgradedP3 ? 0.5 : (sess.scoring?.p3PointsPerQ ?? 0.5);
             // Tự động nâng cấp nếu phiên cũ thiếu đáp án hoặc đang lưu bộ đáp án mẫu cũ (B,C,D,C,D,A)
             if (!hasKeys || (k101 && k101.p1?.slice(0, 6).join('') === 'BCDCD' + 'A')) {
               const freshMap = buildDefaultAnswerKeyMap(sess.templateId);
@@ -310,10 +318,17 @@ export default function App() {
                   activeP1Count: 18,
                   activeP2Count: 4,
                   activeP3Count: 6,
+                  p3PointsPerQ: 0.5,
                 },
               };
             }
-            return sess;
+            return {
+              ...sess,
+              scoring: {
+                ...sess.scoring,
+                p3PointsPerQ: nextP3Points,
+              },
+            };
           });
         }
       }
@@ -2574,17 +2589,22 @@ export default function App() {
         {/* ================================================================= */}
         {bottomTab === 'sessions' && (
           <>
-            {/* 1B. MÀN HÌNH DANH SÁCH ĐỢT CHẤM (TỰ ĐỘNG LƯU PHIÊN CHẤM ĐỂ CHẤM TIẾP) */}
+            {/* 1B. MÀN HÌNH CHÍNH — DANH SÁCH ĐỢT CHẤM (MỞ LÊN VÀO NGAY MÀN HÌNH CHÍNH) */}
             {(sessionView === 'list' || sessionView === 'welcome') && (
               <div className="flex-1 flex flex-col">
-                <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-blue-200/70 px-4 py-3 flex items-center justify-between safe-area-header shadow-xs">
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-xl bg-[#007aff] text-white flex items-center justify-center shadow-xs">
+                <header className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-blue-200/70 px-4 py-3 flex items-center justify-between safe-area-header shadow-xs">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#007aff] to-indigo-600 text-white flex items-center justify-center shadow-xs">
                       <CheckCircle2 className="w-5 h-5" />
                     </div>
-                    <h1 className="text-base sm:text-lg font-extrabold text-slate-900">
-                      Các phiên chấm đã lưu
-                    </h1>
+                    <div>
+                      <h1 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
+                        Màn hình chính — Chấm thi
+                      </h1>
+                      <p className="text-[11px] font-semibold text-slate-500">
+                        Chọn phiên chấm bên dưới hoặc tạo đợt chấm mới
+                      </p>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-1.5">
@@ -3089,23 +3109,16 @@ export default function App() {
                   {/* =================================================================== */}
                   {/* PHẦN 4 (MÀU TÍM PURPLE 3D): 4. CẤU TRÚC ĐỀ (3 PHẦN RIÊNG BIỆT 3D)  */}
                   {/* =================================================================== */}
-                  <div className="bg-white rounded-2xl p-4 border-2 border-purple-300 border-b-4 border-purple-500 shadow-sm space-y-3.5">
+                  <div className="bg-white rounded-2xl p-4 border-2 border-purple-300 border-b-4 border-purple-500 shadow-sm space-y-4">
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <div className="flex items-center gap-2.5">
                         <span className="w-7 h-7 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-500 text-white font-black text-sm flex items-center justify-center shadow-xs">
                           4
                         </span>
                         <label className="font-black text-base text-purple-950">
-                          Cấu trúc đề (3 Phần)
+                          Cấu trúc đề & Thiết lập điểm (3 Phần)
                         </label>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowAdvancedP2Points((v) => !v)}
-                        className="text-xs font-black text-purple-700 bg-purple-100 hover:bg-purple-200 px-3 py-1.5 rounded-xl border border-purple-300 cursor-pointer shadow-2xs"
-                      >
-                        {showAdvancedP2Points ? 'Ẩn chi tiết điểm' : 'Tùy chỉnh điểm mỗi câu'}
-                      </button>
                     </div>
 
                     {/* 3 KHỐI 3D VỚI 3 MÀU SẮC RỰC RỠ VÀ CỠ CHỮ LỚN RÕ RÀNG */}
@@ -3116,9 +3129,8 @@ export default function App() {
                           Phần I (TN)
                         </div>
                         <div className="text-[11px] text-blue-600 font-bold mb-1">
-                          Tối đa {draftDbSheet.p1} câu
+                          Số câu (Tối đa {draftDbSheet.p1})
                         </div>
-                        {/* CỠ CHỮ SỐ CÂU TĂNG LỚN (TEXT-3XL) */}
                         <input
                           type="number"
                           min={0}
@@ -3134,25 +3146,36 @@ export default function App() {
                             }))
                           }
                           placeholder="Số câu"
-                          className="w-full bg-white border-2 border-blue-300 focus:border-blue-500 rounded-xl py-2 px-1 text-center font-black text-3xl text-blue-700 shadow-inner focus:outline-none"
+                          className="w-full bg-white border-2 border-blue-300 focus:border-blue-500 rounded-xl py-1.5 px-1 text-center font-black text-2xl sm:text-3xl text-blue-700 shadow-inner focus:outline-none"
                         />
-                        {/* CỠ CHỮ SỐ ĐIỂM TĂNG LỚN */}
-                        <div className="mt-2 bg-blue-200/80 border border-blue-300 rounded-lg py-1 px-1">
-                          <div className="text-xs font-black text-blue-950">
-                            {draftScoring.p1PointsPerQ}đ / câu
-                          </div>
+                        <div className="mt-2 bg-blue-200/80 border border-blue-300 rounded-lg py-1 px-1.5">
+                          <label className="text-[10px] font-bold text-blue-800 block">
+                            Điểm / câu P1
+                          </label>
+                          <input
+                            type="number"
+                            step={0.05}
+                            min={0}
+                            value={draftScoring.p1PointsPerQ}
+                            onChange={(e) =>
+                              setDraftScoring((prev) => ({
+                                ...prev,
+                                p1PointsPerQ: Number(e.target.value) || 0,
+                              }))
+                            }
+                            className="w-full bg-white border border-blue-300 rounded-md py-0.5 text-center font-black text-xs text-blue-950 focus:outline-none"
+                          />
                         </div>
                       </div>
 
                       {/* KHỐI 2: PHẦN II (ĐÚNG/SAI) - MÀU XANH LÁ EMERALD 3D */}
-                      <div className="bg-gradient-to-b from-emerald-50 to-emerald-100/90 rounded-2xl p-3 border-2 border-emerald-300 border-b-4 border-b-emerald-500 shadow-xs flex flex-col justify-between text-center">
+                      <div className="bg-gradient-to-b from-emerald-50 to-emerald-100/90 rounded-2xl p-3 border-2 border-emerald-300 border-b-4 border-emerald-500 shadow-xs flex flex-col justify-between text-center">
                         <div className="text-xs font-black text-emerald-900 uppercase tracking-tight">
                           Phần II (Đ/S)
                         </div>
                         <div className="text-[11px] text-emerald-600 font-bold mb-1">
-                          Tối đa {draftDbSheet.p2} câu
+                          Số câu (Tối đa {draftDbSheet.p2})
                         </div>
-                        {/* CỠ CHỮ SỐ CÂU TĂNG LỚN (TEXT-3XL) */}
                         <input
                           type="number"
                           min={0}
@@ -3168,25 +3191,34 @@ export default function App() {
                             }))
                           }
                           placeholder="Số câu"
-                          className="w-full bg-white border-2 border-emerald-300 focus:border-emerald-500 rounded-xl py-2 px-1 text-center font-black text-3xl text-emerald-700 shadow-inner focus:outline-none"
+                          className="w-full bg-white border-2 border-emerald-300 focus:border-emerald-500 rounded-xl py-1.5 px-1 text-center font-black text-2xl sm:text-3xl text-emerald-700 shadow-inner focus:outline-none"
                         />
-                        {/* CỠ CHỮ SỐ ĐIỂM TĂNG LỚN */}
-                        <div className="mt-2 bg-emerald-200/80 border border-emerald-300 rounded-lg py-1 px-1">
-                          <div className="text-xs font-black text-emerald-950">
-                            Lũy tiến Bộ GD
+                        <div className="mt-2 bg-emerald-200/80 border border-emerald-300 rounded-lg py-1.5 px-1">
+                          <div className="text-[10px] font-bold text-emerald-800">Cách tính P2</div>
+                          <div className="text-[11px] font-black text-emerald-950 truncate">
+                            {draftScoring.p2PointsMap[0] === 0.1 &&
+                            draftScoring.p2PointsMap[1] === 0.25 &&
+                            draftScoring.p2PointsMap[2] === 0.5 &&
+                            draftScoring.p2PointsMap[3] === 1
+                              ? 'Lũy tiến Bộ GD'
+                              : draftScoring.p2PointsMap[0] === 0.25 &&
+                                draftScoring.p2PointsMap[1] === 0.5 &&
+                                draftScoring.p2PointsMap[2] === 0.75 &&
+                                draftScoring.p2PointsMap[3] === 1
+                              ? '0.25-0.5-0.75-1'
+                              : `${draftScoring.p2PointsMap.join('-')}`}
                           </div>
                         </div>
                       </div>
 
-                      {/* KHỐI 3: PHẦN III (ĐIỀN SỐ) - MÀU TÍM VIOLET 3D */}
-                      <div className="bg-gradient-to-b from-purple-50 to-purple-100/90 rounded-2xl p-3 border-2 border-purple-300 border-b-4 border-b-purple-500 shadow-xs flex flex-col justify-between text-center">
+                      {/* KHỐI 3: PHẦN III (ĐIỀN SỐ) - MÀU TÍM VIOLET 3D (MẶC ĐỊNH 0.5 ĐIỂM) */}
+                      <div className="bg-gradient-to-b from-purple-50 to-purple-100/90 rounded-2xl p-3 border-2 border-purple-300 border-b-4 border-purple-500 shadow-xs flex flex-col justify-between text-center">
                         <div className="text-xs font-black text-purple-900 uppercase tracking-tight">
                           Phần III (Điền)
                         </div>
                         <div className="text-[11px] text-purple-600 font-bold mb-1">
-                          Tối đa {draftDbSheet.p3} câu
+                          Số câu (Tối đa {draftDbSheet.p3})
                         </div>
-                        {/* CỠ CHỮ SỐ CÂU TĂNG LỚN (TEXT-3XL) */}
                         <input
                           type="number"
                           min={0}
@@ -3202,89 +3234,148 @@ export default function App() {
                             }))
                           }
                           placeholder="Số câu"
-                          className="w-full bg-white border-2 border-purple-300 focus:border-purple-500 rounded-xl py-2 px-1 text-center font-black text-3xl text-purple-700 shadow-inner focus:outline-none"
+                          className="w-full bg-white border-2 border-purple-300 focus:border-purple-500 rounded-xl py-1.5 px-1 text-center font-black text-2xl sm:text-3xl text-purple-700 shadow-inner focus:outline-none"
                         />
-                        {/* CỠ CHỮ SỐ ĐIỂM TĂNG LỚN */}
-                        <div className="mt-2 bg-purple-200/80 border border-purple-300 rounded-lg py-1 px-1">
-                          <div className="text-xs font-black text-purple-950">
-                            {draftScoring.p3PointsPerQ}đ / câu
-                          </div>
+                        <div className="mt-2 bg-purple-200/80 border border-purple-300 rounded-lg py-1 px-1.5">
+                          <label className="text-[10px] font-bold text-purple-800 block">
+                            Điểm / câu P3
+                          </label>
+                          <input
+                            type="number"
+                            step={0.05}
+                            min={0}
+                            value={draftScoring.p3PointsPerQ}
+                            onChange={(e) =>
+                              setDraftScoring((prev) => ({
+                                ...prev,
+                                p3PointsPerQ: Number(e.target.value) || 0,
+                              }))
+                            }
+                            className="w-full bg-white border border-purple-300 rounded-md py-0.5 text-center font-black text-xs text-purple-950 focus:outline-none"
+                          />
                         </div>
                       </div>
                     </div>
 
-                    {/* Khung mở rộng tùy chỉnh chi tiết điểm từng câu / bậc thang nếu giáo viên cần */}
-                    {showAdvancedP2Points && (
-                      <div className="bg-slate-50/90 rounded-2xl p-4 border-2 border-purple-200 space-y-3.5 text-xs shadow-inner">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="bg-white p-3 rounded-xl border border-blue-200 shadow-2xs">
-                            <label className="text-blue-900 font-black block mb-1">
-                              Điểm mỗi câu Phần 1
-                            </label>
-                            <input
-                              type="number"
-                              step={0.05}
-                              value={draftScoring.p1PointsPerQ}
-                              onChange={(e) =>
-                                setDraftScoring((prev) => ({
-                                  ...prev,
-                                  p1PointsPerQ: Number(e.target.value) || 0,
-                                }))
-                              }
-                              className="w-full bg-blue-50 border-2 border-blue-300 rounded-xl px-3 py-2 font-black text-lg text-blue-700 text-center"
-                            />
-                          </div>
-                          <div className="bg-white p-3 rounded-xl border border-purple-200 shadow-2xs">
-                            <label className="text-purple-900 font-black block mb-1">
-                              Điểm mỗi câu Phần 3
-                            </label>
-                            <input
-                              type="number"
-                              step={0.05}
-                              value={draftScoring.p3PointsPerQ}
-                              onChange={(e) =>
-                                setDraftScoring((prev) => ({
-                                  ...prev,
-                                  p3PointsPerQ: Number(e.target.value) || 0,
-                                }))
-                              }
-                              className="w-full bg-purple-50 border-2 border-purple-300 rounded-xl px-3 py-2 font-black text-lg text-purple-700 text-center"
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label className="text-emerald-950 font-black block mb-1.5 text-xs">
-                            Điểm bậc thang Phần 2 (Đúng 1 ý - 2 ý - 3 ý - 4 ý)
-                          </label>
-                          <div className="grid grid-cols-4 gap-2">
-                            {[0, 1, 2, 3].map((idx) => (
-                              <div key={idx} className="bg-white p-2.5 rounded-xl border border-emerald-200 shadow-2xs text-center">
-                                <span className="text-[11px] text-emerald-800 font-black block mb-1">
-                                  Đúng {idx + 1} ý
-                                </span>
-                                <input
-                                  type="number"
-                                  step={0.05}
-                                  value={draftScoring.p2PointsMap[idx]}
-                                  onChange={(e) => {
-                                    const nextMap = [...draftScoring.p2PointsMap] as [
-                                      number,
-                                      number,
-                                      number,
-                                      number
-                                    ];
-                                    nextMap[idx] = Number(e.target.value) || 0;
-                                    setDraftScoring((prev) => ({ ...prev, p2PointsMap: nextMap }));
-                                  }}
-                                  className="w-full bg-emerald-50 border border-emerald-300 rounded-lg py-1.5 font-black text-center text-emerald-800 text-base"
-                                />
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                    {/* THIẾT LẬP ĐIỂM NHANH Ở PHẦN 2 THEO 2 CÁCH */}
+                    <div className="bg-emerald-50/90 rounded-2xl p-3.5 border-2 border-emerald-200 space-y-2.5">
+                      <div className="text-xs font-black text-emerald-950 flex items-center justify-between">
+                        <span>⚡ Thiết lập điểm nhanh Phần II (Đúng/Sai):</span>
+                        <span className="text-[11px] font-mono text-emerald-700">
+                          [{draftScoring.p2PointsMap.join(' - ')}]
+                        </span>
                       </div>
-                    )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {/* Cách 2.1: Lũy tiến theo Bộ */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDraftScoring((prev) => ({
+                              ...prev,
+                              p2PointsMap: [0.1, 0.25, 0.5, 1.0],
+                            }))
+                          }
+                          className={`p-2.5 rounded-xl border-2 text-left transition cursor-pointer flex items-center justify-between ${
+                            draftScoring.p2PointsMap[0] === 0.1 &&
+                            draftScoring.p2PointsMap[1] === 0.25 &&
+                            draftScoring.p2PointsMap[2] === 0.5 &&
+                            draftScoring.p2PointsMap[3] === 1.0
+                              ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm'
+                              : 'bg-white text-emerald-950 border-emerald-300 hover:bg-emerald-100/60'
+                          }`}
+                        >
+                          <div>
+                            <div className="text-xs font-black">1. Lũy tiến theo Bộ</div>
+                            <div
+                              className={`text-[11px] font-mono font-bold ${
+                                draftScoring.p2PointsMap[0] === 0.1
+                                  ? 'text-emerald-100'
+                                  : 'text-emerald-700'
+                              }`}
+                            >
+                              0.1 - 0.25 - 0.5 - 1.0
+                            </div>
+                          </div>
+                          {draftScoring.p2PointsMap[0] === 0.1 &&
+                            draftScoring.p2PointsMap[1] === 0.25 &&
+                            draftScoring.p2PointsMap[2] === 0.5 &&
+                            draftScoring.p2PointsMap[3] === 1.0 && (
+                              <CheckCircle2 className="w-5 h-5 text-white shrink-0" />
+                            )}
+                        </button>
+
+                        {/* Cách 2.2: Theo thang điểm: 0.25 - 0.5 - 0.75 - 1 */}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDraftScoring((prev) => ({
+                              ...prev,
+                              p2PointsMap: [0.25, 0.5, 0.75, 1.0],
+                            }))
+                          }
+                          className={`p-2.5 rounded-xl border-2 text-left transition cursor-pointer flex items-center justify-between ${
+                            draftScoring.p2PointsMap[0] === 0.25 &&
+                            draftScoring.p2PointsMap[1] === 0.5 &&
+                            draftScoring.p2PointsMap[2] === 0.75 &&
+                            draftScoring.p2PointsMap[3] === 1.0
+                              ? 'bg-emerald-600 text-white border-emerald-700 shadow-sm'
+                              : 'bg-white text-emerald-950 border-emerald-300 hover:bg-emerald-100/60'
+                          }`}
+                        >
+                          <div>
+                            <div className="text-xs font-black">
+                              2. Theo thang điểm đều
+                            </div>
+                            <div
+                              className={`text-[11px] font-mono font-bold ${
+                                draftScoring.p2PointsMap[0] === 0.25
+                                  ? 'text-emerald-100'
+                                  : 'text-emerald-700'
+                              }`}
+                            >
+                              0.25 - 0.5 - 0.75 - 1
+                            </div>
+                          </div>
+                          {draftScoring.p2PointsMap[0] === 0.25 &&
+                            draftScoring.p2PointsMap[1] === 0.5 &&
+                            draftScoring.p2PointsMap[2] === 0.75 &&
+                            draftScoring.p2PointsMap[3] === 1.0 && (
+                              <CheckCircle2 className="w-5 h-5 text-white shrink-0" />
+                            )}
+                        </button>
+                      </div>
+
+                      {/* 4 ô hiển thị & cho phép chỉnh trực tiếp từng mức 1 ý - 2 ý - 3 ý - 4 ý */}
+                      <div className="grid grid-cols-4 gap-2 pt-1">
+                        {[0, 1, 2, 3].map((idx) => (
+                          <div
+                            key={idx}
+                            className="bg-white p-2 rounded-xl border border-emerald-200 shadow-2xs text-center"
+                          >
+                            <span className="text-[10px] text-emerald-800 font-black block mb-0.5">
+                              Đúng {idx + 1} ý
+                            </span>
+                            <input
+                              type="number"
+                              step={0.05}
+                              value={draftScoring.p2PointsMap[idx]}
+                              onChange={(e) => {
+                                const nextMap = [...draftScoring.p2PointsMap] as [
+                                  number,
+                                  number,
+                                  number,
+                                  number
+                                ];
+                                nextMap[idx] = Number(e.target.value) || 0;
+                                setDraftScoring((prev) => ({ ...prev, p2PointsMap: nextMap }));
+                              }}
+                              className="w-full bg-emerald-50 border border-emerald-300 rounded-lg py-1 font-black text-center text-emerald-800 text-sm focus:outline-none"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
 
