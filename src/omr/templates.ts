@@ -296,11 +296,17 @@ export interface CustomScoringConfig {
   p3PointsPerQ: number;
 }
 
+export type SheetOrientation = 'landscape' | 'portrait';
+
 export interface TemplateConfig {
   id: TemplateId;
   name: string;
   shortName: string;
   group: SheetGroupType;
+  orientation: SheetOrientation;
+  orientationLabel: string;
+  headerPositionHint: string;
+  scanGuideNote: string;
   badgeCode: string;
   subjects: string;
   imageUrl: string;
@@ -335,11 +341,29 @@ function buildTemplateConfigFromDb(item: SheetDatabaseItem): TemplateConfig {
   const p2Total = Number((defaultActiveP2 * 1.0).toFixed(2));
   const p3Total = Number((defaultActiveP3 * item.defaultP3Point).toFixed(2));
 
+  const isLandscape = item.group === 'Khổ ngang (2 bài/A4)';
+  const orientation: SheetOrientation = isLandscape ? 'landscape' : 'portrait';
+  const orientationLabel = isLandscape
+    ? 'Phiếu Khổ Ngang (2 bài/A4)'
+    : 'Phiếu Khổ Dọc A4 Chuẩn';
+  const headerPositionHint = isLandscape
+    ? item.hasSBD
+      ? 'Họ tên ở TRÊN · Cột Mã đề & SBD nằm bên TRÁI · Câu hỏi bên PHẢI'
+      : 'Họ tên ở TRÊN · 10 câu điền số nằm ngang bên DƯỚI'
+    : 'Tiêu đề ở TRÊN · Khung SBD & Mã đề nằm ở GÓC TRÊN PHẢI · Phần I, II, III xếp dọc bên DƯỚI';
+  const scanGuideNote = isLandscape
+    ? 'Đặt phiếu NẰM NGANG đúng chiều đọc (Họ tên ở trên, Mã đề & SBD bên trái)'
+    : 'Đặt phiếu ĐỨNG DỌC A4 đúng chiều đọc (Tiêu đề ở trên, SBD & Mã đề ở góc trên phải)';
+
   return {
     id: item.id,
     name: item.name,
     shortName: item.name,
     group: item.group,
+    orientation,
+    orientationLabel,
+    headerPositionHint,
+    scanGuideNote,
     badgeCode: `MÃ ĐỀ ${item.codeLength} SỐ · ${item.p1}-${item.p2}-${item.p3}`,
     subjects: item.note,
     imageUrl: item.imageUrl,
@@ -356,7 +380,7 @@ function buildTemplateConfigFromDb(item: SheetDatabaseItem): TemplateConfig {
     p3Count: item.p3,
     defaultActiveP3,
     p3TotalPoints: p3Total,
-    defaultRadius: item.group === 'Khổ ngang (2 bài/A4)' ? 7.5 : 5.2,
+    defaultRadius: isLandscape ? 7.5 : 5.2,
     btn3dClass: 'btn-3d btn-3d-blue',
     card3dClass: 'card-3d-toan',
     accentText: 'text-blue-700',

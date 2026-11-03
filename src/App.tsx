@@ -63,6 +63,7 @@ import {
   SHEET_DATABASE,
   SheetDatabaseItem,
   SheetGroupType,
+  SheetOrientation,
   TARGET_CORNERS_1024x550,
   TemplateId,
   TEMPLATES,
@@ -128,6 +129,7 @@ export interface ExamSessionItem {
   examPeriod: string;
   createdAt: string;
   templateId: TemplateId;
+  scanFrameMode?: SheetOrientation;
   codeLength: 3 | 4;
   scanSbd: boolean;
   scoring: CustomScoringConfig;
@@ -359,6 +361,7 @@ export default function App() {
   const [draftName, setDraftName] = useState<string>('');
   const [draftCodeLength, setDraftCodeLength] = useState<3 | 4>(3);
   const [draftTemplateId, setDraftTemplateId] = useState<TemplateId>('qm_khtn_dia');
+  const [draftScanFrameMode, setDraftScanFrameMode] = useState<SheetOrientation>('landscape');
   const [draftScanSbd, setDraftScanSbd] = useState<boolean>(true);
   const [draftScoring, setDraftScoring] = useState<CustomScoringConfig>(() =>
     getDefaultScoringConfig('qm_khtn_dia')
@@ -381,6 +384,13 @@ export default function App() {
   const selectedTemplate = useMemo(
     () => normalizeTemplateId(activeSession?.templateId || 'qm_khtn_dia'),
     [activeSession]
+  );
+  const activeScanFrameMode: SheetOrientation = useMemo(
+    () =>
+      activeSession?.scanFrameMode ||
+      TEMPLATES[selectedTemplate]?.orientation ||
+      'landscape',
+    [activeSession, selectedTemplate]
   );
   const currentScoring = useMemo(
     () => activeSession?.scoring || getDefaultScoringConfig(selectedTemplate),
@@ -782,10 +792,14 @@ export default function App() {
   // Open Create/Edit Session Screen
   const handleOpenCreateSession = (sessionToEdit?: ExamSessionItem) => {
     if (sessionToEdit) {
+      const normTpl = normalizeTemplateId(sessionToEdit.templateId);
       setEditingSessionId(sessionToEdit.id);
       setDraftName(sessionToEdit.name);
       setDraftCodeLength(sessionToEdit.codeLength);
-      setDraftTemplateId(normalizeTemplateId(sessionToEdit.templateId));
+      setDraftTemplateId(normTpl);
+      setDraftScanFrameMode(
+        sessionToEdit.scanFrameMode || TEMPLATES[normTpl]?.orientation || 'landscape'
+      );
       setDraftScanSbd(sessionToEdit.scanSbd);
       setDraftScoring({ ...sessionToEdit.scoring });
     } else {
@@ -796,6 +810,7 @@ export default function App() {
         SHEET_DATABASE.find((s) => s.id === defaultTplId) || SHEET_DATABASE[1];
       setDraftCodeLength(defaultItem.codeLength);
       setDraftTemplateId(defaultItem.id);
+      setDraftScanFrameMode(TEMPLATES[defaultItem.id]?.orientation || 'landscape');
       setDraftScanSbd(defaultItem.hasSBD);
       setDraftScoring(getDefaultScoringConfig(defaultItem.id));
     }
@@ -806,6 +821,7 @@ export default function App() {
   // Auto-fill when selecting a sheet from Bottom Sheet Selector
   const handleSelectSheetFromBottomSheet = (item: SheetDatabaseItem) => {
     setDraftTemplateId(item.id);
+    setDraftScanFrameMode(TEMPLATES[item.id]?.orientation || 'landscape');
     setDraftCodeLength(item.codeLength);
     setDraftScanSbd(item.hasSBD);
     const defaultCfg = getDefaultScoringConfig(item.id);
@@ -820,6 +836,14 @@ export default function App() {
     });
     setShowSheetSelectorBottomSheet(false);
     setPreviewSheetModalItem(null);
+  };
+
+  // Chuyển nhanh chế độ khung ngắm Ngang / Dọc ngay trên màn hình Camera cho phiên chấm hiện tại
+  const handleToggleActiveScanFrameMode = (nextMode: SheetOrientation) => {
+    if (!activeSessionId) return;
+    setExamSessions((prev) =>
+      prev.map((s) => (s.id === activeSessionId ? { ...s, scanFrameMode: nextMode } : s))
+    );
   };
 
   // Toggle 3-digit / 4-digit code length in Create Screen
@@ -851,6 +875,7 @@ export default function App() {
                 ...s,
                 name: cleanName,
                 templateId: draftTemplateId,
+                scanFrameMode: draftScanFrameMode,
                 codeLength: draftCodeLength,
                 scanSbd: draftScanSbd,
                 scoring: draftScoring,
@@ -867,6 +892,7 @@ export default function App() {
         examPeriod: 'Kiểm tra Định kỳ',
         createdAt: nowStr,
         templateId: draftTemplateId,
+        scanFrameMode: draftScanFrameMode,
         codeLength: draftCodeLength,
         scanSbd: draftScanSbd,
         scoring: draftScoring,
@@ -1604,6 +1630,7 @@ export default function App() {
   const scannerRuntimeRef = useRef({
     answerKeys,
     selectedTemplate,
+    activeScanFrameMode,
     omrSettings,
     currentScoring,
     instantScoreBanner,
@@ -1615,6 +1642,7 @@ export default function App() {
     scannerRuntimeRef.current = {
       answerKeys,
       selectedTemplate,
+      activeScanFrameMode,
       omrSettings,
       currentScoring,
       instantScoreBanner,
@@ -1625,6 +1653,7 @@ export default function App() {
   }, [
     answerKeys,
     selectedTemplate,
+    activeScanFrameMode,
     omrSettings,
     currentScoring,
     instantScoreBanner,
@@ -1775,28 +1804,39 @@ export default function App() {
             }
             const stdCtx = stdCanvas.getContext('2d', { willReadFrequently: true })!;
             const frameData = stdCtx.getImageData(0, 0, stdCanvas.width, stdCanvas.height);
-            const rawCorners = detectFourCornerMarkers(frameData);
+            const rawCorners = detectFourCornerMarkers(
+              frameData,
+              runtime.selectedTemplate,
+              runtime.activeScanFrameMode
+            );
 
             const scaleX = vw / stdCanvas.width;
             const scaleY = vh / stdCanvas.height;
+            const scr = rawCorners.screenCorners || rawCorners;
             const overlayCorners = {
               ...rawCorners,
-              tl: { x: rawCorners.tl.x * scaleX, y: rawCorners.tl.y * scaleY },
-              tr: { x: rawCorners.tr.x * scaleX, y: rawCorners.tr.y * scaleY },
-              bl: { x: rawCorners.bl.x * scaleX, y: rawCorners.bl.y * scaleY },
-              br: { x: rawCorners.br.x * scaleX, y: rawCorners.br.y * scaleY },
+              tl: { x: scr.tl.x * scaleX, y: scr.tl.y * scaleY },
+              tr: { x: scr.tr.x * scaleX, y: scr.tr.y * scaleY },
+              bl: { x: scr.bl.x * scaleX, y: scr.bl.y * scaleY },
+              br: { x: scr.br.x * scaleX, y: scr.br.y * scaleY },
             };
 
             const validation = rawCorners.found
               ? isValidExamPaper(rawCorners, frameData, runtime.selectedTemplate)
               : {
                   isValid: false,
-                  reason: 'Đưa phiếu trả lời vào khung xanh (cần rõ ít nhất 3 góc neo đen)',
+                  reason:
+                    runtime.activeScanFrameMode === 'portrait'
+                      ? 'Đưa PHIẾU DỌC A4 vào đúng 4 góc khung xanh (Tiêu đề ở trên, SBD & Mã đề góc phải trên)'
+                      : 'Đưa PHIẾU NGANG vào đúng 4 góc khung xanh (Họ tên ở trên, Mã đề & SBD bên trái)',
                 };
 
-            // BẮT BUỘC phải thỏa mãn đồng thời: tìm thấy tứ giác + vượt qua kiểm định tờ giấy trắng có mốc neo đen + tối thiểu 3 góc neo
+            // BẮT BUỘC phải thỏa mãn đồng thời: tìm thấy tứ giác + vượt qua kiểm định tờ giấy trắng đúng chiều (isRightSideUp) + tối thiểu 3 góc neo
             const isPaperValid = Boolean(
-              rawCorners.found && validation.isValid && rawCorners.anchorCount >= 3
+              rawCorners.found &&
+                rawCorners.isRightSideUp !== false &&
+                validation.isValid &&
+                rawCorners.anchorCount >= 3
             );
 
             if (isPaperValid) {
@@ -1821,19 +1861,21 @@ export default function App() {
             }
 
             setAnchorLockState({
-              found: isPaperValid,
-              count: isPaperValid ? rawCorners.anchorCount : 0,
-              tl: isPaperValid ? rawCorners.locks.tl : false,
-              tr: isPaperValid ? rawCorners.locks.tr : false,
-              bl: isPaperValid ? rawCorners.locks.bl : false,
-              br: isPaperValid ? rawCorners.locks.br : false,
+              found: rawCorners.found,
+              count: rawCorners.found ? rawCorners.anchorCount : 0,
+              tl: rawCorners.found ? rawCorners.locks.tl : false,
+              tr: rawCorners.found ? rawCorners.locks.tr : false,
+              bl: rawCorners.found ? rawCorners.locks.bl : false,
+              br: rawCorners.found ? rawCorners.locks.br : false,
               isValidPaper: isPaperValid,
               statusHint: isPaperValid
-                ? `Đã nhận phiếu hợp lệ (${rawCorners.anchorCount}/4 neo) — Giữ yên để chấm (${Math.min(
+                ? `Đã nhận phiếu ĐÚNG CHIỀU (${rawCorners.anchorCount}/4 neo) — Giữ yên để chấm (${Math.min(
                     stableValidFrames,
-                    4
-                  )}/4)`
-                : validation.reason || 'Đưa phiếu trả lời vào khung xanh',
+                    3
+                  )}/3)`
+                : rawCorners.orientationMessage ||
+                  validation.reason ||
+                  'Đưa phiếu trả lời đúng chiều vào khung xanh',
             });
 
             const oCtx = overlay.getContext('2d')!;
@@ -1978,7 +2020,7 @@ export default function App() {
       const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
       ctx.drawImage(img, 0, 0, targetW, targetH);
       const imgData = ctx.getImageData(0, 0, targetW, targetH);
-      const corners = detectFourCornerMarkers(imgData);
+      const corners = detectFourCornerMarkers(imgData, selectedTemplate);
       URL.revokeObjectURL(url);
 
       if (!corners.found && corners.anchorCount < 3) {
@@ -2047,7 +2089,7 @@ export default function App() {
     }
     const stdCtx = stdCanvas.getContext('2d', { willReadFrequently: true })!;
     const frameData = stdCtx.getImageData(0, 0, stdCanvas.width, stdCanvas.height);
-    const corners = detectFourCornerMarkers(frameData);
+    const corners = detectFourCornerMarkers(frameData, selectedTemplate, activeScanFrameMode);
     const validation = corners.found
       ? isValidExamPaper(corners, frameData, selectedTemplate)
       : { isValid: false, reason: '' };
@@ -2504,135 +2546,224 @@ export default function App() {
               className="absolute inset-0 w-full h-full object-cover pointer-events-none z-10"
             />
 
-            {/* KHUNG ĐỊNH VỊ 4 GÓC NEO XANH LÁ (TỰ ĐỘNG BẮT NEO & CHẤM) */}
+            {/* KHUNG ĐỊNH VỊ 4 GÓC NEO TỰ ĐỘNG THEO ĐÚNG DẠNG PHIẾU (PHIẾU NGANG vs PHIẾU DỌC A4) */}
             {!instantScoreBanner && (
-              <div className="absolute inset-4 sm:inset-6 pointer-events-none z-15 flex flex-col justify-between">
-                {/* Viền khung dẫn hướng phiếu trả lời */}
+              <div className="absolute inset-0 pointer-events-none z-15 flex flex-col items-center justify-center p-3 sm:p-5">
                 <div
-                  className={`absolute inset-0 rounded-2xl border-2 transition-colors duration-150 ${
-                    anchorLockState.isValidPaper && anchorLockState.count >= 3
-                      ? 'border-[#00ff66] bg-emerald-500/10 shadow-[inset_0_0_30px_rgba(0,255,102,0.25)]'
-                      : 'border-emerald-400/55 border-dashed'
+                  className={`relative w-full transition-all duration-200 flex flex-col justify-between ${
+                    activeScanFrameMode === 'landscape'
+                      ? 'max-w-2xl aspect-[1024/580] my-auto'
+                      : 'max-w-md h-full max-h-[82dvh]'
                   }`}
-                />
+                >
+                  {/* Viền khung dẫn hướng phiếu trả lời (Xanh lá khi đúng chiều, Vàng cam khi ngược/sai chiều) */}
+                  <div
+                    className={`absolute inset-0 rounded-2xl border-2 transition-colors duration-150 ${
+                      anchorLockState.isValidPaper && anchorLockState.count >= 3
+                        ? 'border-[#00ff66] bg-emerald-500/10 shadow-[inset_0_0_30px_rgba(0,255,102,0.25)]'
+                        : anchorLockState.found && !anchorLockState.isValidPaper
+                        ? 'border-amber-400 bg-amber-500/10 border-dashed'
+                        : 'border-emerald-400/65 border-dashed'
+                    }`}
+                  />
 
-                {/* Hàng trên: NEO 1 (Trái-Trên TL) & NEO 2 (Phải-Trên TR) */}
-                <div className="flex items-start justify-between relative z-10">
-                  <div className="flex flex-col items-start gap-1">
-                    <div
-                      className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
-                        anchorLockState.tl
-                          ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
-                          : 'border-emerald-400/90 bg-slate-950/60'
-                      }`}
-                    >
+                  {/* SƠ ĐỒ BỐ CỤC ĐÚNG CHIỀU BÊN TRONG KHUNG NGẮM ĐỂ GIÁO VIÊN ĐẶT PHIẾU CHUẨN XÁC */}
+                  {activeScanFrameMode === 'landscape' ? (
+                    <div className="absolute inset-8 sm:inset-10 pointer-events-none flex gap-2 opacity-80">
+                      {/* Cột trái của Phiếu Ngang: Họ tên (Trên) + Mã đề & SBD (Dưới) */}
+                      <div className="w-[28%] h-full flex flex-col gap-1.5">
+                        <div className="h-[34%] rounded-lg border border-dashed border-sky-300/60 bg-slate-950/45 p-1.5 flex flex-col justify-center items-center text-center">
+                          <span className="text-[9px] sm:text-[10px] font-black text-sky-300 uppercase tracking-tight">
+                            HỌ TÊN • LỚP
+                          </span>
+                          <span className="text-[8px] text-slate-300 font-semibold">
+                            (Góc trên trái)
+                          </span>
+                        </div>
+                        <div className="flex-1 rounded-lg border border-dashed border-amber-300/65 bg-slate-950/45 p-1.5 flex flex-col justify-center items-center text-center">
+                          <span className="text-[9px] sm:text-[10px] font-black text-amber-300 uppercase tracking-tight">
+                            MÃ ĐỀ & SBD
+                          </span>
+                          <span className="text-[8px] text-slate-300 font-semibold">
+                            (Tô cột dọc bên trái)
+                          </span>
+                        </div>
+                      </div>
+                      {/* Cột phải của Phiếu Ngang: Phần I, II, III */}
+                      <div className="flex-1 h-full rounded-lg border border-dashed border-emerald-300/55 bg-slate-950/35 p-2 flex flex-col justify-between items-center text-center">
+                        <span className="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-400/40 text-[9px] sm:text-[10px] font-black text-emerald-300 uppercase">
+                          ↕ ĐẶT ĐÚNG CHIỀU PHIẾU NGANG ({activeDbSheet.name})
+                        </span>
+                        <div className="text-[10px] sm:text-xs font-extrabold text-white/85">
+                          VÙNG TÔ ĐÁP ÁN: PHẦN I • PHẦN II • PHẦN III
+                        </div>
+                        <span className="text-[9px] text-emerald-200/80 font-semibold">
+                          Đưa 4 ô vuông đen ở 4 góc phiếu khớp vào 4 góc NEO xanh
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="absolute inset-8 sm:inset-10 pointer-events-none flex flex-col gap-2 opacity-80">
+                      {/* Hàng trên của Phiếu Dọc A4: Thông tin (Trái) + SBD & Mã đề (Phải) */}
+                      <div className="h-[27%] w-full flex gap-2">
+                        <div className="w-[54%] h-full rounded-lg border border-dashed border-sky-300/60 bg-slate-950/45 p-1.5 flex flex-col justify-center items-center text-center">
+                          <span className="text-[9px] sm:text-[10px] font-black text-sky-300 uppercase">
+                            TRƯỜNG • LỚP • HỌ TÊN
+                          </span>
+                          <span className="text-[8px] text-slate-300 font-semibold">
+                            (Góc trên bên trái)
+                          </span>
+                        </div>
+                        <div className="flex-1 h-full rounded-lg border border-dashed border-amber-300/70 bg-slate-950/45 p-1.5 flex flex-col justify-center items-center text-center">
+                          <span className="text-[9px] sm:text-[10px] font-black text-amber-300 uppercase">
+                            7. SBD & 8. MÃ ĐỀ
+                          </span>
+                          <span className="text-[8px] text-slate-300 font-semibold">
+                            (Góc trên bên phải)
+                          </span>
+                        </div>
+                      </div>
+                      {/* Hàng dưới của Phiếu Dọc A4: Phần I, II, III */}
+                      <div className="flex-1 w-full rounded-lg border border-dashed border-emerald-300/55 bg-slate-950/35 p-2 flex flex-col justify-between items-center text-center">
+                        <span className="px-2 py-0.5 rounded bg-emerald-950/80 border border-emerald-400/40 text-[9px] sm:text-[10px] font-black text-emerald-300 uppercase">
+                          ↕ ĐẶT ĐÚNG CHIỀU PHIẾU DỌC A4 ({activeDbSheet.name})
+                        </span>
+                        <div className="space-y-1">
+                          <div className="text-[10px] sm:text-xs font-extrabold text-white/85">
+                            PHẦN I (TRẮC NGHIỆM ABCD)
+                          </div>
+                          <div className="text-[10px] sm:text-xs font-extrabold text-emerald-300/90">
+                            PHẦN II (ĐÚNG / SAI)
+                          </div>
+                          <div className="text-[10px] sm:text-xs font-extrabold text-amber-200/90">
+                            PHẦN III (TRẢ LỜI NGẮN)
+                          </div>
+                        </div>
+                        <span className="text-[9px] text-emerald-200/80 font-semibold">
+                          Đưa 4 mốc vuông đen ở 4 góc tờ A4 khớp vào 4 góc NEO xanh
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Hàng trên: NEO 1 (Trái-Trên TL) & NEO 2 (Phải-Trên TR) */}
+                  <div className="flex items-start justify-between relative z-10 p-1">
+                    <div className="flex flex-col items-start gap-1">
                       <div
-                        className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center ${
+                        className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
                           anchorLockState.tl
-                            ? 'border-white bg-[#00ff66]'
-                            : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
+                            ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
+                            : 'border-emerald-400/90 bg-slate-950/60'
                         }`}
                       >
-                        <div className="w-2 h-2 rounded-full bg-slate-950" />
+                        <div
+                          className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center ${
+                            anchorLockState.tl
+                              ? 'border-white bg-[#00ff66]'
+                              : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
+                          }`}
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />
+                        </div>
                       </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide ${
+                          anchorLockState.tl
+                            ? 'bg-[#00ff66] text-slate-950'
+                            : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/40'
+                        }`}
+                      >
+                        {anchorLockState.tl ? '✓ NEO 1 (TL)' : 'NEO 1 (TL)'}
+                      </span>
                     </div>
-                    <span
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide ${
-                        anchorLockState.tl
-                          ? 'bg-[#00ff66] text-slate-950'
-                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/40'
-                      }`}
-                    >
-                      {anchorLockState.tl ? '✓ NEO 1 (TL)' : 'NEO 1 (TL)'}
-                    </span>
-                  </div>
 
-                  <div className="flex flex-col items-end gap-1">
-                    <div
-                      className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
-                        anchorLockState.tr
-                          ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
-                          : 'border-emerald-400/90 bg-slate-950/60'
-                      }`}
-                    >
+                    <div className="flex flex-col items-end gap-1">
                       <div
-                        className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center ${
+                        className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
                           anchorLockState.tr
-                            ? 'border-white bg-[#00ff66]'
-                            : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
+                            ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
+                            : 'border-emerald-400/90 bg-slate-950/60'
                         }`}
                       >
-                        <div className="w-2 h-2 rounded-full bg-slate-950" />
+                        <div
+                          className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center ${
+                            anchorLockState.tr
+                              ? 'border-white bg-[#00ff66]'
+                              : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
+                          }`}
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />
+                        </div>
                       </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide ${
+                          anchorLockState.tr
+                            ? 'bg-[#00ff66] text-slate-950'
+                            : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/40'
+                        }`}
+                      >
+                        {anchorLockState.tr ? '✓ NEO 2 (TR)' : 'NEO 2 (TR)'}
+                      </span>
                     </div>
-                    <span
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide ${
-                        anchorLockState.tr
-                          ? 'bg-[#00ff66] text-slate-950'
-                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/40'
-                      }`}
-                    >
-                      {anchorLockState.tr ? '✓ NEO 2 (TR)' : 'NEO 2 (TR)'}
-                    </span>
                   </div>
-                </div>
 
-                {/* Hàng dưới: NEO 3 (Trái-Dưới BL) & NEO 4 (Phải-Dưới BR) */}
-                <div className="flex items-end justify-between relative z-10">
-                  <div className="flex flex-col items-start gap-1">
-                    <span
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide ${
-                        anchorLockState.bl
-                          ? 'bg-[#00ff66] text-slate-950'
-                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/40'
-                      }`}
-                    >
-                      {anchorLockState.bl ? '✓ NEO 3 (BL)' : 'NEO 3 (BL)'}
-                    </span>
-                    <div
-                      className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
-                        anchorLockState.bl
-                          ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
-                          : 'border-emerald-400/90 bg-slate-950/60'
-                      }`}
-                    >
-                      <div
-                        className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center ${
+                  {/* Hàng dưới: NEO 3 (Trái-Dưới BL) & NEO 4 (Phải-Dưới BR) */}
+                  <div className="flex items-end justify-between relative z-10 p-1">
+                    <div className="flex flex-col items-start gap-1">
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide ${
                           anchorLockState.bl
-                            ? 'border-white bg-[#00ff66]'
-                            : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
+                            ? 'bg-[#00ff66] text-slate-950'
+                            : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/40'
                         }`}
                       >
-                        <div className="w-2 h-2 rounded-full bg-slate-950" />
+                        {anchorLockState.bl ? '✓ NEO 3 (BL)' : 'NEO 3 (BL)'}
+                      </span>
+                      <div
+                        className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
+                          anchorLockState.bl
+                            ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
+                            : 'border-emerald-400/90 bg-slate-950/60'
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center ${
+                            anchorLockState.bl
+                              ? 'border-white bg-[#00ff66]'
+                              : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
+                          }`}
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex flex-col items-end gap-1">
-                    <span
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide ${
-                        anchorLockState.br
-                          ? 'bg-[#00ff66] text-slate-950'
-                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/40'
-                      }`}
-                    >
-                      {anchorLockState.br ? '✓ NEO 4 (BR)' : 'NEO 4 (BR)'}
-                    </span>
-                    <div
-                      className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
-                        anchorLockState.br
-                          ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
-                          : 'border-emerald-400/90 bg-slate-950/60'
-                      }`}
-                    >
-                      <div
-                        className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center ${
+                    <div className="flex flex-col items-end gap-1">
+                      <span
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide ${
                           anchorLockState.br
-                            ? 'border-white bg-[#00ff66]'
-                            : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
+                            ? 'bg-[#00ff66] text-slate-950'
+                            : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/40'
                         }`}
                       >
-                        <div className="w-2 h-2 rounded-full bg-slate-950" />
+                        {anchorLockState.br ? '✓ NEO 4 (BR)' : 'NEO 4 (BR)'}
+                      </span>
+                      <div
+                        className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
+                          anchorLockState.br
+                            ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
+                            : 'border-emerald-400/90 bg-slate-950/60'
+                        }`}
+                      >
+                        <div
+                          className={`w-4 h-4 rounded-sm border-2 flex items-center justify-center ${
+                            anchorLockState.br
+                              ? 'border-white bg-[#00ff66]'
+                              : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
+                          }`}
+                        >
+                          <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -2640,20 +2771,53 @@ export default function App() {
               </div>
             )}
 
-            {/* Nhãn trạng thái gọn gàng phía trên khung ngắm */}
+            {/* Thanh chọn nhanh Khung Ngang / Khung Dọc + Trạng thái nhận diện đúng chiều */}
             {!instantScoreBanner && (
-              <div className="absolute top-3 inset-x-0 pointer-events-none z-20 flex flex-col items-center gap-1 px-4">
+              <div className="absolute top-2.5 inset-x-0 z-20 flex flex-col items-center gap-1.5 px-3 pointer-events-none">
+                <div className="pointer-events-auto inline-flex items-center gap-1 bg-slate-950/90 p-1 rounded-full border border-slate-700 shadow-lg">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleActiveScanFrameMode('landscape')}
+                    className={`px-3 py-1 rounded-full text-[11px] font-black transition cursor-pointer ${
+                      activeScanFrameMode === 'landscape'
+                        ? 'bg-indigo-500 text-white shadow-xs'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    ↔ Khung Phiếu Ngang
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleActiveScanFrameMode('portrait')}
+                    className={`px-3 py-1 rounded-full text-[11px] font-black transition cursor-pointer ${
+                      activeScanFrameMode === 'portrait'
+                        ? 'bg-indigo-500 text-white shadow-xs'
+                        : 'text-slate-300 hover:text-white'
+                    }`}
+                  >
+                    ↕ Khung Phiếu Dọc A4
+                  </button>
+                </div>
+
                 <div
-                  className={`px-3.5 py-1.5 rounded-full text-xs font-bold shadow-lg border flex items-center gap-2 text-center ${
+                  className={`px-3.5 py-1.5 rounded-2xl text-xs font-bold shadow-lg border flex items-center gap-2 text-center max-w-md ${
                     anchorLockState.isValidPaper && anchorLockState.count >= 3
                       ? 'bg-emerald-600/95 text-white border-[#00ff66]'
+                      : anchorLockState.found && !anchorLockState.isValidPaper
+                      ? 'bg-amber-600/95 text-white border-amber-300'
                       : 'bg-slate-900/90 text-white border-emerald-400/40'
                   }`}
                 >
-                  <span className="w-2 h-2 rounded-full bg-[#00ff66] animate-pulse shrink-0" />
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${
+                      anchorLockState.found && !anchorLockState.isValidPaper
+                        ? 'bg-amber-200 animate-ping'
+                        : 'bg-[#00ff66] animate-pulse'
+                    }`}
+                  />
                   <span>
                     {anchorLockState.statusHint ||
-                      `Đưa 4 góc phiếu trả lời vào 4 khung xanh (${anchorLockState.count || 0}/4 neo)`}
+                      `Đưa 4 góc phiếu đúng chiều vào 4 khung NEO (${anchorLockState.count || 0}/4 neo)`}
                   </span>
                 </div>
               </div>
@@ -3413,6 +3577,77 @@ export default function App() {
                       >
                         <Search className="w-5 h-5 stroke-[2.5]" />
                       </button>
+                    </div>
+
+                    {/* THIẾT LẬP CÁCH CHẤM & CHIỀU KHUNG NHẬN DIỆN CAMERA NGAY TỪ LÚC CHỌN PHIẾU */}
+                    <div className="mt-3 bg-indigo-50/90 rounded-2xl p-3 border-2 border-indigo-200 space-y-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="text-xs font-black text-indigo-950">
+                          📐 Thiết lập chiều phiếu & khung Camera nhận diện:
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[11px] font-black bg-indigo-600 text-white">
+                          {TEMPLATES[draftTemplateId]?.orientationLabel || 'Phiếu Khổ Ngang'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDraftScanFrameMode('landscape')}
+                          className={`p-2.5 rounded-xl border-2 text-left transition cursor-pointer flex items-center justify-between ${
+                            draftScanFrameMode === 'landscape'
+                              ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                              : 'bg-white text-indigo-950 border-indigo-200 hover:bg-indigo-100/50'
+                          }`}
+                        >
+                          <div>
+                            <div className="text-xs font-black">↔ Khung Phiếu Ngang</div>
+                            <div
+                              className={`text-[10px] font-semibold ${
+                                draftScanFrameMode === 'landscape'
+                                  ? 'text-indigo-100'
+                                  : 'text-indigo-700'
+                              }`}
+                            >
+                              2 bài/A4 (Mã đề & SBD bên trái)
+                            </div>
+                          </div>
+                          {draftScanFrameMode === 'landscape' && (
+                            <CheckCircle2 className="w-4 h-4 text-white shrink-0" />
+                          )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setDraftScanFrameMode('portrait')}
+                          className={`p-2.5 rounded-xl border-2 text-left transition cursor-pointer flex items-center justify-between ${
+                            draftScanFrameMode === 'portrait'
+                              ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                              : 'bg-white text-indigo-950 border-indigo-200 hover:bg-indigo-100/50'
+                          }`}
+                        >
+                          <div>
+                            <div className="text-xs font-black">↕ Khung Phiếu Dọc A4</div>
+                            <div
+                              className={`text-[10px] font-semibold ${
+                                draftScanFrameMode === 'portrait'
+                                  ? 'text-indigo-100'
+                                  : 'text-indigo-700'
+                              }`}
+                            >
+                              Nguyên tờ A4 (SBD góc trên phải)
+                            </div>
+                          </div>
+                          {draftScanFrameMode === 'portrait' && (
+                            <CheckCircle2 className="w-4 h-4 text-white shrink-0" />
+                          )}
+                        </button>
+                      </div>
+
+                      <div className="text-[11px] font-bold text-indigo-900 bg-white/90 rounded-xl px-3 py-2 border border-indigo-200">
+                        💡 <strong>Cách đặt phiếu khi chấm:</strong>{' '}
+                        {TEMPLATES[draftTemplateId]?.scanGuideNote}
+                      </div>
                     </div>
                   </div>
 
@@ -5038,6 +5273,17 @@ export default function App() {
                           )}
                         </div>
                         <div className="text-xs font-semibold text-slate-700 flex items-center gap-2 flex-wrap mt-0.5">
+                          <span
+                            className={`px-2 py-0.5 rounded font-black ${
+                              item.group === 'Khổ ngang (2 bài/A4)'
+                                ? 'bg-indigo-100 text-indigo-800'
+                                : 'bg-emerald-100 text-emerald-800'
+                            }`}
+                          >
+                            {item.group === 'Khổ ngang (2 bài/A4)'
+                              ? '↔ Phiếu Ngang (2 bài/A4)'
+                              : '↕ Phiếu Dọc A4'}
+                          </span>
                           <span className="bg-slate-200 text-slate-800 px-2 py-0.5 rounded font-bold">
                             Mã đề {item.codeLength} số
                           </span>
@@ -5054,6 +5300,9 @@ export default function App() {
                           >
                             Tải PDF in
                           </a>
+                        </div>
+                        <div className="text-[11px] text-slate-600 font-medium mt-1">
+                          {TEMPLATES[item.id]?.headerPositionHint}
                         </div>
                       </div>
 

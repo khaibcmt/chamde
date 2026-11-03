@@ -4,7 +4,9 @@ import {
   CustomScoringConfig,
   getDefaultScoringConfig,
   getTemplateBubbleMap,
+  normalizeTemplateId,
   renderVectorFallbackSheet1024x550,
+  SheetOrientation,
   TARGET_CORNERS_1024x550,
   TemplateId,
   TEMPLATES,
@@ -14,6 +16,8 @@ export interface Point2D {
   x: number;
   y: number;
 }
+
+export type DetectedSheetRotation = '0deg' | '180deg' | '90deg' | '270deg';
 
 export interface DetectedCorners {
   found: boolean;
@@ -28,6 +32,15 @@ export interface DetectedCorners {
   tr: Point2D;
   bl: Point2D;
   br: Point2D;
+  screenCorners?: {
+    tl: Point2D;
+    tr: Point2D;
+    bl: Point2D;
+    br: Point2D;
+  };
+  detectedRotation?: DetectedSheetRotation;
+  isRightSideUp?: boolean;
+  orientationMessage?: string;
 }
 
 export interface OMRSettings {
@@ -142,9 +155,18 @@ export function findMatchingAnswerKey(
 
 /**
  * 1. BẮT 4 GÓC ĐỊNH VỊ VUÔNG ĐEN BẰNG INTEGRAL IMAGE ADAPTIVE THRESHOLD
+ *    Hỗ trợ nhận diện chính xác chiều phiếu theo từng mẫu (Phiếu Ngang vs Phiếu Dọc A4)
  */
-export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
+export function detectFourCornerMarkers(
+  imageData: ImageData,
+  templateId?: TemplateId,
+  expectedFrameMode?: SheetOrientation
+): DetectedCorners {
   const { width, height, data } = imageData;
+  const normTplId = normalizeTemplateId(templateId || 'qm_khtn_dia');
+  const tpl = TEMPLATES[normTplId] || TEMPLATES.qm_khtn_dia;
+  const tplOrientation: SheetOrientation = tpl.orientation || 'landscape';
+  const targetFrameMode: SheetOrientation = expectedFrameMode || tplOrientation;
   const size = width * height;
   const gray = new Uint8Array(size);
   const integral = new Float64Array(size);
@@ -549,10 +571,10 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
           if (!isConvexQuad(p0, p1, p2, p3)) continue;
 
           const quadArea = computeQuadArea(p0, p1, p2, p3);
-          if (quadArea < frameArea * 0.14) continue;
+          if (quadArea < frameArea * 0.085) continue;
 
           const maxCos = getMaxCornerCosine(p0, p1, p2, p3);
-          if (maxCos > 0.34) continue;
+          if (maxCos > 0.35) continue;
 
           const edge01 = Math.hypot(p1.x - p0.x, p1.y - p0.y);
           const edge12 = Math.hypot(p2.x - p1.x, p2.y - p1.y);
@@ -635,7 +657,7 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
             if (maxCos > 0.26) continue;
 
             const quadArea = computeQuadArea(p0, p1, p2, p3);
-            if (quadArea >= frameArea * 0.18) {
+            if (quadArea >= frameArea * 0.11) {
               const score = (quadArea / frameArea) * 4000 + (1 - maxCos) * 600;
               if (!bestQuad || score > bestQuad.score) {
                 bestQuad = {
@@ -686,85 +708,244 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
     };
   }
 
-  // 3. Tự động xác định góc xoay (Orientation) & Ánh xạ đúng 4 góc TL, TR, BR, BL của tờ phiếu
-  const { p0, p1, p2, p3 } = bestQuad;
-  const orderedPts = [p0, p1, p2, p3];
+  // 3. Chuẩn hóa 4 đỉnh theo đúng vị trí trên màn hình [screenTL, screenTR, screenBR, screenBL]
+  const rawQuadPts = [bestQuad.p0, bestQuad.p1, bestQuad.p2, bestQuad.p3];
+  const byY = [...rawQuadPts].sort((a, b) => a.y - b.y);
+  const topPair = byY.slice(0, 2).sort((a, b) => a.x - b.x);
+  const botPair = byY.slice(2, 4).sort((a, b) => a.x - b.x);
 
-  // Tính chiều dài cạnh ngang (P0->P1 và P3->P2) so với cạnh dọc (P1->P2 và P0->P3)
-  const wSide =
-    0.5 *
-    (Math.hypot(orderedPts[1].x - orderedPts[0].x, orderedPts[1].y - orderedPts[0].y) +
-      Math.hypot(orderedPts[2].x - orderedPts[3].x, orderedPts[2].y - orderedPts[3].y));
-  const hSide =
-    0.5 *
-    (Math.hypot(orderedPts[3].x - orderedPts[0].x, orderedPts[3].y - orderedPts[0].y) +
-      Math.hypot(orderedPts[2].x - orderedPts[1].x, orderedPts[2].y - orderedPts[1].y));
+  let screenTL = topPair[0];
+  let screenTR = topPair[1];
+  let screenBR = botPair[1];
+  let screenBL = botPair[0];
 
-  // Tờ phiếu Khổ ngang (1024x550) khi cầm điện thoại dọc sẽ có hSide > wSide (xoay 90 độ)
-  const isHeldVertically = hSide > wSide * 1.08;
-
-  // Mẫu mật độ mực đen ở 2 đầu cạnh ngắn để phát hiện đầu nào là Mã Đề / Tiêu đề (Left header)
-  const sampleDensity = (ptA: Point2D, ptB: Point2D) => {
-    let dark = 0;
-    const steps = 14;
-    for (let s = 1; s < steps; s++) {
-      const t = s / steps;
-      const qx = Math.round(ptA.x + (ptB.x - ptA.x) * t);
-      const qy = Math.round(ptA.y + (ptB.y - ptA.y) * t);
-      for (let dy = -8; dy <= 8; dy += 2) {
-        for (let dx = -8; dx <= 8; dx += 2) {
-          const sx = Math.max(0, Math.min(width - 1, qx + dx));
-          const sy = Math.max(0, Math.min(height - 1, qy + dy));
-          if (gray[sy * width + sx] < 135) dark++;
-        }
+  if (!isConvexQuad(screenTL, screenTR, screenBR, screenBL)) {
+    // Fallback khi phiếu nghiêng gần 45 độ
+    let minSumIdx = 0;
+    let minSumVal = Infinity;
+    for (let idx = 0; idx < 4; idx++) {
+      const s = rawQuadPts[idx].x + rawQuadPts[idx].y;
+      if (s < minSumVal) {
+        minSumVal = s;
+        minSumIdx = idx;
       }
     }
-    return dark;
+    screenTL = rawQuadPts[minSumIdx];
+    screenTR = rawQuadPts[(minSumIdx + 1) % 4];
+    screenBR = rawQuadPts[(minSumIdx + 2) % 4];
+    screenBL = rawQuadPts[(minSumIdx + 3) % 4];
+  }
+
+  const orderedPts = [screenTL, screenTR, screenBR, screenBL];
+
+  // Tính chiều dài cạnh ngang màn hình (screenTL->screenTR và screenBL->screenBR)
+  // so với cạnh dọc màn hình (screenTL->screenBL và screenTR->screenBR)
+  const wSide =
+    0.5 *
+    (Math.hypot(screenTR.x - screenTL.x, screenTR.y - screenTL.y) +
+      Math.hypot(screenBR.x - screenBL.x, screenBR.y - screenBL.y));
+  const hSide =
+    0.5 *
+    (Math.hypot(screenBL.x - screenTL.x, screenBL.y - screenTL.y) +
+      Math.hypot(screenBR.x - screenTR.x, screenBR.y - screenTR.y));
+
+  // Hàm đo mật độ điểm mực đen (từ bản đồ nhị phân thích nghi bin + gray) trong vùng nội suy (u0..u1, v0..v1)
+  const sampleQuadRegionInkDensity = (
+    cTL: Point2D,
+    cTR: Point2D,
+    cBR: Point2D,
+    cBL: Point2D,
+    u0: number,
+    v0: number,
+    u1: number,
+    v1: number
+  ): number => {
+    const stepsU = 12;
+    const stepsV = 12;
+    let inkCount = 0;
+    let totalCount = 0;
+    for (let iv = 0; iv <= stepsV; iv++) {
+      const v = v0 + ((v1 - v0) * iv) / stepsV;
+      const leftX = cTL.x + (cBL.x - cTL.x) * v;
+      const leftY = cTL.y + (cBL.y - cTL.y) * v;
+      const rightX = cTR.x + (cBR.x - cTR.x) * v;
+      const rightY = cTR.y + (cBR.y - cTR.y) * v;
+      for (let iu = 0; iu <= stepsU; iu++) {
+        const u = u0 + ((u1 - u0) * iu) / stepsU;
+        const sx = Math.max(0, Math.min(width - 1, Math.round(leftX + (rightX - leftX) * u)));
+        const sy = Math.max(0, Math.min(height - 1, Math.round(leftY + (rightY - leftY) * u)));
+        const idx = sy * width + sx;
+        if (bin[idx] === 1 || gray[idx] < 138) {
+          inkCount++;
+        }
+        totalCount++;
+      }
+    }
+    return totalCount > 0 ? inkCount / totalCount : 0;
   };
 
-  let mappedTL: Point2D;
-  let mappedTR: Point2D;
-  let mappedBR: Point2D;
-  let mappedBL: Point2D;
-
-  if (isHeldVertically) {
-    // Phiếu nằm dọc theo màn hình điện thoại (xoay 90 độ):
-    // Cạnh P0->P1 (ở trên) so với cạnh P3->P2 (ở dưới)
-    const darkTop = sampleDensity(orderedPts[0], orderedPts[1]);
-    const darkBottom = sampleDensity(orderedPts[3], orderedPts[2]);
-
-    if (darkTop >= darkBottom) {
-      // Đầu Mã Đề & SBD nằm ở phía trên camera:
-      // TL tờ phiếu = P1, TR tờ phiếu = P2, BR tờ phiếu = P3, BL tờ phiếu = P0
-      mappedTL = orderedPts[1];
-      mappedTR = orderedPts[2];
-      mappedBR = orderedPts[3];
-      mappedBL = orderedPts[0];
+  // Hàm chấm điểm cấu trúc "Đúng chiều đọc tự nhiên (0 độ)" cho một bộ 4 góc (cTL, cTR, cBR, cBL)
+  const evalRightSideUpStructureScore = (
+    cTL: Point2D,
+    cTR: Point2D,
+    cBR: Point2D,
+    cBL: Point2D
+  ): number => {
+    if (tplOrientation === 'portrait') {
+      // PHIẾU KHỔ DỌC A4 (Edu 2025 A4, CV 1239, Bộ GD, Azota, TNmaker):
+      // - Góc Trên-Trái (u=0.08..0.62, v=0.07..0.26): Khung Giám thị & Thông tin thí sinh (nền trắng thoáng, ít mực)
+      // - Góc Trên-Phải (u=0.71..0.97, v=0.11..0.31): Khung tô SBD & Mã đề dày đặc
+      // - Nửa Dưới (u=0.07..0.95, v=0.68..0.93): Phần III & hàng ô vuông đen định vị chân trang dày đặc
+      const topLeftOpenInfo = sampleQuadRegionInkDensity(cTL, cTR, cBR, cBL, 0.08, 0.07, 0.62, 0.26);
+      const topRightSbdMaDe = sampleQuadRegionInkDensity(cTL, cTR, cBR, cBL, 0.71, 0.11, 0.97, 0.31);
+      const bottomP3AndAnchors = sampleQuadRegionInkDensity(cTL, cTR, cBR, cBL, 0.07, 0.68, 0.95, 0.93);
+      const middleP1P2 = sampleQuadRegionInkDensity(cTL, cTR, cBR, cBL, 0.07, 0.36, 0.95, 0.64);
+      return (
+        topRightSbdMaDe * 1.45 +
+        bottomP3AndAnchors * 1.65 +
+        middleP1P2 * 0.75 -
+        topLeftOpenInfo * 2.45
+      );
     } else {
-      // Đầu Mã Đề & SBD nằm ở phía dưới camera:
-      // TL tờ phiếu = P3, TR tờ phiếu = P0, BR tờ phiếu = P1, BL tờ phiếu = P2
-      mappedTL = orderedPts[3];
-      mappedTR = orderedPts[0];
-      mappedBR = orderedPts[1];
-      mappedBL = orderedPts[2];
+      // PHIẾU KHỔ NGANG (2 bài/A4: Toán, Lý-Hóa-Sinh-Địa, Sử-Tin-CN, Ngoại ngữ, Ôn tập TL ngắn):
+      if (normTplId === 'qm_on_tap_tl_ngan') {
+        const topHeader = sampleQuadRegionInkDensity(cTL, cTR, cBR, cBL, 0.08, 0.03, 0.88, 0.14);
+        const bottomGrid = sampleQuadRegionInkDensity(cTL, cTR, cBR, cBL, 0.06, 0.42, 0.94, 0.93);
+        return bottomGrid * 2.1 - topHeader * 2.5;
+      }
+      // Các mẫu khổ ngang chuẩn:
+      // - Góc Trên-Trái (u=0.05..0.50, v=0.05..0.22): Khung Họ tên, Lớp, Điểm, Lời phê (nền trắng thoáng, ít mực)
+      // - Góc Dưới-Trái (u=0.04..0.35, v=0.42..0.90): Bảng tô Mã đề & SBD + ô mốc đen dày đặc
+      // - Góc Dưới-Phải (u=0.38..0.95, v=0.40..0.90): Bảng tô Phần I, II, III + hàng ô mốc đen chân phiếu dày đặc
+      const topLeftOpenInfo = sampleQuadRegionInkDensity(cTL, cTR, cBR, cBL, 0.05, 0.05, 0.50, 0.22);
+      const bottomLeftSbdMaDe = sampleQuadRegionInkDensity(cTL, cTR, cBR, cBL, 0.04, 0.42, 0.35, 0.90);
+      const bottomRightQuestions = sampleQuadRegionInkDensity(cTL, cTR, cBR, cBL, 0.38, 0.40, 0.95, 0.90);
+      return bottomLeftSbdMaDe * 1.55 + bottomRightQuestions * 1.55 - topLeftOpenInfo * 2.55;
+    }
+  };
+
+  // 4 phép xoay vòng của 4 đỉnh màn hình:
+  const rot0: [Point2D, Point2D, Point2D, Point2D] = [
+    orderedPts[0],
+    orderedPts[1],
+    orderedPts[2],
+    orderedPts[3],
+  ]; // 0° (Đầu phiếu ở cạnh TRÊN màn hình)
+  const rot180: [Point2D, Point2D, Point2D, Point2D] = [
+    orderedPts[2],
+    orderedPts[3],
+    orderedPts[0],
+    orderedPts[1],
+  ]; // 180° (Đầu phiếu bị lộn ngược xuống cạnh DƯỚI màn hình)
+  const rot90: [Point2D, Point2D, Point2D, Point2D] = [
+    orderedPts[1],
+    orderedPts[2],
+    orderedPts[3],
+    orderedPts[0],
+  ]; // 90° (Cạnh trái tờ phiếu nằm ở cạnh TRÊN màn hình)
+  const rot270: [Point2D, Point2D, Point2D, Point2D] = [
+    orderedPts[3],
+    orderedPts[0],
+    orderedPts[1],
+    orderedPts[2],
+  ]; // 270° (Cạnh trái tờ phiếu nằm ở cạnh DƯỚI màn hình)
+
+  let detectedRotation: DetectedSheetRotation = '0deg';
+  let chosenCorners: [Point2D, Point2D, Point2D, Point2D] = rot0;
+
+  if (tplOrientation === 'portrait') {
+    // Mẫu phiếu KHỔ DỌC A4: khi đặt đứng dọc trên màn hình sẽ có hSide >= wSide * 0.90
+    const isPlacedVerticallyOnScreen = hSide >= wSide * 0.90;
+    if (isPlacedVerticallyOnScreen) {
+      const score0 = evalRightSideUpStructureScore(...rot0);
+      const score180 = evalRightSideUpStructureScore(...rot180);
+      if (score0 >= score180 - 0.012) {
+        detectedRotation = '0deg';
+        chosenCorners = rot0;
+      } else {
+        detectedRotation = '180deg';
+        chosenCorners = rot180;
+      }
+    } else {
+      const score90 = evalRightSideUpStructureScore(...rot90);
+      const score270 = evalRightSideUpStructureScore(...rot270);
+      if (score90 >= score270) {
+        detectedRotation = '90deg';
+        chosenCorners = rot90;
+      } else {
+        detectedRotation = '270deg';
+        chosenCorners = rot270;
+      }
     }
   } else {
-    // Phiếu nằm ngang chuẩn theo màn hình:
-    const darkLeft = sampleDensity(orderedPts[0], orderedPts[3]);
-    const darkRight = sampleDensity(orderedPts[1], orderedPts[2]);
-
-    if (darkLeft >= darkRight) {
-      // Chiều chuẩn 0 độ:
-      mappedTL = orderedPts[0];
-      mappedTR = orderedPts[1];
-      mappedBR = orderedPts[2];
-      mappedBL = orderedPts[3];
+    // Mẫu phiếu KHỔ NGANG (2 bài/A4): khi đặt nằm ngang trên màn hình sẽ có wSide >= hSide * 0.92
+    const isPlacedHorizontallyOnScreen = wSide >= hSide * 0.92;
+    if (isPlacedHorizontallyOnScreen) {
+      const score0 = evalRightSideUpStructureScore(...rot0);
+      const score180 = evalRightSideUpStructureScore(...rot180);
+      if (score0 >= score180 - 0.012) {
+        detectedRotation = '0deg';
+        chosenCorners = rot0;
+      } else {
+        detectedRotation = '180deg';
+        chosenCorners = rot180;
+      }
     } else {
-      // Xoay ngược 180 độ:
-      mappedTL = orderedPts[2];
-      mappedTR = orderedPts[3];
-      mappedBR = orderedPts[0];
-      mappedBL = orderedPts[1];
+      const score90 = evalRightSideUpStructureScore(...rot90);
+      const score270 = evalRightSideUpStructureScore(...rot270);
+      if (score90 >= score270 - 0.012) {
+        detectedRotation = '90deg';
+        chosenCorners = rot90;
+      } else {
+        detectedRotation = '270deg';
+        chosenCorners = rot270;
+      }
+    }
+  }
+
+  // Kiểm tra tờ phiếu trên camera có đang đặt ĐÚNG CHIỀU KHUNG HƯỚNG DẪN hay không
+  let isRightSideUp = true;
+  let orientationMessage: string | undefined;
+
+  if (tplOrientation === 'portrait') {
+    if (detectedRotation === '0deg') {
+      isRightSideUp = true;
+    } else if (detectedRotation === '180deg') {
+      isRightSideUp = false;
+      orientationMessage =
+        'Phiếu Dọc A4 đang bị NGƯỢC ĐẦU (180°) — Hãy xoay phần Tiêu đề & SBD lên phía trên!';
+    } else {
+      isRightSideUp = false;
+      orientationMessage =
+        'Phiếu Dọc A4 đang đặt lệch ngang — Hãy xoay đứng dọc tờ phiếu khớp khung A4!';
+    }
+  } else {
+    // Phiếu Khổ Ngang (2 bài/A4)
+    if (targetFrameMode === 'landscape') {
+      if (detectedRotation === '0deg') {
+        isRightSideUp = true;
+      } else if (detectedRotation === '180deg') {
+        isRightSideUp = false;
+        orientationMessage =
+          'Phiếu Ngang đang bị NGƯỢC CHIỀU (180°) — Hãy xoay Họ tên lên trên, Mã đề & SBD sang trái!';
+      } else {
+        isRightSideUp = false;
+        orientationMessage =
+          'Phiếu Ngang đang đặt dọc — Hãy đặt phiếu NẰM NGANG đúng chiều khung hướng dẫn!';
+      }
+    } else {
+      // Trường hợp giáo viên chủ động chọn chế độ cầm dọc xoay 90° cho phiếu ngang
+      if (detectedRotation === '90deg') {
+        isRightSideUp = true;
+      } else if (detectedRotation === '270deg') {
+        isRightSideUp = false;
+        orientationMessage =
+          'Phiếu đang bị NGƯỢC ĐẦU — Hãy xoay phần Mã đề & SBD lên phía trên khung dọc!';
+      } else {
+        isRightSideUp = false;
+        orientationMessage =
+          'Hãy xoay dọc tờ phiếu khớp với khung dọc (hoặc bấm chuyển sang Khung Ngang)!';
+      }
     }
   }
 
@@ -772,10 +953,19 @@ export function detectFourCornerMarkers(imageData: ImageData): DetectedCorners {
     found: true,
     anchorCount: bestQuad.anchorCount,
     locks: { tl: true, tr: true, bl: true, br: true },
-    tl: mappedTL,
-    tr: mappedTR,
-    br: mappedBR,
-    bl: mappedBL,
+    tl: chosenCorners[0],
+    tr: chosenCorners[1],
+    br: chosenCorners[2],
+    bl: chosenCorners[3],
+    screenCorners: {
+      tl: screenTL,
+      tr: screenTR,
+      br: screenBR,
+      bl: screenBL,
+    },
+    detectedRotation,
+    isRightSideUp,
+    orientationMessage,
   };
 }
 
@@ -1001,34 +1191,114 @@ export function gradeWarpedSheet(
 ): interfaceGradedSheetRecord {
   const width = warpedCanvas.width;
   const height = warpedCanvas.height;
-  const ctx = warpedCanvas.getContext('2d')!;
-  const imgData = ctx.getImageData(0, 0, width, height);
-  const data = imgData.data;
-
-  const gray = new Uint8Array(width * height);
-  for (let i = 0; i < width * height; i++) {
-    gray[i] = Math.round(0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2]);
-  }
-
-  const tpl = TEMPLATES[templateId];
-  const cfg = scoringConfig || getDefaultScoringConfig(templateId);
+  const normTplId = normalizeTemplateId(templateId);
+  const tpl = TEMPLATES[normTplId] || TEMPLATES.qm_khtn_dia;
+  const cfg = scoringConfig || getDefaultScoringConfig(normTplId);
   const activeP1Count = Math.min(tpl.p1Count, Math.max(0, cfg.activeP1Count));
   const activeP2Count = Math.min(tpl.p2Count, Math.max(0, cfg.activeP2Count));
   const activeP3Count = Math.min(tpl.p3Count, Math.max(0, cfg.activeP3Count));
+  const thresh = settings.fillThreshold;
 
-  const map = getTemplateBubbleMap(
-    templateId,
+  const extractGray = (cvs: HTMLCanvasElement): Uint8Array => {
+    const c = cvs.getContext('2d')!;
+    const id = c.getImageData(0, 0, cvs.width, cvs.height).data;
+    const g = new Uint8Array(cvs.width * cvs.height);
+    for (let i = 0; i < g.length; i++) {
+      g[i] = Math.round(0.299 * id[i * 4] + 0.587 * id[i * 4 + 1] + 0.114 * id[i * 4 + 2]);
+    }
+    return g;
+  };
+
+  let workingCanvas = warpedCanvas;
+  let gray = extractGray(workingCanvas);
+
+  // Tự động kiểm tra bảo vệ chống ngược đầu 180° (nếu ảnh tĩnh tải lên bị lộn ngược)
+  const baseMap = getTemplateBubbleMap(
+    normTplId,
     settings.offsetX,
     settings.offsetY,
     settings.radiusScale
   );
-  const thresh = settings.fillThreshold;
+
+  const measureHeaderConfidence = (gBuf: Uint8Array, m: typeof baseMap): number => {
+    let validCols = 0;
+    for (const col of m.maDe) {
+      const fills = col.map((b) => measureBubbleFill(gBuf, width, height, b));
+      const sorted = [...fills].sort((a, b) => b - a);
+      if (sorted[0] >= thresh * 0.72 && sorted[0] - sorted[5] >= 0.12) validCols++;
+    }
+    for (const col of m.sbd) {
+      const fills = col.map((b) => measureBubbleFill(gBuf, width, height, b));
+      const sorted = [...fills].sort((a, b) => b - a);
+      if (sorted[0] >= thresh * 0.72 && sorted[0] - sorted[5] >= 0.12) validCols++;
+    }
+    return validCols;
+  };
+
+  if (baseMap.maDe.length + baseMap.sbd.length > 0) {
+    const conf0 = measureHeaderConfidence(gray, baseMap);
+    if (conf0 < Math.ceil((baseMap.maDe.length + baseMap.sbd.length) * 0.35)) {
+      const rot180Canvas = document.createElement('canvas');
+      rot180Canvas.width = width;
+      rot180Canvas.height = height;
+      const rCtx = rot180Canvas.getContext('2d')!;
+      rCtx.translate(width, height);
+      rCtx.rotate(Math.PI);
+      rCtx.drawImage(warpedCanvas, 0, 0);
+      const gray180 = extractGray(rot180Canvas);
+      const conf180 = measureHeaderConfidence(gray180, baseMap);
+      if (conf180 > conf0 + 2) {
+        workingCanvas = rot180Canvas;
+        gray = gray180;
+      }
+    }
+  }
+
+  // Vi chỉnh sub-pixel tự động (±2.0px) quanh offset của người dùng để bù méo quang học camera điện thoại
+  let bestDx = 0;
+  let bestDy = 0;
+  let bestAlignmentContrast = -1;
+  const microSteps = [0, -2, 2];
+  for (const dy of microSteps) {
+    for (const dx of microSteps) {
+      const testMap = getTemplateBubbleMap(
+        normTplId,
+        settings.offsetX + dx,
+        settings.offsetY + dy,
+        settings.radiusScale
+      );
+      let contrastSum = 0;
+      for (const col of testMap.maDe) {
+        const fills = col.map((b) => measureBubbleFill(gray, width, height, b));
+        const sorted = [...fills].sort((a, b) => b - a);
+        contrastSum += Math.max(0, sorted[0] - sorted[4]);
+      }
+      const p1CheckLen = Math.min(8, activeP1Count, testMap.p1.length);
+      for (let q = 0; q < p1CheckLen; q++) {
+        const fills = testMap.p1[q].map((b) => measureBubbleFill(gray, width, height, b));
+        const sorted = [...fills].sort((a, b) => b - a);
+        contrastSum += Math.max(0, sorted[0] - sorted[2]);
+      }
+      if (contrastSum > bestAlignmentContrast) {
+        bestAlignmentContrast = contrastSum;
+        bestDx = dx;
+        bestDy = dy;
+      }
+    }
+  }
+
+  const map = getTemplateBubbleMap(
+    normTplId,
+    settings.offsetX + bestDx,
+    settings.offsetY + bestDy,
+    settings.radiusScale
+  );
 
   const outCanvas = document.createElement('canvas');
   outCanvas.width = width;
   outCanvas.height = height;
   const outCtx = outCanvas.getContext('2d')!;
-  outCtx.drawImage(warpedCanvas, 0, 0);
+  outCtx.drawImage(workingCanvas, 0, 0);
 
   const cornerList = [
     TARGET_CORNERS_1024x550.tl,
@@ -1044,7 +1314,7 @@ export function gradeWarpedSheet(
 
   const warnings: string[] = [];
 
-  // A. Đọc Mã Đề (3 hoặc 4 cột tùy mẫu phiếu)
+  // A. Đọc Mã Đề (3 hoặc 4 cột tùy mẫu phiếu) với so sánh tương phản cột thông minh
   const maDeColCount = map.maDe.length;
   let examCode = '';
   if (maDeColCount === 0) {
@@ -1054,13 +1324,21 @@ export function gradeWarpedSheet(
       const fills = map.maDe[col].map((b) => measureBubbleFill(gray, width, height, b));
       const maxFill = Math.max(...fills);
       const maxIdx = fills.indexOf(maxFill);
-      if (maxFill >= thresh * 0.85) {
+      const sorted = [...fills].sort((a, b) => b - a);
+      const medianBg = sorted[5] ?? 0;
+      const isFilled =
+        maxFill >= thresh * 0.84 ||
+        (maxFill >= thresh * 0.62 && maxFill - medianBg >= 0.13 && maxFill - sorted[1] >= 0.06);
+
+      if (isFilled) {
         examCode += String(maxIdx);
         const b = map.maDe[col][maxIdx];
+        outCtx.fillStyle = 'rgba(16, 185, 129, 0.28)';
         outCtx.strokeStyle = '#10b981';
         outCtx.lineWidth = 2.2;
         outCtx.beginPath();
         outCtx.arc(b.x, b.y, b.r + 1.5, 0, Math.PI * 2);
+        outCtx.fill();
         outCtx.stroke();
       } else {
         examCode += '?';
@@ -1076,7 +1354,7 @@ export function gradeWarpedSheet(
     }
   }
 
-  // B. Đọc Số Báo Danh (6 hoặc 8 cột tùy mẫu phiếu)
+  // B. Đọc Số Báo Danh (6 hoặc 8 cột tùy mẫu phiếu) với so sánh tương phản cột thông minh
   const sbdColCount = map.sbd.length;
   let rawSbd = '';
   if (sbdColCount === 0) {
@@ -1086,13 +1364,21 @@ export function gradeWarpedSheet(
       const fills = map.sbd[col].map((b) => measureBubbleFill(gray, width, height, b));
       const maxFill = Math.max(...fills);
       const maxIdx = fills.indexOf(maxFill);
-      if (maxFill >= thresh * 0.85) {
+      const sorted = [...fills].sort((a, b) => b - a);
+      const medianBg = sorted[5] ?? 0;
+      const isFilled =
+        maxFill >= thresh * 0.84 ||
+        (maxFill >= thresh * 0.62 && maxFill - medianBg >= 0.13 && maxFill - sorted[1] >= 0.06);
+
+      if (isFilled) {
         rawSbd += String(maxIdx);
         const b = map.sbd[col][maxIdx];
+        outCtx.fillStyle = 'rgba(16, 185, 129, 0.28)';
         outCtx.strokeStyle = '#10b981';
         outCtx.lineWidth = 2.2;
         outCtx.beginPath();
         outCtx.arc(b.x, b.y, b.r + 1.5, 0, Math.PI * 2);
+        outCtx.fill();
         outCtx.stroke();
       } else {
         rawSbd += '?';
@@ -1364,8 +1650,22 @@ export function gradeWarpedSheet(
   const p3Score = p3CorrectCount * cfg.p3PointsPerQ;
   const totalScore = Math.round((p1Score + p2Score + p3Score) * 100) / 100;
 
-  // 1. Tạo ảnh minh chứng có vẽ con dấu khung điểm màu đỏ ở góc trên (chuẩn giáo viên)
-  const evidenceImageUrl = generateEvidenceImage(outCanvas, {
+  // 1. Chuẩn hóa tỷ lệ hiển thị tự nhiên của tờ phiếu trước khi đóng dấu điểm:
+  // - Phiếu Khổ Ngang (2 bài/A4): giữ nguyên tỷ lệ ngang 1024 x 550 đúng chiều đọc
+  // - Phiếu Khổ Dọc A4: khôi phục tỷ lệ trang A4 dọc chuẩn (840 x 1188) đúng chiều đọc tự nhiên
+  let displayCanvas = outCanvas;
+  if (tpl.orientation === 'portrait') {
+    const portraitCanvas = document.createElement('canvas');
+    portraitCanvas.width = 840;
+    portraitCanvas.height = 1188;
+    const pCtx = portraitCanvas.getContext('2d')!;
+    pCtx.imageSmoothingEnabled = true;
+    pCtx.imageSmoothingQuality = 'high';
+    pCtx.drawImage(outCanvas, 0, 0, 840, 1188);
+    displayCanvas = portraitCanvas;
+  }
+
+  const evidenceImageUrl = generateEvidenceImage(displayCanvas, {
     studentId: sbd,
     examCode,
     totalScore,
@@ -1411,6 +1711,7 @@ export function gradeWarpedSheet(
 /**
  * Vẽ khung điểm và chú thích đúng sai lên ảnh bài làm làm minh chứng
  * Hiển thị đầy đủ Điểm Phần I, Điểm Phần II, Điểm Phần III và ĐIỂM TỔNG trực tiếp trên ảnh phiếu
+ * Đặt ở góc Trên-Trái (vùng thông tin Họ tên / Giám thị) để KHÔNG BAO GIỜ che mất vùng tô SBD, Mã đề hoặc Phần II
  */
 export function generateEvidenceImage(
   paperCanvas: HTMLCanvasElement,
@@ -1435,17 +1736,18 @@ export function generateEvidenceImage(
 
   const w = paperCanvas.width;
   const h = paperCanvas.height;
+  const isPortraitSheet = h > w;
 
-  // Khung con dấu điểm đỏ ở góc trên bài làm (hiển thị rõ Điểm các phần & Điểm tổng)
-  const boxW = Math.min(365, Math.round(w * 0.38));
-  const boxH = Math.min(144, Math.round(h * 0.29));
-  const boxX = w > 600 ? w - boxW - 18 : 16;
-  const boxY = 14;
+  // Đặt con dấu ở góc Trên-Trái (tránh hoàn toàn Phần II ở góc trên phải của Phiếu Ngang và SBD/Mã đề ở góc trên phải của Phiếu Dọc A4)
+  const boxW = isPortraitSheet ? Math.min(390, Math.round(w * 0.48)) : Math.min(350, Math.round(w * 0.35));
+  const boxH = isPortraitSheet ? 132 : 112;
+  const boxX = 36;
+  const boxY = isPortraitSheet ? 22 : 12;
 
   ctx.save();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.97)';
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
   ctx.strokeStyle = '#dc2626';
-  ctx.lineWidth = 3.5;
+  ctx.lineWidth = 3;
   ctx.fillRect(boxX, boxY, boxW, boxH);
   ctx.strokeRect(boxX, boxY, boxW, boxH);
 
@@ -1460,11 +1762,11 @@ export function generateEvidenceImage(
 
   // Cột 1: Thông tin SBD, Mã đề & Điểm chi tiết Phần I, Phần II, Phần III
   ctx.fillStyle = '#0f172a';
-  ctx.font = 'bold 13px Arial, sans-serif';
+  ctx.font = 'bold 12.5px Arial, sans-serif';
   ctx.fillText(
     `SBD: ${result.studentId || '---'} | Mã đề: ${result.examCode || '---'}`,
     boxX + 10,
-    boxY + 24
+    boxY + 22
   );
 
   const p1CountText =
@@ -1477,44 +1779,44 @@ export function generateEvidenceImage(
       : '';
 
   ctx.fillStyle = '#1d4ed8';
-  ctx.font = 'bold 12.5px Arial, sans-serif';
+  ctx.font = 'bold 12px Arial, sans-serif';
   ctx.fillText(
     `• Phần I: ${Number(result.p1 || 0).toFixed(2)} đ${p1CountText}`,
     boxX + 10,
-    boxY + 50
+    boxY + 46
   );
 
   ctx.fillStyle = '#047857';
   ctx.fillText(
     `• Phần II: ${Number(result.p2 || 0).toFixed(2)} đ (${result.p2TotalCount ?? 4} câu Đ/S)`,
     boxX + 10,
-    boxY + 75
+    boxY + 70
   );
 
   ctx.fillStyle = '#6d28d9';
   ctx.fillText(
     `• Phần III: ${Number(result.p3 || 0).toFixed(2)} đ${p3CountText}`,
     boxX + 10,
-    boxY + 100
+    boxY + 94
   );
 
-  if (result.studentName) {
-    ctx.font = 'bold 11.5px Arial, sans-serif';
+  if (result.studentName && isPortraitSheet) {
+    ctx.font = 'bold 11px Arial, sans-serif';
     ctx.fillStyle = '#334155';
-    ctx.fillText(`${result.studentName}`, boxX + 10, boxY + 124);
+    ctx.fillText(`${result.studentName}`, boxX + 10, boxY + 116);
   }
 
   // Cột 2: Con dấu ĐIỂM TỔNG cực to màu đỏ son
   ctx.fillStyle = '#dc2626';
-  ctx.font = '900 12px Arial, sans-serif';
-  ctx.fillText('ĐIỂM TỔNG:', midX + 10, boxY + 28);
+  ctx.font = '900 11.5px Arial, sans-serif';
+  ctx.fillText('ĐIỂM TỔNG:', midX + 10, boxY + 24);
 
-  ctx.font = '900 40px Arial, sans-serif';
-  ctx.fillText(Number(result.totalScore).toFixed(2), midX + 10, boxY + 78);
+  ctx.font = isPortraitSheet ? '900 38px Arial, sans-serif' : '900 34px Arial, sans-serif';
+  ctx.fillText(Number(result.totalScore).toFixed(2), midX + 10, boxY + 68);
 
-  ctx.font = 'bold 11px Arial, sans-serif';
+  ctx.font = 'bold 10.5px Arial, sans-serif';
   ctx.fillStyle = '#b91c1c';
-  ctx.fillText('THANG ĐIỂM 10', midX + 10, boxY + 106);
+  ctx.fillText('THANG ĐIỂM 10', midX + 10, boxY + 94);
 
   ctx.restore();
 
@@ -1634,7 +1936,7 @@ export async function generateSimulatedSheetCanvas(
     const rawCtx = rawCanvas.getContext('2d')!;
     rawCtx.drawImage(img, 0, 0);
     const rawData = rawCtx.getImageData(0, 0, img.width, img.height);
-    const detected = detectFourCornerMarkers(rawData);
+    const detected = detectFourCornerMarkers(rawData, templateId);
     sheetCanvas = warpPerspectiveTo1024x550(rawData, detected);
   } catch {
     sheetCanvas = renderVectorFallbackSheet1024x550(templateId);

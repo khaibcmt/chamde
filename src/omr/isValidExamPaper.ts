@@ -26,7 +26,13 @@ export interface PaperValidationDetails {
   markerDarkness: number[]; // Độ sáng 4 marker góc (càng nhỏ càng đen)
   markerFillRatios: number[]; // Tỷ lệ pixel đen trong 4 ô marker (0.0 - 1.0)
   areaRatio: number; // Tỷ lệ diện tích tứ giác so với toàn khung hình
-  failedCheck?: 'aspect_ratio' | 'corner_angle' | 'fiducial_markers' | 'paper_brightness' | 'area_ratio';
+  failedCheck?:
+    | 'aspect_ratio'
+    | 'corner_angle'
+    | 'fiducial_markers'
+    | 'paper_brightness'
+    | 'area_ratio'
+    | 'orientation_mismatch';
   reason?: string;
 }
 
@@ -85,12 +91,17 @@ function getPixelLuminance(imageData: ImageData, x: number, y: number): number {
 
 /**
  * HÀM KIỂM DUYỆT TÍNH HỢP LỆ CỦA PHIẾU THI (VALIDATION GATE)
- * @param corners Tứ giác 4 góc { tl, tr, br, bl }
- * @param frameData Dữ liệu pixel ImageData từ camera
- * @param templateId Mẫu phiếu đang chọn để đối chiếu tỷ lệ
+ * Bắt buộc tờ phiếu phải đặt ĐÚNG CHIỀU đọc tự nhiên tương ứng với mẫu phiếu đang chọn mới cho phép chấm
  */
 export function isValidExamPaper(
-  corners: { tl: Point2D; tr: Point2D; br: Point2D; bl: Point2D },
+  corners: {
+    tl: Point2D;
+    tr: Point2D;
+    br: Point2D;
+    bl: Point2D;
+    isRightSideUp?: boolean;
+    orientationMessage?: string;
+  },
   frameData: ImageData,
   templateId?: TemplateId
 ): PaperValidationDetails {
@@ -103,7 +114,7 @@ export function isValidExamPaper(
   const quadArea = calculateQuadArea(pts[0], pts[1], pts[2], pts[3]);
   const areaRatio = quadArea / frameArea;
 
-  if (areaRatio < 0.12 || areaRatio > 0.98) {
+  if (areaRatio < 0.085 || areaRatio > 0.98) {
     return {
       isValid: false,
       aspectRatio: 0,
@@ -114,7 +125,7 @@ export function isValidExamPaper(
       markerFillRatios: [],
       areaRatio,
       failedCheck: 'area_ratio',
-      reason: areaRatio < 0.12 ? 'Hãy đưa phiếu lại gần camera hơn' : 'Phiếu quá sát mép camera',
+      reason: areaRatio < 0.085 ? 'Hãy đưa phiếu lại gần camera hơn' : 'Phiếu quá sát mép camera',
     };
   }
 
@@ -166,7 +177,7 @@ export function isValidExamPaper(
   const avgH = (rightEdge + leftEdge) / 2;
   const aspectRatio = Math.max(avgW, avgH) / Math.max(1, Math.min(avgW, avgH));
 
-  const minRatio = 1.16;
+  const minRatio = 1.15;
   const maxRatio = 3.45;
 
   if (aspectRatio < minRatio || aspectRatio > maxRatio) {
@@ -181,6 +192,25 @@ export function isValidExamPaper(
       areaRatio,
       failedCheck: 'aspect_ratio',
       reason: 'Khung hình chưa khớp tỷ lệ phiếu trả lời',
+    };
+  }
+
+  // 3B. KIỂM TRA ĐÚNG CHIỀU PHIẾU (Right-Side-Up Orientation Gate)
+  // Bắt buộc bảng chấm phải hiện đúng chiều theo loại phiếu (Phiếu Ngang hoặc Phiếu Dọc A4) mới cho phép chấm
+  if (corners.isRightSideUp === false) {
+    return {
+      isValid: false,
+      aspectRatio,
+      angles,
+      cosines,
+      paperBrightness: 0,
+      markerDarkness: [],
+      markerFillRatios: [],
+      areaRatio,
+      failedCheck: 'orientation_mismatch',
+      reason:
+        corners.orientationMessage ||
+        'Phiếu chưa đúng chiều — Hãy xoay phiếu đúng chiều khung hướng dẫn!',
     };
   }
 
