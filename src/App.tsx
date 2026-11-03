@@ -32,6 +32,7 @@ import {
   Plus,
   QrCode,
   RefreshCw,
+  Save,
   Search,
   Settings,
   Share2,
@@ -280,9 +281,9 @@ function computeTotalScoreFromConfig(cfg: CustomScoringConfig): number {
 }
 
 export default function App() {
-  // Bottom Navigation & Sub-screen State
+  // Bottom Navigation & Sub-screen State (Mở phần mềm lên là vô ngay Màn hình chính có tên sản phẩm, tác giả, bản quyền)
   const [bottomTab, setBottomTab] = useState<BottomNavTab>('sessions');
-  const [sessionView, setSessionView] = useState<SessionSubView>('list');
+  const [sessionView, setSessionView] = useState<SessionSubView>('welcome');
 
   // Exam Sessions State: Khởi tạo sẵn đợt chấm chuẩn kèm bộ đáp án 101-104 (18 P1, 4 P2, 6 P3)
   const [examSessions, setExamSessions] = useState<ExamSessionItem[]>(() => {
@@ -464,6 +465,9 @@ export default function App() {
   });
   const [selectedExamCodeView, setSelectedExamCodeView] = useState<string>('101');
   const [rawQrInput, setRawQrInput] = useState<string>(DEFAULT_QR_JSON_RAW);
+  const [showRawQrPasteBox, setShowRawQrPasteBox] = useState<boolean>(false);
+  const [quickP1StringInput, setQuickP1StringInput] = useState<string>('');
+  const [customNewExamCodeInput, setCustomNewExamCodeInput] = useState<string>('');
   const [statusBanner, setStatusBanner] = useState<{
     type: 'success' | 'warning' | 'info';
     message: string;
@@ -1149,29 +1153,78 @@ export default function App() {
   };
 
   const handleScanUploadedQrImage = async (file: File) => {
-    const img = new Image();
     const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.width;
-      canvas.height = img.height;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0);
-      const imageData = ctx.getImageData(0, 0, img.width, img.height);
-      const decodedData = decodeQrFromImageData(imageData);
-      URL.revokeObjectURL(url);
-      if (decodedData) {
-        playSuccessBeep();
-        setRawQrInput(decodedData);
-        handleApplyRawJsonQr(decodedData);
-      } else {
-        setStatusBanner({
-          type: 'warning',
-          message: 'Không tìm thấy mã QR hợp lệ trong ảnh tải lên.',
-        });
+    try {
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error('Không thể đọc file ảnh đã chọn.'));
+        img.src = url;
+      });
+
+      // 1. Thử giải mã nhanh bằng BarcodeDetector phần cứng của trình duyệt (nếu có)
+      const WinWithBarcode = window as unknown as {
+        BarcodeDetector?: new (opts: { formats: string[] }) => {
+          detect: (source: HTMLImageElement | HTMLCanvasElement) => Promise<{ rawValue?: string }[]>;
+        };
+      };
+      if (typeof WinWithBarcode.BarcodeDetector === 'function') {
+        try {
+          const detector = new WinWithBarcode.BarcodeDetector({ formats: ['qr_code'] });
+          const barcodes = await detector.detect(img);
+          if (barcodes && barcodes.length > 0 && barcodes[0].rawValue) {
+            URL.revokeObjectURL(url);
+            playSuccessBeep();
+            setRawQrInput(barcodes[0].rawValue);
+            handleApplyRawJsonQr(barcodes[0].rawValue);
+            return;
+          }
+        } catch {
+          // Tiếp tục quét bằng bộ giải mã đa tầng jsQR bên dưới
+        }
       }
-    };
-    img.src = url;
+
+      // 2. Quét đa tỉ lệ (Multi-scale) bằng decodeQrFromImageData để đọc tốt cả ảnh chụp màn hình 4K lẫn ảnh cắt nhỏ
+      const maxDim = Math.max(img.width, img.height);
+      const targetMaxDims = Array.from(new Set([maxDim, 1200, 850, 600]));
+
+      for (const targetDim of targetMaxDims) {
+        if (targetDim <= 0) continue;
+        const scale = targetDim === maxDim ? 1 : targetDim / maxDim;
+        const w = Math.max(64, Math.round(img.width * scale));
+        const h = Math.max(64, Math.round(img.height * scale));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+
+        const imageData = ctx.getImageData(0, 0, w, h);
+        const decodedData = decodeQrFromImageData(imageData);
+        if (decodedData) {
+          URL.revokeObjectURL(url);
+          playSuccessBeep();
+          setRawQrInput(decodedData);
+          handleApplyRawJsonQr(decodedData);
+          return;
+        }
+      }
+
+      URL.revokeObjectURL(url);
+      setStatusBanner({
+        type: 'warning',
+        message: 'Không tìm thấy mã QR hợp lệ trong ảnh tải lên. Hãy chụp rõ nét vùng mã QR.',
+      });
+    } catch (err) {
+      URL.revokeObjectURL(url);
+      setStatusBanner({
+        type: 'warning',
+        message: `Lỗi đọc ảnh QR: ${err instanceof Error ? err.message : 'Ảnh không hợp lệ'}`,
+      });
+    }
   };
 
   const handleLoadBuiltInSampleQrImage = async () => {
@@ -1206,27 +1259,74 @@ export default function App() {
     }
   };
 
-  // QR Camera Stream
+  // QR Camera Stream (Tối ưu tốc độ 60fps + quét đa vùng mượt mà)
   useEffect(() => {
     if (!isQrCameraOpen) return;
     let stream: MediaStream | null = null;
     let animId = 0;
+    let isCancelled = false;
+    let lastScanTime = 0;
 
     const startQrCamera = async () => {
       try {
         if (!qrVideoRef.current) return;
         const session = await startCrossPlatformCamera(qrVideoRef.current);
+        if (isCancelled) {
+          session.stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         stream = session.stream;
         const scanCanvas = document.createElement('canvas');
         const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true })!;
 
-        const tick = () => {
+        const WinWithBarcode = window as unknown as {
+          BarcodeDetector?: new (opts: { formats: string[] }) => {
+            detect: (source: HTMLVideoElement | HTMLCanvasElement) => Promise<{ rawValue?: string }[]>;
+          };
+        };
+        const nativeDetector =
+          typeof WinWithBarcode.BarcodeDetector === 'function'
+            ? new WinWithBarcode.BarcodeDetector({ formats: ['qr_code'] })
+            : null;
+
+        const tick = async () => {
+          if (isCancelled) return;
+          const now = Date.now();
           const video = qrVideoRef.current;
-          if (video && video.readyState === video.HAVE_ENOUGH_DATA) {
-            scanCanvas.width = video.videoWidth;
-            scanCanvas.height = video.videoHeight;
-            scanCtx.drawImage(video, 0, 0);
-            const imgData = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
+
+          if (
+            video &&
+            video.readyState >= 2 &&
+            video.videoWidth > 0 &&
+            video.videoHeight > 0 &&
+            now - lastScanTime >= 110
+          ) {
+            lastScanTime = now;
+
+            // 1. Ưu tiên BarcodeDetector phần cứng nếu trình duyệt hỗ trợ
+            if (nativeDetector) {
+              try {
+                const results = await nativeDetector.detect(video);
+                if (results && results.length > 0 && results[0].rawValue) {
+                  playSuccessBeep();
+                  setRawQrInput(results[0].rawValue);
+                  handleApplyRawJsonQr(results[0].rawValue);
+                  setIsQrCameraOpen(false);
+                  return;
+                }
+              } catch {
+                // fallback sang jsQR
+              }
+            }
+
+            // 2. Chuẩn hóa khung hình về chiều rộng 720px để quét jsQR siêu mượt không giật lag
+            const targetW = Math.min(720, video.videoWidth);
+            const targetH = Math.round((video.videoHeight * targetW) / video.videoWidth);
+            scanCanvas.width = targetW;
+            scanCanvas.height = targetH;
+            scanCtx.drawImage(video, 0, 0, targetW, targetH);
+
+            const imgData = scanCtx.getImageData(0, 0, targetW, targetH);
             const decodedData = decodeQrFromImageData(imgData);
             if (decodedData) {
               playSuccessBeep();
@@ -1236,7 +1336,9 @@ export default function App() {
               return;
             }
           }
-          animId = requestAnimationFrame(tick);
+          if (!isCancelled) {
+            animId = requestAnimationFrame(tick);
+          }
         };
         animId = requestAnimationFrame(tick);
       } catch (err) {
@@ -1250,12 +1352,73 @@ export default function App() {
 
     startQrCamera();
     return () => {
+      isCancelled = true;
       cancelAnimationFrame(animId);
       if (stream) stream.getTracks().forEach((t) => t.stop());
     };
   }, [isQrCameraOpen, selectedTemplate]);
 
-  // Excel Answer Key Importer
+  // Tải file Excel mẫu chuẩn (.xlsx) để giáo viên điền đáp án nhanh
+  const handleDownloadSampleExcelAnswerKey = () => {
+    try {
+      const codes = Object.keys(answerKeys).length > 0 ? Object.keys(answerKeys) : ['101', '102', '103', '104'];
+      const p1Count = currentScoring.activeP1Count || 18;
+      const p2Count = currentScoring.activeP2Count || 4;
+      const p3Count = currentScoring.activeP3Count || 6;
+
+      const sheetData: (string | number)[][] = [];
+      sheetData.push(['Câu / Mã đề', ...codes]);
+
+      if (p1Count > 0) {
+        sheetData.push(['PHẦN I (Trắc nghiệm A, B, C, D)', ...codes.map(() => '')]);
+        for (let i = 0; i < p1Count; i++) {
+          sheetData.push([
+            i + 1,
+            ...codes.map((c) => answerKeys[c]?.p1?.[i] || ['A', 'B', 'C', 'D'][i % 4]),
+          ]);
+        }
+      }
+
+      if (p2Count > 0) {
+        sheetData.push(['PHẦN II (Đúng / Sai: Đ hoặc S)', ...codes.map(() => '')]);
+        for (let q = 0; q < p2Count; q++) {
+          for (const sub of ['a', 'b', 'c', 'd'] as const) {
+            sheetData.push([
+              `${q + 1}${sub}`,
+              ...codes.map((c) => (answerKeys[c]?.p2?.[q]?.[sub] === 'S' ? 'S' : 'Đ')),
+            ]);
+          }
+        }
+      }
+
+      if (p3Count > 0) {
+        sheetData.push(['PHẦN III (Trả lời ngắn điền số)', ...codes.map(() => '')]);
+        for (let i = 0; i < p3Count; i++) {
+          sheetData.push([
+            i + 1,
+            ...codes.map((c) => answerKeys[c]?.p3?.[i] ?? (i + 1) * 2),
+          ]);
+        }
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(sheetData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'DapAn');
+      XLSX.writeFile(wb, `Mau_Dap_An_EduChamDe_${codes.join('_')}.xlsx`);
+
+      setStatusBanner({
+        type: 'success',
+        message: 'Đã tải về file Excel mẫu đáp án (.xlsx) thành công!',
+      });
+    } catch (err) {
+      setStatusBanner({
+        type: 'warning',
+        message: `Lỗi tạo file Excel mẫu: ${err instanceof Error ? err.message : 'Thất bại'}`,
+      });
+    }
+  };
+
+  // Excel Answer Key Importer (Hỗ trợ cả bảng dọc theo cột Mã đề và bảng ngang theo dòng Mã đề)
   const handleImportExcelAnswerKey = async (file: File) => {
     try {
       const buffer = await file.arrayBuffer();
@@ -1265,21 +1428,31 @@ export default function App() {
       const rows = XLSX.utils.sheet_to_json<(string | number)[]>(ws, { header: 1 });
 
       const tpl = TEMPLATES[selectedTemplate] || TEMPLATES.qm_khtn_dia;
+
+      // Trích xuất mã đề 3 hoặc 4 chữ số từ ô tiêu đề (ví dụ "101", "Mã 101", "Đề 0101")
+      const extractExamCode = (val: unknown): string | null => {
+        const s = String(val ?? '').trim();
+        const m = s.match(/^(?:MÃ\s*ĐỀ|MÃ|ĐỀ|CODE)?\s*[:\-]?\s*(\d{3,4})$/i);
+        if (!m) return null;
+        const digits = m[1];
+        if (tpl.maDeDigits === 4 && digits.length === 3) return digits.padStart(4, '0');
+        if (tpl.maDeDigits === 3 && digits.length === 4 && digits.startsWith('0')) {
+          return digits.slice(1);
+        }
+        return digits;
+      };
+
       const codeCols: { colIdx: number; code: string }[] = [];
       let headerRowIdx = -1;
 
-      for (let r = 0; r < Math.min(10, rows.length); r++) {
+      for (let r = 0; r < Math.min(12, rows.length); r++) {
         const row = rows[r];
         if (!Array.isArray(row)) continue;
         const foundCols: { colIdx: number; code: string }[] = [];
         for (let c = 1; c < row.length; c++) {
-          const cellVal = String(row[c] ?? '').trim();
-          if (/^\d{3,4}$/.test(cellVal)) {
-            const normCode =
-              tpl.maDeDigits === 4 && cellVal.length === 3
-                ? cellVal.padStart(4, '0')
-                : cellVal;
-            foundCols.push({ colIdx: c, code: normCode });
+          const parsedCode = extractExamCode(row[c]);
+          if (parsedCode) {
+            foundCols.push({ colIdx: c, code: parsedCode });
           }
         }
         if (foundCols.length >= 1) {
@@ -1289,10 +1462,25 @@ export default function App() {
         }
       }
 
+      // Trường hợp 2: File Excel dạng bảng ngang (mỗi dòng bắt đầu bằng Mã đề ở cột 0: 101 | A | B | C...)
       if (codeCols.length === 0) {
+        const horizontalRows: (string | number)[][] = [];
+        for (const row of rows) {
+          if (!Array.isArray(row) || row.length < 3) continue;
+          const rowCode = extractExamCode(row[0]);
+          if (rowCode) {
+            horizontalRows.push([rowCode, ...row.slice(1).filter((v) => v !== undefined && v !== null && String(v).trim() !== '')]);
+          }
+        }
+        if (horizontalRows.length > 0) {
+          playSuccessBeep();
+          handleApplyRawJsonQr(JSON.stringify(horizontalRows));
+          return;
+        }
+
         setStatusBanner({
           type: 'warning',
-          message: 'Không tìm thấy cột Mã Đề (ví dụ 101, 102 hoặc 0101) trong file Excel.',
+          message: 'Không tìm thấy cột hoặc dòng Mã Đề (ví dụ 101, 102 hoặc 0101) trong file Excel.',
         });
         return;
       }
@@ -1313,6 +1501,10 @@ export default function App() {
       }
 
       let currentSection: 1 | 2 | 3 = 1;
+      let maxP1Seen = 0;
+      let maxP2Seen = 0;
+      let maxP3Seen = 0;
+
       for (let r = headerRowIdx + 1; r < rows.length; r++) {
         const row = rows[r];
         if (!Array.isArray(row) || row.length === 0) continue;
@@ -1337,45 +1529,68 @@ export default function App() {
           continue;
         }
 
-        const p2Match = label.match(/^(\d+)\s*([a-dA-D])$/);
+        // Khớp nhãn câu Phần II dạng "1a", "Câu 1a", "1.a", "1a)"
+        const p2Match = label.match(/^(?:CÂU|C)?\s*(\d+)\s*[.\-]?\s*([a-dA-D])\)?$/i);
         if (p2Match) {
           const qIdx = Number(p2Match[1]) - 1;
           const subK = p2Match[2].toLowerCase() as 'a' | 'b' | 'c' | 'd';
           if (qIdx >= 0 && qIdx < 16) {
+            maxP2Seen = Math.max(maxP2Seen, qIdx + 1);
             for (const { colIdx, code } of codeCols) {
               const rawAns = String(row[colIdx] ?? 'D').toUpperCase().trim();
               keyMap[code].p2[qIdx][subK] =
-                rawAns === 'Đ' || rawAns === 'D' || rawAns === 'TRUE' ? 'D' : 'S';
+                rawAns === 'Đ' || rawAns === 'D' || rawAns === 'TRUE' || rawAns === '1' ? 'D' : 'S';
             }
           }
           continue;
         }
 
-        if (/^\d+$/.test(label)) {
-          const qNum = Number(label);
+        // Khớp nhãn số câu dạng "1", "Câu 1", "C.1", "C1"
+        const qNumMatch = label.match(/^(?:CÂU|C\.?)?\s*(\d+)$/i);
+        if (qNumMatch) {
+          const qNum = Number(qNumMatch[1]);
           for (const { colIdx, code } of codeCols) {
             const cellVal = row[colIdx];
             if (cellVal === undefined || cellVal === null || cellVal === '') continue;
             const strVal = String(cellVal).trim();
 
-            if (currentSection === 1 && /^[A-Da-d]$/.test(strVal) && qNum <= 40) {
+            // Nếu đang ở Phần II và ô chứa chuỗi 4 ký tự Đ/S (ví dụ "ĐĐSS", "Đ-S-Đ-S", "DSSD")
+            const cleanDS = strVal.toUpperCase().replace(/[^ĐDS]/g, '');
+            if ((currentSection === 2 || cleanDS.length === 4) && cleanDS.length === 4 && qNum >= 1 && qNum <= 16) {
+              maxP2Seen = Math.max(maxP2Seen, qNum);
+              const qIdx = qNum - 1;
+              keyMap[code].p2[qIdx] = {
+                a: cleanDS[0] === 'S' ? 'S' : 'D',
+                b: cleanDS[1] === 'S' ? 'S' : 'D',
+                c: cleanDS[2] === 'S' ? 'S' : 'D',
+                d: cleanDS[3] === 'S' ? 'S' : 'D',
+              };
+              continue;
+            }
+
+            if (currentSection === 1 && /^[A-Da-d]$/.test(strVal) && qNum >= 1 && qNum <= 40) {
+              maxP1Seen = Math.max(maxP1Seen, qNum);
               keyMap[code].p1[qNum - 1] = strVal.toUpperCase();
             } else if (currentSection === 3 || !/^[A-Da-d]$/.test(strVal)) {
               if (qNum >= 1 && qNum <= 12) {
-                keyMap[code].p3[qNum - 1] = cellVal;
+                maxP3Seen = Math.max(maxP3Seen, qNum);
+                keyMap[code].p3[qNum - 1] = String(cellVal).replace('.', ',');
               }
             }
           }
         }
       }
 
+      playSuccessBeep();
       setAnswerKeys(keyMap);
       const firstCode = codeCols[0].code;
       setSelectedExamCodeView(firstCode);
       setSimExamCode(firstCode);
       setStatusBanner({
         type: 'success',
-        message: `Đã nạp bảng đáp án Excel gồm ${codeCols.length} mã đề!`,
+        message: `Đã nạp thành công bảng đáp án Excel gồm ${codeCols.length} mã đề (${codeCols
+          .map((c) => c.code)
+          .join(', ')})!`,
       });
     } catch (err) {
       setStatusBanner({
@@ -2589,22 +2804,149 @@ export default function App() {
         {/* ================================================================= */}
         {bottomTab === 'sessions' && (
           <>
-            {/* 1B. MÀN HÌNH CHÍNH — DANH SÁCH ĐỢT CHẤM (MỞ LÊN VÀO NGAY MÀN HÌNH CHÍNH) */}
-            {(sessionView === 'list' || sessionView === 'welcome') && (
+            {/* 1A. MÀN HÌNH CHÍNH (TÊN SẢN PHẨM, THÔNG TIN TÁC GIẢ, BẢN QUYỀN & MENU CHÍNH) */}
+            {sessionView === 'welcome' && (
+              <div className="flex-1 flex flex-col justify-between p-4 sm:p-5 bg-gradient-to-b from-[#e8f2fc] via-[#f0f7ff] to-[#e2ecf7] min-h-[88vh]">
+                {/* Header Thương Hiệu & Tác Giả Bản Quyền */}
+                <div className="text-center space-y-2.5 pt-2">
+                  <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-500 text-white mx-auto flex items-center justify-center shadow-[0_10px_25px_rgba(37,99,235,0.35)] border-2 border-white">
+                    <GraduationCap className="w-11 h-11 drop-shadow" />
+                  </div>
+                  <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-slate-900">
+                    Edu Chấm Đề
+                  </h1>
+                  <p className="text-xs sm:text-sm font-bold text-blue-800 bg-blue-100/80 inline-block px-3.5 py-1 rounded-full border border-blue-200">
+                    Hệ Thống Chấm Thi Trắc Nghiệm Bằng Camera AI (GDPT 2018)
+                  </p>
+
+                  {/* Thẻ Thông Tin Tác Giả & Bản Quyền Chính Thức */}
+                  <div className="bg-white/95 backdrop-blur-md rounded-2xl p-3.5 border border-blue-200/90 shadow-sm max-w-md mx-auto text-left flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                      <Award className="w-7 h-7" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] font-extrabold uppercase tracking-wider text-blue-600 flex items-center gap-1">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Bản quyền chính thức GDPT 2018</span>
+                      </div>
+                      <div className="text-sm font-black text-slate-900 truncate">
+                        Tác giả: Thầy Hồ Tấn Khải
+                      </div>
+                      <div className="text-xs font-semibold text-slate-600 truncate">
+                        Đơn vị: Trường THPT Mang Thít, Tỉnh Vĩnh Long
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Các nút chức năng chính phong cách 3D nổi bật */}
+                <div className="my-4 space-y-3 max-w-md mx-auto w-full">
+                  {/* 1. Danh sách chấm */}
+                  <button
+                    type="button"
+                    onClick={() => setSessionView('list')}
+                    className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 text-white font-black text-base shadow-[0_5px_0_#1e3a8a,0_8px_16px_rgba(37,99,235,0.28)] active:translate-y-1 active:shadow-[0_1px_0_#1e3a8a] transition-all flex items-center justify-between cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                        <FolderCheck className="w-6 h-6 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-base font-black leading-tight">Danh sách chấm</div>
+                        <div className="text-[11px] font-medium text-blue-100">
+                          Mở các đợt chấm đã lưu ({examSessions.length} đợt chấm)
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-white/90" />
+                  </button>
+
+                  {/* 2. Tạo đợt chấm mới */}
+                  <button
+                    type="button"
+                    onClick={() => handleOpenCreateSession()}
+                    className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-600 text-white font-black text-base shadow-[0_5px_0_#065f46,0_8px_16px_rgba(16,185,129,0.25)] active:translate-y-1 active:shadow-[0_1px_0_#065f46] transition-all flex items-center justify-between cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                        <Plus className="w-6 h-6 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-base font-black leading-tight">Tạo đợt chấm mới</div>
+                        <div className="text-[11px] font-medium text-emerald-50">
+                          Thiết lập bài chấm, thang điểm & đáp án mới
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-white/90" />
+                  </button>
+
+                  {/* 3. Tải mẫu phiếu trả lời */}
+                  <button
+                    type="button"
+                    onClick={() => setShowSheetSelectorBottomSheet(true)}
+                    className="w-full py-3.5 px-5 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-600 text-white font-black text-base shadow-[0_5px_0_#9a3412,0_8px_16px_rgba(245,158,11,0.25)] active:translate-y-1 active:shadow-[0_1px_0_#9a3412] transition-all flex items-center justify-between cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                        <FileText className="w-6 h-6 text-white" />
+                      </div>
+                      <div className="text-left">
+                        <div className="text-base font-black leading-tight">Tải phiếu trả lời</div>
+                        <div className="text-[11px] font-medium text-amber-50">
+                          14 mẫu phiếu chuẩn GDPT 2018 & CV 1239 (PDF)
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-white/90" />
+                  </button>
+
+                  {/* 4. Cài đặt hệ thống & 5. Bản quyền & Tác giả */}
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setBottomTab('settings')}
+                      className="py-3 px-3.5 rounded-2xl bg-white hover:bg-blue-50 text-slate-800 font-extrabold text-xs sm:text-sm border-2 border-blue-200 shadow-[0_4px_0_#bfdbfe] active:translate-y-0.5 active:shadow-none transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Settings className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span>Cài đặt chấm</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowAccountModal(true)}
+                      className="py-3 px-3.5 rounded-2xl bg-white hover:bg-amber-50 text-slate-800 font-extrabold text-xs sm:text-sm border-2 border-amber-200 shadow-[0_4px_0_#fde68a] active:translate-y-0.5 active:shadow-none transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Award className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Bản quyền & Tác giả</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Chân trang bản quyền */}
+                <div className="text-center text-[11px] font-semibold text-slate-500 pb-2">
+                  © Bản quyền thuộc về Thầy Hồ Tấn Khải — THPT Mang Thít, Vĩnh Long
+                </div>
+              </div>
+            )}
+
+            {/* 1B. DANH SÁCH ĐỢT CHẤM */}
+            {sessionView === 'list' && (
               <div className="flex-1 flex flex-col">
                 <header className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-blue-200/70 px-4 py-3 flex items-center justify-between safe-area-header shadow-xs">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#007aff] to-indigo-600 text-white flex items-center justify-center shadow-xs">
-                      <CheckCircle2 className="w-5 h-5" />
-                    </div>
-                    <div>
-                      <h1 className="text-base sm:text-lg font-black text-slate-900 leading-tight">
-                        Màn hình chính — Chấm thi
-                      </h1>
-                      <p className="text-[11px] font-semibold text-slate-500">
-                        Chọn phiên chấm bên dưới hoặc tạo đợt chấm mới
-                      </p>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSessionView('welcome')}
+                      className="text-[#007aff] font-bold text-sm flex items-center gap-0.5 pr-2 py-1 rounded-lg hover:bg-blue-50 cursor-pointer"
+                    >
+                      <ChevronLeft className="w-5 h-5 -ml-1" />
+                      <span>Màn hình chính</span>
+                    </button>
+                    <div className="h-4 w-[1px] bg-slate-200" />
+                    <h1 className="text-base font-black text-slate-900 leading-tight">
+                      Danh sách đợt chấm
+                    </h1>
                   </div>
 
                   <div className="flex items-center gap-1.5">
@@ -3417,249 +3759,644 @@ export default function App() {
               </div>
             )}
 
-            {/* 1E. MÀN HÌNH ĐÁP ÁN & ACTION SHEET THÊM ĐÁP ÁN (ẢNH 6) */}
+            {/* 1E. MÀN HÌNH NHẬP ĐÁP ÁN ĐA HÌNH THỨC (QUÉT QR, ẢNH QR, EXCEL, NHẬP THỦ CÔNG) */}
             {sessionView === 'keys' && (
               <div className="flex-1 flex flex-col">
-                <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-blue-200/70 px-4 py-3 flex items-center justify-between safe-area-header shadow-xs">
+                <header className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-blue-200/70 px-4 py-3 flex items-center justify-between safe-area-header shadow-xs">
                   <button
                     type="button"
                     onClick={() => setSessionView('hub')}
-                    className="text-[#007aff] font-medium text-base flex items-center gap-0.5 touch-target-44 cursor-pointer"
+                    className="text-[#007aff] font-bold text-base flex items-center gap-0.5 touch-target-44 cursor-pointer"
                   >
                     <ChevronLeft className="w-6 h-6 -ml-1.5" />
                     <span>Quay lại</span>
                   </button>
 
-                  <h1 className="text-base font-bold text-slate-900">Đáp án</h1>
+                  <h1 className="text-base font-black text-slate-900">
+                    Quản lý & Nhập đáp án
+                  </h1>
 
                   <button
                     type="button"
                     onClick={() => setShowKeyActionSheet(true)}
-                    className="w-10 h-10 rounded-full text-slate-700 hover:bg-slate-200 flex items-center justify-center touch-target-44 cursor-pointer"
+                    title="Mở menu thêm đáp án"
+                    className="w-10 h-10 rounded-full bg-blue-50 text-[#007aff] hover:bg-blue-100 flex items-center justify-center touch-target-44 cursor-pointer"
                   >
                     <Plus className="w-6 h-6" />
                   </button>
                 </header>
 
-                {isQrCameraOpen && (
-                  <div className="m-3.5 relative rounded-2xl overflow-hidden border-2 border-emerald-500 bg-black aspect-video">
-                    <video
-                      ref={qrVideoRef}
-                      className="w-full h-full object-cover"
-                      playsInline
-                      muted
-                    />
-                    <div className="absolute inset-6 border-2 border-dashed border-emerald-400 rounded-xl pointer-events-none flex items-center justify-center">
-                      <span className="px-3 py-1 rounded bg-black/75 text-xs text-emerald-300 font-mono">
-                        Đưa mã QR đáp án vào khung ngắm...
+                <div className="p-3.5 space-y-3.5">
+                  {/* =============================================================== */}
+                  {/* BẢNG CÔNG CỤ NHẬP ĐÁP ÁN ĐA HÌNH THỨC (HIỂN THỊ TRỰC TIẾP)      */}
+                  {/* =============================================================== */}
+                  <div className="bg-white rounded-3xl p-3.5 border-2 border-blue-200/90 shadow-xs space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
+                        <Key className="w-4 h-4 text-blue-600" />
+                        <span>Chọn hình thức nhập đáp án nhanh:</span>
                       </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsQrCameraOpen(false)}
-                      className="absolute top-2 right-2 bg-rose-600 text-white text-xs font-bold px-3 py-1.5 rounded-lg"
-                    >
-                      Đóng
-                    </button>
-                  </div>
-                )}
-
-                {Object.keys(answerKeys).length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center p-10 text-center">
-                    <p className="text-slate-500 text-base mb-4">Nhấn + để thêm đáp án</p>
-                    <button
-                      type="button"
-                      onClick={() => setShowKeyActionSheet(true)}
-                      className="bg-[#007aff] text-white font-bold px-5 py-2.5 rounded-xl text-sm shadow"
-                    >
-                      + Thêm đáp án
-                    </button>
-                  </div>
-                ) : (
-                  <div className="p-3.5 space-y-3">
-                    {/* Dải chọn mã đề */}
-                    <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                      {Object.keys(answerKeys).map((code) => (
-                        <button
-                          key={code}
-                          type="button"
-                          onClick={() => {
-                            setSelectedExamCodeView(code);
-                            setSimExamCode(code);
-                          }}
-                          className={`px-4 py-2 rounded-xl font-mono text-sm font-bold shrink-0 transition cursor-pointer ${
-                            selectedExamCodeView === code
-                              ? 'bg-[#007aff] text-white shadow-xs'
-                              : 'bg-white text-slate-700 border border-slate-200'
-                          }`}
-                        >
-                          Mã {code}
-                        </button>
-                      ))}
                       <button
                         type="button"
-                        onClick={() => setShowKeyActionSheet(true)}
-                        className="px-3.5 py-2 rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-300 text-xs font-bold shrink-0 cursor-pointer"
+                        onClick={handleLoadBuiltInSampleQrImage}
+                        className="text-[11px] font-extrabold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-2.5 py-1 rounded-lg border border-emerald-200 cursor-pointer"
                       >
-                        + Nạp QR / Excel / Thêm mã
+                        ⚡ Nạp mẫu chuẩn
                       </button>
                     </div>
 
-                    {currentKeyView && (
-                      <div className="space-y-3">
-                        {/* Phần I */}
-                        {currentScoring.activeP1Count > 0 && (
-                          <div className="bg-white rounded-2xl p-3.5 border border-slate-200 space-y-2">
-                            <div className="text-xs font-bold uppercase text-blue-800">
-                              Phần I — {currentScoring.activeP1Count} câu nhiều lựa chọn
-                            </div>
-                            <div className="grid grid-cols-6 gap-2">
-                              {currentKeyView.p1
-                                .slice(0, currentScoring.activeP1Count)
-                                .map((ans, idx) => (
-                                  <div
-                                    key={idx}
-                                    className="bg-slate-50 border border-slate-200 rounded-xl p-1.5 text-center"
-                                  >
-                                    <div className="text-[11px] text-slate-500 font-mono">
-                                      C.{idx + 1}
-                                    </div>
-                                    <select
-                                      value={ans}
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        setAnswerKeys((prev) => {
-                                          const target = { ...prev[selectedExamCodeView] };
-                                          const nextP1 = [...target.p1];
-                                          nextP1[idx] = val;
-                                          return {
-                                            ...prev,
-                                            [selectedExamCodeView]: { ...target, p1: nextP1 },
-                                          };
-                                        });
-                                      }}
-                                      className="bg-transparent font-mono font-bold text-sm text-blue-700 focus:outline-none"
-                                    >
-                                      <option value="A">A</option>
-                                      <option value="B">B</option>
-                                      <option value="C">C</option>
-                                      <option value="D">D</option>
-                                    </select>
-                                  </div>
-                                ))}
-                            </div>
+                    {/* 4 Nút Hình Thức Chính (2x2 Grid chuẩn Mobile-First) */}
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {/* Hình thức 1: Quét mã QR bằng Camera */}
+                      <button
+                        type="button"
+                        onClick={() => setIsQrCameraOpen((v) => !v)}
+                        className={`p-3 rounded-2xl border-2 text-left transition flex items-center gap-2.5 cursor-pointer ${
+                          isQrCameraOpen
+                            ? 'bg-emerald-600 text-white border-emerald-700 shadow-md'
+                            : 'bg-emerald-50/90 hover:bg-emerald-100/80 text-emerald-950 border-emerald-300'
+                        }`}
+                      >
+                        <div
+                          className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                            isQrCameraOpen ? 'bg-white/20 text-white' : 'bg-emerald-600 text-white'
+                          }`}
+                        >
+                          <QrCode className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs sm:text-sm font-black leading-tight truncate">
+                            1. Quét mã QR
                           </div>
-                        )}
+                          <div
+                            className={`text-[10px] font-semibold truncate ${
+                              isQrCameraOpen ? 'text-emerald-100' : 'text-emerald-700'
+                            }`}
+                          >
+                            {isQrCameraOpen ? 'Đang mở Camera...' : 'Bằng Camera trực tiếp'}
+                          </div>
+                        </div>
+                      </button>
 
-                        {/* Phần II */}
-                        {currentScoring.activeP2Count > 0 && (
-                          <div className="bg-white rounded-2xl p-3.5 border border-slate-200 space-y-2">
-                            <div className="text-xs font-bold uppercase text-emerald-800">
-                              Phần II — {currentScoring.activeP2Count} câu Đúng / Sai
-                            </div>
-                            <div className="grid grid-cols-2 gap-2.5">
-                              {currentKeyView.p2
-                                .slice(0, currentScoring.activeP2Count)
-                                .map((qObj, qIdx) => (
-                                  <div
-                                    key={qIdx}
-                                    className="bg-slate-50 border border-slate-200 rounded-xl p-2.5"
-                                  >
-                                    <div className="text-xs font-bold text-slate-700 mb-1.5">
-                                      Câu {qIdx + 1}
-                                    </div>
-                                    <div className="grid grid-cols-4 gap-1">
-                                      {(['a', 'b', 'c', 'd'] as const).map((sk) => (
-                                        <button
-                                          key={sk}
-                                          type="button"
-                                          onClick={() => {
-                                            setAnswerKeys((prev) => {
-                                              const target = { ...prev[selectedExamCodeView] };
-                                              const nextP2 = [...target.p2];
-                                              nextP2[qIdx] = {
-                                                ...nextP2[qIdx],
-                                                [sk]: nextP2[qIdx][sk] === 'D' ? 'S' : 'D',
-                                              };
-                                              return {
-                                                ...prev,
-                                                [selectedExamCodeView]: { ...target, p2: nextP2 },
-                                              };
-                                            });
-                                          }}
-                                          className={`py-1 rounded-lg font-mono text-xs font-bold ${
-                                            qObj[sk] === 'D'
-                                              ? 'bg-emerald-600 text-white'
-                                              : 'bg-rose-600 text-white'
-                                          }`}
-                                        >
-                                          {sk}:{qObj[sk] === 'D' ? 'Đ' : 'S'}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </div>
-                                ))}
-                            </div>
+                      {/* Hình thức 2: Nhập bằng Ảnh mã QR */}
+                      <label className="p-3 rounded-2xl border-2 border-blue-300 bg-blue-50/90 hover:bg-blue-100/80 text-blue-950 text-left transition flex items-center gap-2.5 cursor-pointer">
+                        <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+                          <ImageIcon className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs sm:text-sm font-black leading-tight truncate">
+                            2. Ảnh mã QR
                           </div>
-                        )}
+                          <div className="text-[10px] font-semibold text-blue-700 truncate">
+                            Chọn ảnh QR từ máy
+                          </div>
+                        </div>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleScanUploadedQrImage(f);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
 
-                        {/* Phần III */}
-                        {currentScoring.activeP3Count > 0 && (
-                          <div className="bg-white rounded-2xl p-3.5 border border-slate-200 space-y-2">
-                            <div className="text-xs font-bold uppercase text-purple-800">
-                              Phần III — {currentScoring.activeP3Count} câu điền số trả lời ngắn
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              {currentKeyView.p3
-                                .slice(0, currentScoring.activeP3Count)
-                                .map((val, qIdx) => (
-                                  <div
-                                    key={qIdx}
-                                    className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
-                                  >
-                                    <span className="text-xs font-bold text-slate-700">
-                                      Câu {qIdx + 1}
-                                    </span>
-                                    <input
-                                      type="text"
-                                      value={String(val)}
-                                      onChange={(e) => {
-                                        const nextVal = e.target.value;
-                                        setAnswerKeys((prev) => {
-                                          const target = { ...prev[selectedExamCodeView] };
-                                          const nextP3 = [...target.p3];
-                                          nextP3[qIdx] = nextVal;
-                                          return {
-                                            ...prev,
-                                            [selectedExamCodeView]: { ...target, p3: nextP3 },
-                                          };
-                                        });
-                                      }}
-                                      className="w-20 text-right font-mono font-bold text-sm bg-white border border-slate-300 rounded-lg px-2 py-1"
-                                    />
-                                  </div>
-                                ))}
-                            </div>
+                      {/* Hình thức 3: Nhập bằng File Excel */}
+                      <label className="p-3 rounded-2xl border-2 border-purple-300 bg-purple-50/90 hover:bg-purple-100/80 text-purple-950 text-left transition flex items-center gap-2.5 cursor-pointer">
+                        <div className="w-10 h-10 rounded-xl bg-purple-600 text-white flex items-center justify-center shrink-0">
+                          <FileSpreadsheet className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs sm:text-sm font-black leading-tight truncate">
+                            3. File Excel
                           </div>
-                        )}
-                        {/* Nút LƯU ĐÁP ÁN & CẤU HÌNH */}
-                        <div className="pt-2 pb-4 sticky bottom-2 z-10">
+                          <div className="text-[10px] font-semibold text-purple-700 truncate">
+                            Nạp .xlsx / .xls / .csv
+                          </div>
+                        </div>
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls,.csv"
+                          className="hidden"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            if (f) handleImportExcelAnswerKey(f);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+
+                      {/* Hình thức 4: Thêm mã đề & Nhập thủ công bằng tay */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const defaultLen = activeDbSheet.codeLength;
+                          const existingCodes = Object.keys(answerKeys);
+                          const numericCodes = existingCodes
+                            .map((c) => parseInt(c, 10))
+                            .filter((n) => !isNaN(n));
+                          const nextNum =
+                            numericCodes.length > 0
+                              ? Math.max(...numericCodes) + 1
+                              : 101 + existingCodes.length;
+                          const newCode =
+                            defaultLen === 4 ? String(nextNum).padStart(4, '0') : String(nextNum);
+                          setAnswerKeys((prev) => ({
+                            ...prev,
+                            [newCode]: {
+                              examCode: newCode,
+                              p1: new Array(40).fill('A'),
+                              p2: Array.from({ length: 16 }, () => ({
+                                a: 'D',
+                                b: 'D',
+                                c: 'D',
+                                d: 'D',
+                              })),
+                              p3: new Array(12).fill(''),
+                            },
+                          }));
+                          setSelectedExamCodeView(newCode);
+                          setSimExamCode(newCode);
+                          playSuccessBeep();
+                          setStatusBanner({
+                            type: 'success',
+                            message: `Đã thêm Mã đề ${newCode} để nhập thủ công bằng tay!`,
+                          });
+                        }}
+                        className="p-3 rounded-2xl border-2 border-amber-300 bg-amber-50/90 hover:bg-amber-100/80 text-amber-950 text-left transition flex items-center gap-2.5 cursor-pointer"
+                      >
+                        <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                          <Plus className="w-5 h-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs sm:text-sm font-black leading-tight truncate">
+                            4. Nhập thủ công
+                          </div>
+                          <div className="text-[10px] font-semibold text-amber-800 truncate">
+                            + Thêm mã đề & chọn tay
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+
+                    {/* Thanh phụ trợ: Tải file Excel mẫu & Dán chuỗi QR/Text */}
+                    <div className="flex items-center justify-between gap-2 pt-1 border-t border-slate-100">
+                      <button
+                        type="button"
+                        onClick={handleDownloadSampleExcelAnswerKey}
+                        className="flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Download className="w-3.5 h-3.5 text-purple-600" />
+                        <span>Tải file Excel mẫu (.xlsx)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowRawQrPasteBox((v) => !v)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <FileCode className="w-3.5 h-3.5 text-blue-600" />
+                        <span>{showRawQrPasteBox ? 'Ẩn ô dán mã QR' : 'Dán chuỗi QR / Đáp án'}</span>
+                      </button>
+                    </div>
+
+                    {/* Ô dán trực tiếp dữ liệu QR hoặc chuỗi đáp án */}
+                    {showRawQrPasteBox && (
+                      <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                        <div className="text-xs font-bold text-slate-700">
+                          Dán nội dung mã QR (JSON QM2025 / Azota / TNMaker) hoặc chuỗi đáp án:
+                        </div>
+                        <textarea
+                          rows={3}
+                          value={rawQrInput}
+                          onChange={(e) => setRawQrInput(e.target.value)}
+                          placeholder='Ví dụ: [[101,"A","B","C",...]] hoặc 101:ABCD...#ĐĐSS#12,5'
+                          className="w-full rounded-xl border border-slate-300 bg-white p-2.5 text-xs font-mono text-slate-800 focus:outline-none focus:border-blue-500"
+                        />
+                        <div className="flex justify-end gap-2">
                           <button
                             type="button"
                             onClick={() => {
-                              handleSaveGradingConfiguration();
-                              setSessionView('hub');
+                              handleApplyRawJsonQr(rawQrInput);
+                              setShowRawQrPasteBox(false);
                             }}
-                            className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-base shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                            className="px-4 py-2 rounded-xl bg-blue-600 text-white font-black text-xs cursor-pointer shadow-xs"
                           >
-                            <Save className="w-5 h-5" />
-                            <span>LƯU LẠI ĐÁP ÁN & CẤU HÌNH</span>
+                            Nạp dữ liệu vừa dán
                           </button>
                         </div>
                       </div>
                     )}
                   </div>
-                )}
+
+                  {/* KHUNG CAMERA QUÉT MÃ QR TRỰC TIẾP */}
+                  {isQrCameraOpen && (
+                    <div className="relative rounded-3xl overflow-hidden border-2 border-emerald-500 bg-black aspect-video shadow-lg">
+                      <video
+                        ref={qrVideoRef}
+                        className="w-full h-full object-cover"
+                        playsInline
+                        muted
+                      />
+                      <div className="absolute inset-6 border-2 border-dashed border-emerald-400 rounded-2xl pointer-events-none flex items-end justify-center pb-3">
+                        <span className="px-3 py-1 rounded-full bg-black/75 text-xs text-emerald-300 font-bold">
+                          Đưa mã QR đáp án vào khung ngắm để tự động nhận...
+                        </span>
+                      </div>
+                      <div className="absolute top-2.5 right-2.5 flex items-center gap-2">
+                        <label className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl cursor-pointer shadow">
+                          Chọn ảnh QR
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) {
+                                handleScanUploadedQrImage(f);
+                                setIsQrCameraOpen(false);
+                              }
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setIsQrCameraOpen(false)}
+                          className="bg-rose-600 text-white text-xs font-bold px-3 py-1.5 rounded-xl cursor-pointer shadow"
+                        >
+                          Đóng Camera
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* =============================================================== */}
+                  {/* DANH SÁCH MÃ ĐỀ & NHẬP THỦ CÔNG BẰNG TAY CHO TỪNG CÂU            */}
+                  {/* =============================================================== */}
+                  {Object.keys(answerKeys).length === 0 ? (
+                    <div className="bg-white rounded-3xl p-8 text-center border border-slate-200 space-y-3">
+                      <p className="text-slate-600 text-sm font-semibold">
+                        Chưa có mã đề nào. Hãy chọn 1 trong 4 hình thức ở trên để thêm đáp án!
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowKeyActionSheet(true)}
+                        className="bg-[#007aff] text-white font-black px-5 py-2.5 rounded-xl text-sm shadow cursor-pointer"
+                      >
+                        + Thêm đáp án ngay
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {/* Thanh chọn Mã đề + Ô nhập Mã đề tùy chọn + Xóa mã đề */}
+                      <div className="bg-white rounded-2xl p-3 border border-slate-200 space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-black text-slate-700">
+                            Đang chọn mã đề ({Object.keys(answerKeys).length} mã):
+                          </span>
+
+                          {/* Nhập mã đề mới theo số bất kỳ (VD: 105, 201, 0105) */}
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="text"
+                              maxLength={4}
+                              value={customNewExamCodeInput}
+                              onChange={(e) =>
+                                setCustomNewExamCodeInput(e.target.value.replace(/[^0-9]/g, ''))
+                              }
+                              placeholder="Mã mới (VD: 105)"
+                              className="w-28 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-blue-500"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const cleanCode = customNewExamCodeInput.trim();
+                                const defaultLen = activeDbSheet.codeLength;
+                                const existingCodes = Object.keys(answerKeys);
+                                const numericCodes = existingCodes
+                                  .map((c) => parseInt(c, 10))
+                                  .filter((n) => !isNaN(n));
+                                const nextNum =
+                                  numericCodes.length > 0
+                                    ? Math.max(...numericCodes) + 1
+                                    : 101 + existingCodes.length;
+                                const newCode =
+                                  cleanCode.length >= 3
+                                    ? cleanCode
+                                    : defaultLen === 4
+                                    ? String(nextNum).padStart(4, '0')
+                                    : String(nextNum);
+
+                                setAnswerKeys((prev) => ({
+                                  ...prev,
+                                  [newCode]: prev[newCode] || {
+                                    examCode: newCode,
+                                    p1: new Array(40).fill('A'),
+                                    p2: Array.from({ length: 16 }, () => ({
+                                      a: 'D',
+                                      b: 'D',
+                                      c: 'D',
+                                      d: 'D',
+                                    })),
+                                    p3: new Array(12).fill(''),
+                                  },
+                                }));
+                                setSelectedExamCodeView(newCode);
+                                setSimExamCode(newCode);
+                                setCustomNewExamCodeInput('');
+                                playSuccessBeep();
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-xs font-black cursor-pointer"
+                            >
+                              + Thêm mã
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                          {Object.keys(answerKeys).map((code) => (
+                            <button
+                              key={code}
+                              type="button"
+                              onClick={() => {
+                                setSelectedExamCodeView(code);
+                                setSimExamCode(code);
+                              }}
+                              className={`px-4 py-2 rounded-xl font-mono text-sm font-black shrink-0 transition cursor-pointer ${
+                                selectedExamCodeView === code
+                                  ? 'bg-[#007aff] text-white shadow-xs'
+                                  : 'bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200'
+                              }`}
+                            >
+                              Mã {code}
+                            </button>
+                          ))}
+
+                          {Object.keys(answerKeys).length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextMap = { ...answerKeys };
+                                delete nextMap[selectedExamCodeView];
+                                const remaining = Object.keys(nextMap);
+                                setAnswerKeys(nextMap);
+                                if (remaining.length > 0) {
+                                  setSelectedExamCodeView(remaining[0]);
+                                  setSimExamCode(remaining[0]);
+                                }
+                              }}
+                              className="px-3 py-2 rounded-xl bg-rose-50 text-rose-600 border border-rose-200 text-xs font-bold shrink-0 cursor-pointer flex items-center gap-1"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Xóa mã {selectedExamCodeView}</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {currentKeyView && (
+                        <div className="space-y-3">
+                          {/* Phần I — Chạm chọn trực tiếp nút A / B / C / D hoặc nhập nhanh chuỗi */}
+                          {currentScoring.activeP1Count > 0 && (
+                            <div className="bg-white rounded-2xl p-3.5 border border-slate-200 space-y-3">
+                              <div className="flex items-center justify-between flex-wrap gap-2">
+                                <div className="text-xs font-black uppercase text-blue-800">
+                                  Phần I — {currentScoring.activeP1Count} câu trắc nghiệm (A, B, C, D)
+                                </div>
+                                <span className="text-[11px] font-semibold text-slate-500">
+                                  Chạm trực tiếp vào A, B, C, D để chọn
+                                </span>
+                              </div>
+
+                              {/* Ô nhập nhanh chuỗi đáp án Phần I (VD: ABCDABCD...) */}
+                              <div className="flex items-center gap-2 bg-blue-50/70 p-2 rounded-xl border border-blue-200/80">
+                                <input
+                                  type="text"
+                                  value={quickP1StringInput}
+                                  onChange={(e) =>
+                                    setQuickP1StringInput(
+                                      e.target.value.toUpperCase().replace(/[^A-D]/g, '')
+                                    )
+                                  }
+                                  placeholder={`Nhập nhanh chuỗi ${currentScoring.activeP1Count} câu (VD: ABCDBCAD...)`}
+                                  className="flex-1 bg-white border border-blue-200 rounded-lg px-2.5 py-1.5 text-xs font-mono font-bold text-blue-900 focus:outline-none focus:border-blue-500"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (!quickP1StringInput) return;
+                                    setAnswerKeys((prev) => {
+                                      const target = { ...prev[selectedExamCodeView] };
+                                      const nextP1 = [...target.p1];
+                                      for (
+                                        let i = 0;
+                                        i <
+                                        Math.min(
+                                          quickP1StringInput.length,
+                                          currentScoring.activeP1Count
+                                        );
+                                        i++
+                                      ) {
+                                        nextP1[i] = quickP1StringInput[i];
+                                      }
+                                      return {
+                                        ...prev,
+                                        [selectedExamCodeView]: { ...target, p1: nextP1 },
+                                      };
+                                    });
+                                    setQuickP1StringInput('');
+                                    playSuccessBeep();
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-black shrink-0 cursor-pointer"
+                                >
+                                  Điền nhanh
+                                </button>
+                              </div>
+
+                              {/* Lưới nút bấm A, B, C, D trực quan cho từng câu */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {currentKeyView.p1
+                                  .slice(0, currentScoring.activeP1Count)
+                                  .map((ans, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2"
+                                    >
+                                      <span className="text-xs font-black text-slate-700 font-mono min-w-[48px]">
+                                        Câu {idx + 1}
+                                      </span>
+                                      <div className="flex items-center gap-1.5">
+                                        {(['A', 'B', 'C', 'D'] as const).map((choice) => {
+                                          const isSelected = ans === choice;
+                                          return (
+                                            <button
+                                              key={choice}
+                                              type="button"
+                                              onClick={() => {
+                                                setAnswerKeys((prev) => {
+                                                  const target = { ...prev[selectedExamCodeView] };
+                                                  const nextP1 = [...target.p1];
+                                                  nextP1[idx] = choice;
+                                                  return {
+                                                    ...prev,
+                                                    [selectedExamCodeView]: {
+                                                      ...target,
+                                                      p1: nextP1,
+                                                    },
+                                                  };
+                                                });
+                                              }}
+                                              className={`w-8 h-8 rounded-full font-mono text-xs font-black transition cursor-pointer flex items-center justify-center ${
+                                                isSelected
+                                                  ? 'bg-blue-600 text-white shadow-xs scale-105'
+                                                  : 'bg-white text-slate-600 border border-slate-300 hover:bg-blue-50'
+                                              }`}
+                                            >
+                                              {choice}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Phần II — Đúng / Sai (Chạm nút a, b, c, d để đảo Đ ↔ S) */}
+                          {currentScoring.activeP2Count > 0 && (
+                            <div className="bg-white rounded-2xl p-3.5 border border-slate-200 space-y-2.5">
+                              <div className="flex items-center justify-between flex-wrap gap-1">
+                                <div className="text-xs font-black uppercase text-emerald-800">
+                                  Phần II — {currentScoring.activeP2Count} câu Đúng / Sai
+                                </div>
+                                <span className="text-[11px] font-semibold text-slate-500">
+                                  Chạm để đổi Đ (Xanh) ↔ S (Đỏ)
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                {currentKeyView.p2
+                                  .slice(0, currentScoring.activeP2Count)
+                                  .map((qObj, qIdx) => (
+                                    <div
+                                      key={qIdx}
+                                      className="bg-slate-50 border border-slate-200 rounded-xl p-2.5"
+                                    >
+                                      <div className="text-xs font-black text-slate-800 mb-2 flex items-center justify-between">
+                                        <span>Câu {qIdx + 1}</span>
+                                        <span className="text-[11px] font-mono text-slate-500">
+                                          {(['a', 'b', 'c', 'd'] as const)
+                                            .map((k) => `${k}:${qObj[k] === 'D' ? 'Đ' : 'S'}`)
+                                            .join(' · ')}
+                                        </span>
+                                      </div>
+                                      <div className="grid grid-cols-4 gap-1.5">
+                                        {(['a', 'b', 'c', 'd'] as const).map((sk) => (
+                                          <button
+                                            key={sk}
+                                            type="button"
+                                            onClick={() => {
+                                              setAnswerKeys((prev) => {
+                                                const target = { ...prev[selectedExamCodeView] };
+                                                const nextP2 = [...target.p2];
+                                                nextP2[qIdx] = {
+                                                  ...nextP2[qIdx],
+                                                  [sk]: nextP2[qIdx][sk] === 'D' ? 'S' : 'D',
+                                                };
+                                                return {
+                                                  ...prev,
+                                                  [selectedExamCodeView]: {
+                                                    ...target,
+                                                    p2: nextP2,
+                                                  },
+                                                };
+                                              });
+                                            }}
+                                            className={`py-2 rounded-xl font-mono text-xs font-black shadow-2xs cursor-pointer active:scale-95 transition ${
+                                              qObj[sk] === 'D'
+                                                ? 'bg-emerald-600 text-white'
+                                                : 'bg-rose-600 text-white'
+                                            }`}
+                                          >
+                                            {sk}: {qObj[sk] === 'D' ? 'Đ' : 'S'}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Phần III — Điền số trả lời ngắn */}
+                          {currentScoring.activeP3Count > 0 && (
+                            <div className="bg-white rounded-2xl p-3.5 border border-slate-200 space-y-2.5">
+                              <div className="flex items-center justify-between flex-wrap gap-1">
+                                <div className="text-xs font-black uppercase text-purple-800">
+                                  Phần III — {currentScoring.activeP3Count} câu điền số trả lời ngắn
+                                </div>
+                                <span className="text-[11px] font-semibold text-slate-500">
+                                  Nhập số (VD: 16, -2,5, 88,9)
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                {currentKeyView.p3
+                                  .slice(0, currentScoring.activeP3Count)
+                                  .map((val, qIdx) => (
+                                    <div
+                                      key={qIdx}
+                                      className="flex items-center justify-between bg-slate-50 border border-slate-200 rounded-xl px-3 py-2"
+                                    >
+                                      <span className="text-xs font-black text-slate-700">
+                                        Câu {qIdx + 1}
+                                      </span>
+                                      <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={String(val)}
+                                        placeholder="Nhập số..."
+                                        onChange={(e) => {
+                                          const nextVal = e.target.value;
+                                          setAnswerKeys((prev) => {
+                                            const target = { ...prev[selectedExamCodeView] };
+                                            const nextP3 = [...target.p3];
+                                            nextP3[qIdx] = nextVal;
+                                            return {
+                                              ...prev,
+                                              [selectedExamCodeView]: { ...target, p3: nextP3 },
+                                            };
+                                          });
+                                        }}
+                                        className="w-24 text-right font-mono font-black text-sm bg-white border border-purple-300 focus:border-purple-600 rounded-lg px-2.5 py-1 text-purple-900 focus:outline-none"
+                                      />
+                                    </div>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Nút LƯU ĐÁP ÁN & CẤU HÌNH */}
+                          <div className="pt-2 pb-4 sticky bottom-2 z-10">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleSaveGradingConfiguration();
+                                setSessionView('hub');
+                              }}
+                              className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-base shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                            >
+                              <Save className="w-5 h-5" />
+                              <span>LƯU LẠI ĐÁP ÁN & QUAY LẠI CHẤM THI</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -3896,72 +4633,135 @@ export default function App() {
         )}
 
         {/* ================================================================= */}
-        {/* TAB 4: CÀI ĐẶT (TỐC ĐỘ CHẤM, XEM KẾT QUẢ, TÀI KHOẢN PRO & TẢI HTML) */}
+        {/* TAB 4: CÀI ĐẶT HỆ THỐNG CHẤM (ĐÃ FIX TRIỆT ĐỂ LỖI THIẾT LẬP)      */}
         {/* ================================================================= */}
         {bottomTab === 'settings' && (
           <div className="flex-1 flex flex-col bg-gradient-to-b from-[#e8f2fc] via-[#edf4fb] to-[#e4eef8] min-h-[88vh]">
-            <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-blue-200/70 px-4 py-3 flex items-center justify-between safe-area-header shadow-xs">
+            <header className="sticky top-0 z-20 bg-white/95 backdrop-blur-md border-b border-blue-200/70 px-4 py-3 flex items-center justify-between safe-area-header shadow-xs">
               <button
                 type="button"
                 onClick={() => setBottomTab('sessions')}
-                className="text-[#007aff] font-medium text-base flex items-center gap-0.5 touch-target-44 cursor-pointer"
+                className="text-[#007aff] font-bold text-base flex items-center gap-0.5 touch-target-44 cursor-pointer"
               >
                 <ChevronLeft className="w-6 h-6 -ml-1.5" />
                 <span>Quay lại</span>
               </button>
-              <h1 className="text-base font-bold text-slate-900">Cài đặt</h1>
-              <div className="w-16" />
+              <h1 className="text-base font-black text-slate-900">Cài đặt hệ thống</h1>
+              <button
+                type="button"
+                onClick={() => {
+                  handleSaveGradingConfiguration();
+                  setBottomTab('sessions');
+                }}
+                className="text-[#007aff] font-black text-sm cursor-pointer"
+              >
+                Lưu
+              </button>
             </header>
 
-            <div className="p-4 space-y-5">
-              {/* Tốc độ chấm (1s -> 5s) giống hệt ảnh 11 */}
-              <div className="space-y-2">
-                <div className="font-medium text-base text-slate-900">
-                  • Tốc độ chấm: {autoGradeDelaySeconds} s
+            <div className="p-4 space-y-4">
+              {/* 1. Tốc độ nhận diện 4 góc & tự động chấm */}
+              <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-sm text-slate-900">
+                    1. Tốc độ nhận diện tự chấm
+                  </span>
+                  <span className="text-xs font-mono font-black text-white bg-[#4263eb] px-2.5 py-1 rounded-lg">
+                    {autoGradeDelaySeconds.toFixed(1)} giây
+                  </span>
                 </div>
                 <input
                   type="range"
-                  min={1.0}
+                  min={0.5}
                   max={5.0}
                   step={0.5}
                   value={autoGradeDelaySeconds}
                   onChange={(e) => setAutoGradeDelaySeconds(Number(e.target.value))}
-                  className="w-full accent-[#4263eb] h-2 bg-slate-300 rounded-lg cursor-pointer"
+                  className="w-full accent-[#4263eb] h-2 bg-slate-200 rounded-lg cursor-pointer"
                 />
+                <div className="flex justify-between text-[11px] font-semibold text-slate-500">
+                  <span>Nhanh (0.5s)</span>
+                  <span>Chuẩn (1.5s)</span>
+                  <span>Chậm (5.0s)</span>
+                </div>
               </div>
 
-              {/* Vừa chấm vừa xem kết quả */}
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-base text-slate-900">
-                  • Vừa chấm vừa xem kết quả
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setGradingMode((m) => (m === 'review' ? 'continuous' : 'review'))
-                  }
-                  className={`w-14 h-8 rounded-full p-1 transition-colors cursor-pointer ${
-                    gradingMode === 'review' ? 'bg-[#4263eb]' : 'bg-slate-400'
-                  }`}
-                >
-                  <div
-                    className={`w-6 h-6 rounded-full bg-white shadow transition-transform ${
-                      gradingMode === 'review' ? 'translate-x-6' : 'translate-x-0'
+              {/* 2. Chế độ chấm bài */}
+              <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-bold text-sm text-slate-900">
+                      2. Dừng xem kết quả sau mỗi bài chấm
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      {gradingMode === 'review'
+                        ? 'Đang bật: Chấm xong hiện ảnh kết quả để giáo viên ghi điểm rồi bấm Chấm tiếp'
+                        : 'Đang tắt: Chấm liên tục nhiều bài nối tiếp nhau, ghi điểm sau'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setGradingMode((m) => (m === 'review' ? 'continuous' : 'review'))
+                    }
+                    className={`w-14 h-8 rounded-full p-1 transition-colors shrink-0 cursor-pointer ${
+                      gradingMode === 'review' ? 'bg-[#4263eb]' : 'bg-slate-300'
                     }`}
-                  />
-                </button>
+                  >
+                    <div
+                      className={`w-6 h-6 rounded-full bg-white shadow transition-transform ${
+                        gradingMode === 'review' ? 'translate-x-6' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* Tuỳ chọn tự động chuyển bài sau N giây hoặc chờ bấm nút */}
+                {gradingMode === 'review' && (
+                  <div className="pt-2 border-t border-slate-100 space-y-2">
+                    <div className="text-xs font-bold text-slate-700">
+                      Thời gian dừng màn hình kết quả:
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {[
+                        { val: 0, label: 'Chờ bấm nút' },
+                        { val: 2, label: 'Tự đóng 2s' },
+                        { val: 3, label: 'Tự đóng 3s' },
+                        { val: 5, label: 'Tự đóng 5s' },
+                      ].map((opt) => (
+                        <button
+                          key={opt.val}
+                          type="button"
+                          onClick={() => setAutoNextDelaySeconds(opt.val)}
+                          className={`py-2 px-1.5 rounded-xl text-[11px] font-extrabold border transition cursor-pointer ${
+                            autoNextDelaySeconds === opt.val
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Đọc điểm bằng giọng nói */}
-              <div className="flex items-center justify-between">
-                <span className="font-medium text-base text-slate-900">
-                  • Đọc điểm bằng giọng nói tiếng Việt
-                </span>
+              {/* 3. Đọc điểm bằng giọng nói tiếng Việt */}
+              <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-sm text-slate-900">
+                    3. Đọc điểm bằng giọng nói tiếng Việt
+                  </div>
+                  <div className="text-[11px] text-slate-500">
+                    Phát tiếng bíp & đọc to điểm số ngay khi nhận diện xong phiếu
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={() => setVoiceReadout((v) => !v)}
-                  className={`w-14 h-8 rounded-full p-1 transition-colors cursor-pointer ${
-                    voiceReadout ? 'bg-[#4263eb]' : 'bg-slate-400'
+                  className={`w-14 h-8 rounded-full p-1 transition-colors shrink-0 cursor-pointer ${
+                    voiceReadout ? 'bg-[#4263eb]' : 'bg-slate-300'
                   }`}
                 >
                   <div
@@ -3972,31 +4772,49 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Cài đặt độ nhạy tô chì OMR */}
-              <div className="space-y-2 bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs">
+              {/* 4. Độ nhạy nhận diện ô tô chì OMR */}
+              <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-2xs space-y-2.5">
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-sm text-slate-900">
-                    • Độ nhạy nhận diện ô tô chì (OMR)
+                    4. Độ nhạy nhận diện ô tô chì (OMR)
                   </span>
-                  <span className="text-xs font-mono font-bold text-[#4263eb]">
-                    {(omrThreshold * 100).toFixed(0)}%
+                  <span className="text-xs font-mono font-black text-[#4263eb] bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-200">
+                    {Math.round((omrSettings?.fillThreshold ?? 0.35) * 100)}%
                   </span>
                 </div>
                 <input
                   type="range"
-                  min={0.14}
-                  max={0.35}
+                  min={0.15}
+                  max={0.5}
                   step={0.01}
-                  value={omrThreshold}
-                  onChange={(e) => setOmrThreshold(Number(e.target.value))}
+                  value={omrSettings?.fillThreshold ?? 0.35}
+                  onChange={(e) =>
+                    setOmrSettings((prev) => ({
+                      ...prev,
+                      fillThreshold: Number(e.target.value),
+                    }))
+                  }
                   className="w-full accent-[#4263eb] h-2 bg-slate-200 rounded-lg cursor-pointer"
                 />
-                <p className="text-[11px] text-slate-500">
-                  Mặc định 20%: Tự động nhận cả bút chì nhạt (2B/HB) và bút bi dưới mọi điều kiện ánh sáng.
-                </p>
+                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <span>Nhạy cao (15% - Chì nhạt)</span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOmrSettings((prev) => ({
+                        ...prev,
+                        fillThreshold: 0.35,
+                      }))
+                    }
+                    className="text-blue-600 font-bold underline cursor-pointer"
+                  >
+                    Đặt lại chuẩn (35%)
+                  </button>
+                  <span>Chặt chẽ (50%)</span>
+                </div>
               </div>
 
-              {/* Trạng thái nhớ quyền truy cập Camera */}
+              {/* 5. Trạng thái nhớ quyền truy cập Camera */}
               <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
                   <Camera className="w-5 h-5 text-emerald-600 shrink-0" />
@@ -4009,13 +4827,13 @@ export default function App() {
                     </div>
                   </div>
                 </div>
-                <span className="text-xs font-black text-emerald-700 bg-white px-2.5 py-1 rounded-lg border border-emerald-300">
+                <span className="text-xs font-black text-emerald-700 bg-white px-2.5 py-1 rounded-lg border border-emerald-300 shrink-0">
                   ĐÃ NHỚ
                 </span>
               </div>
 
               {/* Nút LƯU LẠI CẤU HÌNH CHẤM */}
-              <div className="pt-2">
+              <div className="pt-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -4030,7 +4848,7 @@ export default function App() {
               </div>
 
               {/* Xóa lịch sử bài chấm của phiên hiện tại nếu cần chấm lại từ đầu */}
-              <div className="pt-2">
+              <div className="pt-1">
                 <button
                   type="button"
                   onClick={() => {
@@ -4057,7 +4875,24 @@ export default function App() {
       {bottomTab !== 'scanner' && sessionView !== 'graded' && (
         <nav className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-slate-200 safe-area-bottom-nav">
           <div className="max-w-lg mx-auto px-4 py-1 flex items-center justify-around">
-            {/* Tab 1: Đợt chấm */}
+            {/* Tab 1: Màn hình chính */}
+            <button
+              type="button"
+              onClick={() => {
+                setBottomTab('sessions');
+                setSessionView('welcome');
+              }}
+              className={`flex flex-col items-center justify-center py-1 px-3 touch-target-44 cursor-pointer ${
+                bottomTab === 'sessions' && sessionView === 'welcome'
+                  ? 'text-[#007aff] font-bold'
+                  : 'text-slate-500'
+              }`}
+            >
+              <GraduationCap className="w-5 h-5" />
+              <span className="text-[11px] mt-0.5">Màn hình chính</span>
+            </button>
+
+            {/* Tab 2: Danh sách đợt chấm */}
             <button
               type="button"
               onClick={() => {
@@ -4065,14 +4900,16 @@ export default function App() {
                 setSessionView('list');
               }}
               className={`flex flex-col items-center justify-center py-1 px-3 touch-target-44 cursor-pointer ${
-                bottomTab === 'sessions' ? 'text-[#007aff] font-bold' : 'text-slate-500'
+                bottomTab === 'sessions' && sessionView !== 'welcome'
+                  ? 'text-[#007aff] font-bold'
+                  : 'text-slate-500'
               }`}
             >
               <Folder className="w-5 h-5" />
               <span className="text-[11px] mt-0.5">Đợt chấm</span>
             </button>
 
-            {/* Tab 2: Quét bài (Nút tròn lớn màu xanh dương nổi bật ở giữa) */}
+            {/* Tab 3: Quét bài (Nút tròn lớn màu xanh dương nổi bật ở giữa) */}
             <button
               type="button"
               onClick={enterScannerScreen}
@@ -4084,7 +4921,7 @@ export default function App() {
               <span className="text-[11px] font-bold text-[#007aff] mt-0.5">Quét bài</span>
             </button>
 
-            {/* Tab 3: Cài đặt */}
+            {/* Tab 4: Cài đặt */}
             <button
               type="button"
               onClick={() => setBottomTab('settings')}
@@ -4579,6 +5416,67 @@ export default function App() {
                 className="w-full py-2.5 px-4 rounded-xl text-slate-500 hover:text-slate-800 text-xs font-bold cursor-pointer"
               >
                 Để sau / Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODAL THÔNG TIN TÁC GIẢ & BẢN QUYỀN SẢN PHẨM                          */}
+      {/* ===================================================================== */}
+      {showAccountModal && (
+        <div
+          onClick={() => setShowAccountModal(false)}
+          className="fixed inset-0 z-50 bg-slate-900/65 backdrop-blur-2xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border border-blue-200 animate-bottom-sheet"
+          >
+            <div className="px-5 py-5 bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 text-white text-center relative">
+              <button
+                type="button"
+                onClick={() => setShowAccountModal(false)}
+                className="absolute top-3.5 right-3.5 p-1.5 rounded-full bg-white/20 text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="w-16 h-16 rounded-2xl bg-white/20 mx-auto flex items-center justify-center mb-2 border border-white/40">
+                <GraduationCap className="w-9 h-9 text-white" />
+              </div>
+              <h3 className="font-black text-xl">Edu Chấm Đề</h3>
+              <p className="text-xs text-blue-100 font-semibold mt-0.5">
+                Phiên bản Chuyên Nghiệp GDPT 2018 & Công Văn 1239
+              </p>
+            </div>
+
+            <div className="p-5 space-y-3.5 text-sm text-slate-700">
+              <div className="p-3.5 rounded-2xl bg-blue-50/80 border border-blue-200 space-y-1.5">
+                <div className="text-xs font-bold uppercase text-blue-600">
+                  Thông tin tác giả & Bản quyền
+                </div>
+                <div className="font-black text-base text-slate-900">
+                  Thầy Hồ Tấn Khải
+                </div>
+                <div className="text-xs font-semibold text-slate-600">
+                  Đơn vị công tác: Trường THPT Mang Thít, Tỉnh Vĩnh Long
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center gap-3">
+                <ShieldCheck className="w-7 h-7 text-emerald-600 shrink-0" />
+                <div className="text-xs leading-relaxed text-emerald-950 font-medium">
+                  <strong>Bản quyền chính thức:</strong> Đã kích hoạt đầy đủ tính năng quét OMR 4 góc tự động, 14 mẫu phiếu chuẩn và xuất báo cáo Excel/ZIP.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowAccountModal(false)}
+                className="w-full py-3 rounded-2xl bg-[#007aff] text-white font-black text-sm shadow-md cursor-pointer"
+              >
+                Đóng
               </button>
             </div>
           </div>

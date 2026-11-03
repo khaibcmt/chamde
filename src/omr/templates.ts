@@ -569,25 +569,62 @@ export function parseQM2025QrPayload(
   templateId: TemplateId = 'qm_khtn_dia'
 ): AnswerKeyData[] {
   const cleaned = rawText.trim();
-  let parsed: any;
+  const tpl = TEMPLATES[templateId] || TEMPLATES.qm_khtn_dia;
+  let parsed: any = null;
+
   try {
     parsed = JSON.parse(cleaned);
   } catch {
-    throw new Error('Dữ liệu QR không phải JSON hợp lệ.');
+    // Hỗ trợ thêm định dạng QR dạng chuỗi thuần (Plain-text) từ các phần mềm trộn đề khác
+    // Ví dụ: "101:CCBAD...#ĐĐĐS_ĐĐSĐ#2700_88.9;102:..." hoặc mỗi dòng 1 mã đề
+    const textEntries: Record<string, string> = {};
+    const lines = cleaned
+      .split(/[\r\n;|]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    for (const line of lines) {
+      const m = line.match(/^(\d{3,4})\s*[:=\-\s]\s*(.+)$/);
+      if (m) {
+        textEntries[m[1]] = m[2].trim();
+      }
+    }
+
+    if (Object.keys(textEntries).length > 0) {
+      parsed = textEntries;
+    } else if (/^[A-Da-d,\s]+$/.test(cleaned)) {
+      // Nếu chỉ dán chuỗi đáp án Phần I (VD: "ABCDABCD...") -> gán cho mã đề 101
+      const p1Only = cleaned.toUpperCase().replace(/[^A-D]/g, '');
+      if (p1Only.length > 0) {
+        parsed = { [tpl.maDeDigits === 4 ? '0101' : '101']: p1Only };
+      }
+    }
+
+    if (!parsed) {
+      throw new Error('Dữ liệu QR không đúng định dạng đáp án hợp lệ.');
+    }
   }
 
-  const tpl = TEMPLATES[templateId] || TEMPLATES.qm_khtn_dia;
+  // Nếu JSON bọc trong thuộc tính data / keys / answers
+  if (
+    parsed &&
+    typeof parsed === 'object' &&
+    !Array.isArray(parsed) &&
+    (parsed.data || parsed.keys || parsed.answers)
+  ) {
+    parsed = parsed.data || parsed.keys || parsed.answers;
+  }
+
   const result: AnswerKeyData[] = [];
 
   // 1. Trường hợp QR dạng Object dictionary (TNMaker / Azota {"101": "CCBAD...#ĐĐĐS_ĐĐSĐ_ĐĐSĐ_SĐĐĐ#2700_88.9...", ...})
   if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-    for (const [codeKey, valStr] of Object.entries(parsed)) {
+    for (const [codeKey, valRaw] of Object.entries(parsed)) {
       if (
         codeKey === 'success' ||
         codeKey === 'type' ||
         codeKey === 'examId' ||
-        codeKey === 'title' ||
-        typeof valStr !== 'string'
+        codeKey === 'title'
       ) {
         continue;
       }
@@ -599,7 +636,17 @@ export function parseQM2025QrPayload(
         examCode = examCode.slice(1);
       }
 
-      const strVal = String(valStr);
+      if (Array.isArray(valRaw)) {
+        // Trường hợp {"101": ["A","B",...]} -> Chuyển xuống bộ giải mã mảng
+        parsed = Object.entries(parsed).map(([k, v]) =>
+          Array.isArray(v) ? [k, ...v] : [k, String(v)]
+        );
+        break;
+      }
+
+      if (typeof valRaw !== 'string') continue;
+
+      const strVal = String(valRaw);
       const parts = strVal.split('#');
 
       // Phần I (Trắc nghiệm A, B, C, D)
