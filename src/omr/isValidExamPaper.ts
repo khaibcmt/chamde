@@ -103,7 +103,7 @@ export function isValidExamPaper(
   const quadArea = calculateQuadArea(pts[0], pts[1], pts[2], pts[3]);
   const areaRatio = quadArea / frameArea;
 
-  if (areaRatio < 0.14 || areaRatio > 0.98) {
+  if (areaRatio < 0.12 || areaRatio > 0.98) {
     return {
       isValid: false,
       aspectRatio: 0,
@@ -114,7 +114,7 @@ export function isValidExamPaper(
       markerFillRatios: [],
       areaRatio,
       failedCheck: 'area_ratio',
-      reason: areaRatio < 0.14 ? 'Hãy đưa phiếu lại gần camera hơn' : 'Phiếu quá sát mép camera',
+      reason: areaRatio < 0.12 ? 'Hãy đưa phiếu lại gần camera hơn' : 'Phiếu quá sát mép camera',
     };
   }
 
@@ -135,8 +135,8 @@ export function isValidExamPaper(
     angles.push(angleDeg);
     cosines.push(cosTheta);
 
-    // Góc dao động trong khoảng [70°, 110°] tương ứng |cos| <= 0.34
-    if (Math.abs(cosTheta) > 0.34 || angleDeg < 70 || angleDeg > 110) {
+    // Góc dao động trong khoảng [68°, 112°] tương ứng |cos| <= 0.37
+    if (Math.abs(cosTheta) > 0.37 || angleDeg < 68 || angleDeg > 112) {
       isAngleValid = false;
     }
   }
@@ -166,7 +166,7 @@ export function isValidExamPaper(
   const avgH = (rightEdge + leftEdge) / 2;
   const aspectRatio = Math.max(avgW, avgH) / Math.max(1, Math.min(avgW, avgH));
 
-  const minRatio = 1.18;
+  const minRatio = 1.16;
   const maxRatio = 3.45;
 
   if (aspectRatio < minRatio || aspectRatio > maxRatio) {
@@ -207,7 +207,7 @@ export function isValidExamPaper(
       const luma = getPixelLuminance(frameData, sx, sy);
       paperLumaSum += luma;
       paperSampleCount++;
-      if (luma >= 120) brightWhiteCount++;
+      if (luma >= 115) brightWhiteCount++;
       if (luma < minInteriorLuma) minInteriorLuma = luma;
       if (luma > maxInteriorLuma) maxInteriorLuma = luma;
     }
@@ -216,7 +216,7 @@ export function isValidExamPaper(
   const paperBrightness = paperLumaSum / Math.max(1, paperSampleCount);
   const brightWhiteRatio = brightWhiteCount / Math.max(1, paperSampleCount);
 
-  if (paperBrightness < 120 || brightWhiteRatio < 0.52 || maxInteriorLuma < 140) {
+  if (paperBrightness < 108 || brightWhiteRatio < 0.48 || maxInteriorLuma < 135) {
     return {
       isValid: false,
       aspectRatio,
@@ -250,7 +250,7 @@ export function isValidExamPaper(
         const luma = getPixelLuminance(frameData, pt.x + dx, pt.y + dy);
         markerLumaSum += luma;
         totalSampled++;
-        if (luma < 140) {
+        if (luma < 145) {
           darkPixelCount++;
         }
       }
@@ -263,7 +263,7 @@ export function isValidExamPaper(
     markerFillRatios.push(Number(fillRatio.toFixed(2)));
 
     const contrast = paperBrightness - avgMarkerDarkness;
-    if (avgMarkerDarkness < 148 && fillRatio >= 0.22 && contrast >= 30) {
+    if (avgMarkerDarkness < 152 && fillRatio >= 0.20 && contrast >= 26) {
       validMarkersCount++;
     }
   }

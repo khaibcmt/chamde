@@ -132,6 +132,7 @@ export interface ExamSessionItem {
   scoring: CustomScoringConfig;
   classId: string;
   answerKeys?: Record<string, AnswerKeyData>;
+  gradedRecords?: interfaceGradedSheetRecord[];
 }
 
 const APP_VERSION = '1.89 (Build 89 • GDPT 2018)';
@@ -382,8 +383,19 @@ export default function App() {
   });
   const [activeClassId, setActiveClassId] = useState<string>('cls-12a1');
 
-  // Settings
-  const [autoGradeDelaySeconds, setAutoGradeDelaySeconds] = useState<number>(1.5);
+  // Settings (Tự động khôi phục từ localStorage)
+  const [autoGradeDelaySeconds, setAutoGradeDelaySeconds] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('edu_cham_de_settings_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.autoGradeDelaySeconds === 'number') return parsed.autoGradeDelaySeconds;
+      }
+    } catch {
+      // ignore
+    }
+    return 1.2;
+  });
   // Cài đặt đếm ngược tự chuyển bài khi dừng màn hình: Mặc định 0 (Dừng lại để giáo viên ghi điểm, bấm Chấm tiếp mới quét tiếp)
   const [autoNextDelaySeconds, setAutoNextDelaySeconds] = useState<number>(() => {
     try {
@@ -395,8 +407,36 @@ export default function App() {
   });
   const [countdownRemaining, setCountdownRemaining] = useState<number>(0);
   const lockStartTimeRef = useRef<number | null>(null);
-  const [gradingMode, setGradingMode] = useState<GradingMode>('review');
-  const [voiceReadout, setVoiceReadout] = useState<boolean>(true);
+  const lastContinuousScanRef = useRef<{ key: string; timestamp: number }>({
+    key: '',
+    timestamp: 0,
+  });
+  const [gradingMode, setGradingMode] = useState<GradingMode>(() => {
+    try {
+      const saved = localStorage.getItem('edu_cham_de_settings_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.gradingMode === 'continuous' || parsed.gradingMode === 'review') {
+          return parsed.gradingMode;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return 'review';
+  });
+  const [voiceReadout, setVoiceReadout] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('edu_cham_de_settings_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.voiceReadout === 'boolean') return parsed.voiceReadout;
+      }
+    } catch {
+      // ignore
+    }
+    return true;
+  });
   const { isOnline } = usePWAInstall();
 
   // Answer Keys per Exam Code (Khởi tạo sẵn từ đợt chấm đang chọn hoặc bộ mã đề 101-104)
@@ -423,11 +463,22 @@ export default function App() {
   const [isOmrCameraOpen, setIsOmrCameraOpen] = useState(false);
   const [autoTriggerOmr, setAutoTriggerOmr] = useState(true);
   const [showGridOverlay, setShowGridOverlay] = useState(false);
-  const [omrSettings, setOmrSettings] = useState<OMRSettings>({
-    fillThreshold: 0.35,
-    offsetX: 0,
-    offsetY: 0,
-    radiusScale: 1.0,
+  const [omrSettings, setOmrSettings] = useState<OMRSettings>(() => {
+    try {
+      const saved = localStorage.getItem('edu_cham_de_settings_v2');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.omrSettings) return parsed.omrSettings;
+      }
+    } catch {
+      // ignore
+    }
+    return {
+      fillThreshold: 0.35,
+      offsetX: 0,
+      offsetY: 0,
+      radiusScale: 1.0,
+    };
   });
 
   const omrVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -464,8 +515,11 @@ export default function App() {
   );
   const cooldownRef = useRef<boolean>(false);
 
-  // Graded Records & Gallery Index
+  // Graded Records & Gallery Index (Lưu tự động theo từng phiên chấm)
   const [gradedRecords, setGradedRecords] = useState<interfaceGradedSheetRecord[]>(() => {
+    if (activeSession?.gradedRecords && Array.isArray(activeSession.gradedRecords)) {
+      return activeSession.gradedRecords;
+    }
     try {
       const saved = localStorage.getItem('edu_cham_de_2025_records');
       if (saved) return JSON.parse(saved);
@@ -496,13 +550,25 @@ export default function App() {
     }
   }, [examSessions]);
 
+  // Tự động đồng bộ danh sách bài đã chấm vào đúng phiên chấm đang mở để lần sau mở lên chấm tiếp
   useEffect(() => {
     try {
       localStorage.setItem('edu_cham_de_2025_records', JSON.stringify(gradedRecords));
     } catch {
       // ignore
     }
-  }, [gradedRecords]);
+    if (!activeSessionId) return;
+    setExamSessions((prev) =>
+      prev.map((s) => {
+        if (s.id !== activeSessionId) return s;
+        if (s.gradedRecords === gradedRecords) return s;
+        return {
+          ...s,
+          gradedRecords,
+        };
+      })
+    );
+  }, [gradedRecords, activeSessionId]);
 
   useEffect(() => {
     try {
@@ -512,7 +578,30 @@ export default function App() {
     }
   }, [classRosters]);
 
-  // Hàm chuyển bài an toàn (Dùng cho cả Bấm nút, Phím Space/Enter và Tự động hết giờ)
+  // Lưu cấu hình hệ thống
+  const handleSaveGradingConfiguration = () => {
+    try {
+      localStorage.setItem(
+        'edu_cham_de_settings_v2',
+        JSON.stringify({
+          gradingMode,
+          voiceReadout,
+          autoGradeDelaySeconds,
+          omrSettings,
+        })
+      );
+      localStorage.setItem('edu_cham_de_auto_next_delay_v2', String(autoNextDelaySeconds));
+    } catch {
+      // ignore
+    }
+    playSuccessBeep();
+    setStatusBanner({
+      type: 'success',
+      message: 'Đã lưu thiết lập cấu hình chấm thành công!',
+    });
+  };
+
+  // Hàm đóng kết quả bài hiện tại và tiếp tục chấm bài tiếp theo
   const proceedToNextScan = () => {
     setInstantScoreBanner(null);
     setActiveHudRecord(null);
@@ -521,14 +610,22 @@ export default function App() {
     cooldownRef.current = true;
     setTimeout(() => {
       cooldownRef.current = false;
-    }, 400);
+    }, 350);
   };
 
-  // Đếm ngược tự động chuyển bài khi đang dừng hiển thị điểm (Freeze Frame Review Screen)
+  // Xử lý chế độ Chấm liên tục (tự động chuyển sang bài kế tiếp sau 1.3s) hoặc đếm ngược hẹn giờ
   useEffect(() => {
     if (!instantScoreBanner) {
       setCountdownRemaining(0);
       return;
+    }
+
+    if (gradingMode === 'continuous') {
+      setCountdownRemaining(1);
+      const timer = setTimeout(() => {
+        proceedToNextScan();
+      }, 1300);
+      return () => clearTimeout(timer);
     }
 
     if (autoNextDelaySeconds <= 0) {
@@ -549,7 +646,7 @@ export default function App() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [instantScoreBanner, autoNextDelaySeconds]);
+  }, [instantScoreBanner, autoNextDelaySeconds, gradingMode]);
 
   // Phím tắt Space hoặc Enter để giáo viên chuyển bài nhanh bằng một tay / bàn phím
   useEffect(() => {
@@ -622,7 +719,7 @@ export default function App() {
     }
   };
 
-  // Đồng bộ đáp án theo đợt chấm đang chọn (Nếu đợt chấm chưa có đáp án thì nạp sẵn bộ mã chuẩn 101-104)
+  // Đồng bộ đáp án & danh sách bài đã chấm theo đợt chấm đang chọn
   useEffect(() => {
     if (activeSession) {
       const savedKeys =
@@ -630,6 +727,12 @@ export default function App() {
           ? activeSession.answerKeys
           : buildDefaultAnswerKeyMap(activeSession.templateId);
       setAnswerKeys(savedKeys);
+      if (Array.isArray(activeSession.gradedRecords)) {
+        setGradedRecords(activeSession.gradedRecords);
+      }
+      if (activeSession.classId) {
+        setActiveClassId(activeSession.classId);
+      }
       const codeList = Object.keys(savedKeys);
       const firstCode = codeList[0] || '101';
       setSelectedExamCodeView(firstCode);
@@ -749,11 +852,18 @@ export default function App() {
         scanSbd: draftScanSbd,
         scoring: draftScoring,
         classId: activeClassId,
+        answerKeys: buildDefaultAnswerKeyMap(draftTemplateId),
+        gradedRecords: [],
       };
       setExamSessions((prev) => [newSession, ...prev]);
       setActiveSessionId(newSession.id);
+      setGradedRecords([]);
     }
     playSuccessBeep();
+    setStatusBanner({
+      type: 'success',
+      message: 'Đã lưu cấu hình phiên chấm thành công!',
+    });
     setSessionView('hub');
   };
 
@@ -1320,8 +1430,8 @@ export default function App() {
       },
       isPaperValid: boolean
     ) => {
-      // Vẽ viền nối 4 góc khi nhận diện được từ 3 mốc neo trở lên
-      if (isPaperValid || rawCorners.anchorCount >= 3) {
+      // Chỉ vẽ khung xanh lá khóa mục tiêu khi thực sự là phiếu trả lời hợp lệ (isPaperValid === true)
+      if (isPaperValid) {
         oCtx.fillStyle = 'rgba(16, 185, 129, 0.18)';
         oCtx.strokeStyle = '#00ff66';
         oCtx.lineWidth = 4;
@@ -1508,16 +1618,16 @@ export default function App() {
             );
 
             // CHỈ TỰ ĐỘNG CHẤM KHI:
-            // 1. Đã qua thời gian khởi động camera (>= 750ms)
+            // 1. Đã qua thời gian khởi động camera (>= 600ms)
             // 2. Có phiếu thi thật hợp lệ (isPaperValid === true, đủ >= 3 neo đen trên nền giấy trắng)
-            // 3. Phiếu giữ ổn định liên tiếp >= 4 frame (stableValidFrames >= 4)
-            // 4. Kiểm tra sau khi nắn phẳng thực sự đọc được Mã đề hoặc các ô đáp án đã tô (không chấm nhầm mặt bàn / giấy trắng)
-            const isWarmUpDone = Date.now() - streamStartTime >= 750;
+            // 3. Phiếu giữ ổn định liên tiếp >= 3 frame (stableValidFrames >= 3)
+            // 4. Sau khi nắn phẳng thực sự đọc được Mã đề hoặc các ô đáp án đã tô (không chấm nhầm mặt bàn / giấy trắng)
+            const isWarmUpDone = Date.now() - streamStartTime >= 600;
             if (
               runtime.autoTriggerOmr &&
               isWarmUpDone &&
               isPaperValid &&
-              stableValidFrames >= 4 &&
+              stableValidFrames >= 3 &&
               !cooldownRef.current
             ) {
               const activeKeys =
@@ -1539,11 +1649,7 @@ export default function App() {
                 record.p1Details.filter((d) => d.studentAnswer !== '').length +
                 record.p2Details.reduce(
                   (acc, q) =>
-                    acc +
-                    (q.studentAnswers.a ? 1 : 0) +
-                    (q.studentAnswers.b ? 1 : 0) +
-                    (q.studentAnswers.c ? 1 : 0) +
-                    (q.studentAnswers.d ? 1 : 0),
+                    acc + q.subResults.filter((sub) => sub.studentAnswer !== '').length,
                   0
                 ) +
                 record.p3Details.filter((d) => d.studentString !== '').length;
@@ -1554,17 +1660,29 @@ export default function App() {
                 setAnchorLockState((prev) => ({
                   ...prev,
                   isValidPaper: false,
-                  statusHint: 'Chưa nhận diện được ô tô trên phiếu — Hãy đưa đúng phiếu bài làm vào khung!',
+                  statusHint: 'Chưa nhận diện được ô tô trên phiếu — Hãy đưa đúng phiếu trả lời vào khung!',
                 }));
                 animId = requestAnimationFrame(processFrame);
                 return;
               }
 
+              // Chống quét trùng lặp cùng 1 tờ phiếu trong chế độ chấm liên tục khi giáo viên đang rút giấy
+              const scanKey = `${record.sbd}-${record.examCode}-${record.totalScore}`;
+              const nowMs = Date.now();
+              if (
+                lastContinuousScanRef.current.key === scanKey &&
+                nowMs - lastContinuousScanRef.current.timestamp < 3200
+              ) {
+                animId = requestAnimationFrame(processFrame);
+                return;
+              }
+              lastContinuousScanRef.current = { key: scanKey, timestamp: nowMs };
+
               cooldownRef.current = true;
               stableValidFrames = 0;
               setCountdownRemaining(0);
               lockStartTimeRef.current = null;
-              playSuccessBeep(); // Phát tiếng bíp bíp khi đã nhận diện đúng phiếu và chấm xong
+              playSuccessBeep();
 
               try {
                 capturePhoto(video, 0.92);
@@ -1579,7 +1697,7 @@ export default function App() {
 
         animId = requestAnimationFrame(processFrame);
       } catch {
-        // Khi thiết bị chưa cấp quyền camera hoặc không có camera vật lý, giữ trạng thái chờ 0/4 neo (không tự ý vẽ giả hoặc tự chấm)
+        // Khi thiết bị chưa cấp quyền camera hoặc không có camera vật lý, giữ trạng thái chờ 0/4 neo
         if (isCancelled) return;
         setAnchorLockState({
           found: false,
@@ -1589,7 +1707,7 @@ export default function App() {
           bl: false,
           br: false,
           isValidPaper: false,
-          statusHint: 'Hãy cấp quyền Camera để đưa phiếu vào quét, hoặc bấm nút "Ảnh" để chọn ảnh phiếu trả lời',
+          statusHint: 'Hãy cho phép quyền Camera để tự động nhận diện phiếu trả lời',
         });
       }
     };
@@ -1598,7 +1716,7 @@ export default function App() {
     return () => {
       isCancelled = true;
       cancelAnimationFrame(animId);
-      if (stream) stream.getTracks().forEach((t) => t.stop());
+      // Giữ nguyên luồng stream ấm trong WebcamManager (không gọi track.stop) để trình duyệt nhớ quyền Camera và không hỏi lại
       omrVideoTrackRef.current = null;
       setTorchEnabled(false);
       lockStartTimeRef.current = null;
@@ -2071,66 +2189,61 @@ export default function App() {
       {/* ===================================================================== */}
       {/* MÀN HÌNH D: CAMERA QUÉT CHẤM BÀI (FULL SCREEN 100dvh - ẨN HEADER & NAV) */}
       {/* ===================================================================== */}
+      {/* ===================================================================== */}
+      {/* MÀN HÌNH CHẤM BÀI TỐI GIẢN (100% TỰ ĐỘNG NHẬN DIỆN 4 GÓC NEO)        */}
+      {/* ===================================================================== */}
       {bottomTab === 'scanner' && (
-        <div className="fixed inset-0 z-50 bg-[#f2f3f7] flex flex-col h-[100dvh] overflow-hidden">
-          {/* Thanh điều hướng đỉnh tối giản đúng chuẩn QM 2025 (Ảnh 6, 24, 25) */}
-          <div className="bg-white border-b border-slate-200 px-3.5 py-2.5 flex items-center justify-between safe-area-header shrink-0">
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col h-[100dvh] overflow-hidden">
+          {/* Thanh đỉnh tối giản: Nút Đóng lại + Chuyển chế độ Từng bài / Liên tục + Số bài đã chấm */}
+          <div className="bg-slate-900/95 border-b border-slate-800 px-3 py-2 flex items-center justify-between safe-area-header shrink-0">
             <button
               type="button"
               onClick={exitScannerScreen}
-              className="text-[#007aff] font-semibold text-base flex items-center gap-0.5 touch-target-44 cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs sm:text-sm flex items-center gap-1 cursor-pointer border border-slate-700"
             >
-              <ChevronLeft className="w-6 h-6 -ml-1.5" />
-              <span>Quay lại</span>
+              <X className="w-4 h-4 text-rose-400" />
+              <span>Đóng lại</span>
             </button>
 
-            <div className="text-center">
-              <div className="font-bold text-base text-slate-900">Chấm bài</div>
-              <div className="text-[11px] font-semibold text-slate-500 truncate max-w-[180px]">
-                {activeDbSheet.name} ({activeDbSheet.codeLength} số)
-              </div>
+            {/* Nút gạt nhanh 2 chế độ: Chấm từng bài (Ghi điểm ngay) vs Chấm liên tục (Ghi điểm sau) */}
+            <div className="inline-flex bg-slate-950 p-1 rounded-xl border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setGradingMode('review')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition cursor-pointer ${
+                  gradingMode === 'review'
+                    ? 'bg-emerald-500 text-slate-950 shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Từng bài
+              </button>
+              <button
+                type="button"
+                onClick={() => setGradingMode('continuous')}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition cursor-pointer ${
+                  gradingMode === 'continuous'
+                    ? 'bg-sky-500 text-slate-950 shadow-xs'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Chấm liên tục
+              </button>
             </div>
 
             <div className="flex items-center gap-1.5">
-              {/* Cài đặt thanh hẹn giờ ở thanh điều khiển trên màn hình camera */}
-              <div className="scanner-top-bar">
-                <Clock className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                <label htmlFor="autoNextSelect" className="font-semibold text-xs ml-1 hidden sm:inline text-slate-200">
-                  Tự chuyển bài sau:
-                </label>
-                <select
-                  id="autoNextSelect"
-                  value={autoNextDelaySeconds}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value, 10);
-                    setAutoNextDelaySeconds(val);
-                    try {
-                      localStorage.setItem('edu_cham_de_auto_next_delay_v2', String(val));
-                    } catch {
-                      // ignore
-                    }
-                  }}
-                  className="cursor-pointer"
-                >
-                  <option value={0}>Dừng ghi điểm (Bấm Chấm tiếp)</option>
-                  <option value={3}>3 giây</option>
-                  <option value={5}>5 giây</option>
-                  <option value={7}>7 giây</option>
-                </select>
-              </div>
-
               {torchSupported && (
                 <button
                   type="button"
                   onClick={handleToggleCameraTorch}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-bold ${
-                    torchEnabled ? 'bg-amber-400 text-slate-950' : 'bg-slate-100 text-slate-700'
+                  className={`px-2.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer ${
+                    torchEnabled ? 'bg-amber-400 text-slate-950' : 'bg-slate-800 text-slate-300'
                   }`}
                 >
-                  ⚡ Flash
+                  ⚡
                 </button>
               )}
-              <label className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-[#007aff] text-xs font-bold cursor-pointer flex items-center gap-1">
+              <label className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-sky-300 text-xs font-bold cursor-pointer flex items-center gap-1 border border-slate-700">
                 <Upload className="w-3.5 h-3.5" />
                 <span>Ảnh</span>
                 <input
@@ -2147,15 +2260,8 @@ export default function App() {
             </div>
           </div>
 
-          {/* Dòng nhắc nhở giữ phẳng phiếu */}
-          <div className="bg-[#f2f3f7] px-4 py-2 text-center text-slate-800 text-xs sm:text-sm font-medium leading-snug shrink-0">
-            Hãy giữ phiếu trả lời thật phẳng!
-            <br />
-            Tránh ánh sáng phản chiếu trên phiếu
-          </div>
-
-          {/* Vùng Camera + Khung 4 góc vuông xanh lá + HUD Overlay kết quả */}
-          <div className="flex-1 relative bg-black mx-2.5 rounded-xl overflow-hidden flex flex-col justify-center">
+          {/* Vùng Camera chiếm trọn màn hình + Khung nhận diện 4 neo ở 4 góc */}
+          <div className="flex-1 relative bg-black overflow-hidden flex flex-col justify-center">
             <video
               ref={omrVideoRef}
               className="absolute inset-0 w-full h-full object-cover"
@@ -2168,31 +2274,30 @@ export default function App() {
               className="absolute inset-0 w-full h-full object-cover pointer-events-none z-10"
             />
 
-            {/* KHUNG ĐỊNH VỊ 4 GÓC NEO XANH LÁ (LUÔN HIỂN THỊ RÕ RÀNG TRÊN MỌI THIẾT BỊ) */}
+            {/* KHUNG ĐỊNH VỊ 4 GÓC NEO XANH LÁ (TỰ ĐỘNG BẮT NEO & CHẤM) */}
             {!instantScoreBanner && (
-              <div className="absolute inset-3 sm:inset-5 pointer-events-none z-15 flex flex-col justify-between">
-                {/* Viền khung dẫn hướng phiếu thi */}
+              <div className="absolute inset-4 sm:inset-6 pointer-events-none z-15 flex flex-col justify-between">
+                {/* Viền khung dẫn hướng phiếu trả lời */}
                 <div
-                  className={`absolute inset-0 rounded-2xl border-2 transition-colors duration-200 ${
-                    anchorLockState.count >= 3
+                  className={`absolute inset-0 rounded-2xl border-2 transition-colors duration-150 ${
+                    anchorLockState.isValidPaper && anchorLockState.count >= 3
                       ? 'border-[#00ff66] bg-emerald-500/10 shadow-[inset_0_0_30px_rgba(0,255,102,0.25)]'
-                      : 'border-emerald-400/50 border-dashed'
+                      : 'border-emerald-400/55 border-dashed'
                   }`}
                 />
 
                 {/* Hàng trên: NEO 1 (Trái-Trên TL) & NEO 2 (Phải-Trên TR) */}
                 <div className="flex items-start justify-between relative z-10">
-                  {/* Góc Trái-Trên (TL) */}
                   <div className="flex flex-col items-start gap-1">
                     <div
                       className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
                         anchorLockState.tl
                           ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
-                          : 'border-emerald-400/90 bg-slate-950/55 shadow-[0_0_12px_rgba(16,185,129,0.45)]'
+                          : 'border-emerald-400/90 bg-slate-950/60'
                       }`}
                     >
                       <div
-                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-sm border-2 flex items-center justify-center ${
+                        className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center ${
                           anchorLockState.tl
                             ? 'border-white bg-[#00ff66]'
                             : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
@@ -2202,27 +2307,26 @@ export default function App() {
                       </div>
                     </div>
                     <span
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide shadow-md ${
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide ${
                         anchorLockState.tl
                           ? 'bg-[#00ff66] text-slate-950'
-                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/50'
+                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/40'
                       }`}
                     >
                       {anchorLockState.tl ? '✓ NEO 1 (TL)' : 'NEO 1 (TL)'}
                     </span>
                   </div>
 
-                  {/* Góc Phải-Trên (TR) */}
                   <div className="flex flex-col items-end gap-1">
                     <div
                       className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
                         anchorLockState.tr
                           ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
-                          : 'border-emerald-400/90 bg-slate-950/55 shadow-[0_0_12px_rgba(16,185,129,0.45)]'
+                          : 'border-emerald-400/90 bg-slate-950/60'
                       }`}
                     >
                       <div
-                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-sm border-2 flex items-center justify-center ${
+                        className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center ${
                           anchorLockState.tr
                             ? 'border-white bg-[#00ff66]'
                             : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
@@ -2232,10 +2336,10 @@ export default function App() {
                       </div>
                     </div>
                     <span
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide shadow-md ${
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide ${
                         anchorLockState.tr
                           ? 'bg-[#00ff66] text-slate-950'
-                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/50'
+                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/40'
                       }`}
                     >
                       {anchorLockState.tr ? '✓ NEO 2 (TR)' : 'NEO 2 (TR)'}
@@ -2245,13 +2349,12 @@ export default function App() {
 
                 {/* Hàng dưới: NEO 3 (Trái-Dưới BL) & NEO 4 (Phải-Dưới BR) */}
                 <div className="flex items-end justify-between relative z-10">
-                  {/* Góc Trái-Dưới (BL) */}
                   <div className="flex flex-col items-start gap-1">
                     <span
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide shadow-md ${
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide ${
                         anchorLockState.bl
                           ? 'bg-[#00ff66] text-slate-950'
-                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/50'
+                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/40'
                       }`}
                     >
                       {anchorLockState.bl ? '✓ NEO 3 (BL)' : 'NEO 3 (BL)'}
@@ -2260,11 +2363,11 @@ export default function App() {
                       className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
                         anchorLockState.bl
                           ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
-                          : 'border-emerald-400/90 bg-slate-950/55 shadow-[0_0_12px_rgba(16,185,129,0.45)]'
+                          : 'border-emerald-400/90 bg-slate-950/60'
                       }`}
                     >
                       <div
-                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-sm border-2 flex items-center justify-center ${
+                        className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center ${
                           anchorLockState.bl
                             ? 'border-white bg-[#00ff66]'
                             : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
@@ -2275,13 +2378,12 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Góc Phải-Dưới (BR) */}
                   <div className="flex flex-col items-end gap-1">
                     <span
-                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide shadow-md ${
+                      className={`px-2 py-0.5 rounded-md text-[10px] font-black tracking-wide ${
                         anchorLockState.br
                           ? 'bg-[#00ff66] text-slate-950'
-                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/50'
+                          : 'bg-slate-900/90 text-emerald-300 border border-emerald-400/40'
                       }`}
                     >
                       {anchorLockState.br ? '✓ NEO 4 (BR)' : 'NEO 4 (BR)'}
@@ -2290,11 +2392,11 @@ export default function App() {
                       className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-4 flex items-center justify-center transition-all duration-150 ${
                         anchorLockState.br
                           ? 'border-[#00ff66] bg-emerald-500/35 shadow-[0_0_20px_#00ff66] scale-105'
-                          : 'border-emerald-400/90 bg-slate-950/55 shadow-[0_0_12px_rgba(16,185,129,0.45)]'
+                          : 'border-emerald-400/90 bg-slate-950/60'
                       }`}
                     >
                       <div
-                        className={`w-5 h-5 sm:w-6 sm:h-6 rounded-sm border-2 flex items-center justify-center ${
+                        className={`w-5 h-5 rounded-sm border-2 flex items-center justify-center ${
                           anchorLockState.br
                             ? 'border-white bg-[#00ff66]'
                             : 'border-emerald-300 bg-emerald-400/30 animate-pulse'
@@ -2308,113 +2410,100 @@ export default function App() {
               </div>
             )}
 
-            {/* Thanh trạng thái nhận diện mốc neo thời gian thực + 4 đèn báo Neo */}
-            <div className="absolute top-3 inset-x-0 pointer-events-none z-20 flex flex-col items-center gap-1.5 px-3">
-              {instantScoreBanner ? (
-                <div className="bg-amber-600/95 text-white px-4 py-1.5 rounded-full text-xs font-bold shadow-xl border border-amber-300 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                  <span>⏸ ĐÃ DỪNG ĐỂ GHI ĐIỂM · Bấm &quot;CHẤM BÀI TIẾP THEO&quot; để quét tiếp</span>
-                </div>
-              ) : anchorLockState.isValidPaper && anchorLockState.count >= 3 ? (
-                <div className="bg-emerald-600/95 text-white px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold shadow-2xl border-2 border-[#00ff66] flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#00ff66] animate-ping" />
-                  <span>
-                    🎯 {anchorLockState.statusHint || `ĐÃ NHẬN PHIẾU (${anchorLockState.count}/4 NEO) · Đang chấm...`}
-                  </span>
-                </div>
-              ) : (
-                <div className="bg-slate-900/90 backdrop-blur-xs text-white px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-lg border border-emerald-400/40 flex items-center gap-2 text-center">
+            {/* Nhãn trạng thái gọn gàng phía trên khung ngắm */}
+            {!instantScoreBanner && (
+              <div className="absolute top-3 inset-x-0 pointer-events-none z-20 flex flex-col items-center gap-1 px-4">
+                <div
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-bold shadow-lg border flex items-center gap-2 text-center ${
+                    anchorLockState.isValidPaper && anchorLockState.count >= 3
+                      ? 'bg-emerald-600/95 text-white border-[#00ff66]'
+                      : 'bg-slate-900/90 text-white border-emerald-400/40'
+                  }`}
+                >
                   <span className="w-2 h-2 rounded-full bg-[#00ff66] animate-pulse shrink-0" />
                   <span>
                     {anchorLockState.statusHint ||
-                      `🔍 Đưa phiếu trả lời vào khung 4 góc (${anchorLockState.count || 0}/4 neo)`}
+                      `Đưa 4 góc phiếu trả lời vào 4 khung xanh (${anchorLockState.count || 0}/4 neo)`}
                   </span>
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Dải 4 đèn báo trạng thái từng góc neo TL - TR - BL - BR */}
-              {!instantScoreBanner && (
-                <div className="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1 rounded-full border border-white/15 shadow-md">
-                  {[
-                    { key: 'tl', label: 'TL', active: anchorLockState.tl },
-                    { key: 'tr', label: 'TR', active: anchorLockState.tr },
-                    { key: 'bl', label: 'BL', active: anchorLockState.bl },
-                    { key: 'br', label: 'BR', active: anchorLockState.br },
-                  ].map((item) => (
-                    <span
-                      key={item.key}
-                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold flex items-center gap-1 transition-colors ${
-                        item.active
-                          ? 'bg-[#00ff66] text-slate-950 shadow-[0_0_8px_#00ff66]'
-                          : 'bg-slate-800 text-slate-300'
-                      }`}
-                    >
-                      <span>{item.active ? '●' : '○'}</span>
-                      <span>{item.label}</span>
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* 2. DỪNG MÀN HÌNH ĐỂ GIÁO VIÊN GHI ĐIỂM (FREEZE FRAME REVIEW SCREEN) */}
+            {/* MÀN HÌNH HIỂN THỊ ẢNH PHIẾU TRẢ LỜI ĐÃ CHẤM (CÓ ĐẦY ĐỦ ĐIỂM CÁC PHẦN & ĐIỂM TỔNG) */}
             {instantScoreBanner && (
               <div id="reviewScreen" className="review-screen">
                 <div className="review-header safe-area-header">
                   <div>
-                    <div className="review-title">ĐÃ CHẤM XONG - GHI ĐIỂM VÀO BÀI LÀM</div>
+                    <div className="review-title">
+                      {gradingMode === 'continuous'
+                        ? 'ĐÃ LƯU BÀI (CHẾ ĐỘ CHẤM LIÊN TỤC)'
+                        : 'KẾT QUẢ CHẤM BÀI — GHI ĐIỂM'}
+                    </div>
                     <div className="text-xs text-slate-300 font-bold mt-0.5">
-                      SBD: <strong className="text-amber-300 font-mono text-sm">{instantScoreBanner.sbd}</strong> | Mã đề: <strong className="text-sky-300 font-mono text-sm">{instantScoreBanner.examCode}</strong> {instantScoreBanner.studentName ? `• ${instantScoreBanner.studentName}` : ''}
+                      SBD: <strong className="text-amber-300 font-mono text-sm">{instantScoreBanner.sbd}</strong> | Mã đề:{' '}
+                      <strong className="text-sky-300 font-mono text-sm">{instantScoreBanner.examCode}</strong>{' '}
+                      {instantScoreBanner.studentName ? `• ${instantScoreBanner.studentName}` : ''}
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {autoNextDelaySeconds > 0 ? (
-                      <div id="countdownTimer" className="countdown-badge">
-                        <Clock className="w-3.5 h-3.5 animate-spin" />
-                        <span>Tự chuyển sau: {countdownRemaining}s</span>
-                      </div>
-                    ) : (
-                      <div className="text-xs font-bold bg-slate-800 text-slate-300 px-3 py-1.5 rounded-full border border-slate-700">
-                        Thủ công (Nhấn Chấm tiếp / Phím Space)
-                      </div>
-                    )}
+                  <div className="text-xs font-bold bg-slate-800 text-emerald-300 px-3 py-1 rounded-full border border-slate-700">
+                    Đã lưu ({gradedRecords.length} bài)
                   </div>
                 </div>
 
-                {/* Dòng tóm tắt điểm đỏ nổi bật */}
-                <div className="bg-slate-800/95 border-b border-slate-700 px-4 py-2 flex items-center justify-between text-xs sm:text-sm text-white">
-                  <div className="flex items-center gap-2.5 font-mono flex-wrap">
-                    <span>P1: <strong className="text-emerald-400">{instantScoreBanner.p1CorrectCount}/{instantScoreBanner.p1TotalCount} ({instantScoreBanner.p1Score.toFixed(2)}đ)</strong></span>
-                    <span>|</span>
-                    <span>P2: <strong className="text-teal-400">{instantScoreBanner.p2Score.toFixed(2)}đ</strong></span>
-                    <span>|</span>
-                    <span>P3: <strong className="text-purple-400">{instantScoreBanner.p3Score.toFixed(2)}đ</strong></span>
+                {/* Bảng điểm đầy đủ Phần I, Phần II, Phần III và ĐIỂM TỔNG */}
+                <div className="bg-slate-900 border-b border-slate-700 px-3.5 py-2.5 flex items-center justify-between gap-2 text-xs sm:text-sm text-white">
+                  <div className="grid grid-cols-3 gap-2 flex-1">
+                    <div className="bg-blue-950/90 border border-blue-500/40 rounded-xl px-2.5 py-1.5 text-center">
+                      <div className="text-[10px] text-blue-300 font-bold uppercase">
+                        Phần I ({instantScoreBanner.p1CorrectCount}/{instantScoreBanner.p1TotalCount})
+                      </div>
+                      <div className="text-sm sm:text-base font-black text-white">
+                        {instantScoreBanner.p1Score.toFixed(2)} đ
+                      </div>
+                    </div>
+                    <div className="bg-emerald-950/90 border border-emerald-500/40 rounded-xl px-2.5 py-1.5 text-center">
+                      <div className="text-[10px] text-emerald-300 font-bold uppercase">
+                        Phần II (Đ/S)
+                      </div>
+                      <div className="text-sm sm:text-base font-black text-white">
+                        {instantScoreBanner.p2Score.toFixed(2)} đ
+                      </div>
+                    </div>
+                    <div className="bg-purple-950/90 border border-purple-500/40 rounded-xl px-2.5 py-1.5 text-center">
+                      <div className="text-[10px] text-purple-300 font-bold uppercase">
+                        Phần III ({instantScoreBanner.p3CorrectCount}/{instantScoreBanner.p3TotalCount})
+                      </div>
+                      <div className="text-sm sm:text-base font-black text-white">
+                        {instantScoreBanner.p3Score.toFixed(2)} đ
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 bg-rose-600 text-white px-3 py-1 rounded-xl font-black text-base shadow-md">
-                    <span className="text-[11px] uppercase tracking-wider text-rose-200">TỔNG ĐIỂM:</span>
-                    <span className="text-2xl leading-none">{instantScoreBanner.totalScore.toFixed(2)}</span>
+
+                  <div className="bg-rose-600 text-white px-3.5 py-1.5 rounded-xl font-black text-center shadow-lg shrink-0 border border-rose-400">
+                    <div className="text-[10px] uppercase tracking-wider text-rose-100">ĐIỂM TỔNG</div>
+                    <div className="text-2xl leading-none">{instantScoreBanner.totalScore.toFixed(2)}</div>
                   </div>
                 </div>
 
-                {/* Vùng bài thi: Hiển thị chính bức ảnh bài thi đã đóng con dấu điểm đỏ */}
+                {/* Ảnh phiếu trả lời đã đóng dấu điểm các phần & điểm tổng */}
                 <div className="review-body">
                   <img
                     id="evidenceImageDisplay"
                     src={instantScoreBanner.annotatedImageDataUrl}
-                    alt="Bài làm minh chứng"
+                    alt="Ảnh phiếu trả lời đã chấm"
                   />
                 </div>
 
-                {/* Thanh footer: Nút to CHẤM BÀI TIẾP THEO (Phím Space) + Lưu ảnh */}
+                {/* Thanh đáy tối giản: Chỉ có nút ĐÓNG LẠI và nút CHẤM TIẾP */}
                 <div className="review-footer safe-area-bottom-nav">
                   <button
                     type="button"
-                    onClick={() => handleSaveEvidenceSheet(instantScoreBanner, false)}
-                    className="px-4 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    onClick={exitScannerScreen}
+                    className="px-5 py-3.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-sm font-extrabold flex items-center gap-1.5 cursor-pointer border border-slate-600"
                   >
-                    <Download className="w-4 h-4" />
-                    <span className="hidden sm:inline">Lưu ảnh</span>
+                    <X className="w-5 h-5 text-rose-400" />
+                    <span>Đóng lại</span>
                   </button>
                   <button
                     id="btnContinueScan"
@@ -2423,74 +2512,38 @@ export default function App() {
                     className="btn-continue"
                   >
                     <Play className="w-5 h-5 fill-white" />
-                    <span>CHẤM BÀI TIẾP THEO (CHẤM TIẾP)</span>
+                    <span>CHẤM TIẾP</span>
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Thông báo lỗi khi không tô mã đề (Chuẩn ảnh 6: "Không tìm thấy mã đề") */}
             {missingExamCodeAlert && (
-              <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-30 w-[85%] max-w-xs bg-slate-600/95 text-white text-center py-2.5 px-4 rounded-xl shadow-lg font-medium text-base">
+              <div className="absolute bottom-5 left-1/2 -translate-x-1/2 z-30 w-[88%] max-w-xs bg-rose-600/95 text-white text-center py-2.5 px-4 rounded-xl shadow-lg font-bold text-sm">
                 {missingExamCodeAlert.message}
               </div>
             )}
           </div>
 
-          {/* Thanh công cụ Chụp & Chấm Ngay + Giả lập Phiếu Thực Tế + Nút X Huỷ / Quay lại */}
-          <div className="bg-[#f2f3f7] px-3 pt-2 pb-3 safe-area-bottom-nav shrink-0 space-y-2">
-            {/* Nút CHỤP & CHẤM NGAY 3D nổi bật */}
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={handleManualSnap}
-                className="w-full max-w-xs py-2.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 text-white font-extrabold text-sm sm:text-base shadow-[0_5px_0_#065f46,0_10px_16px_rgba(16,185,129,0.3)] active:translate-y-1 active:shadow-[0_2px_0_#065f46] transition-all flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Camera className="w-5 h-5 stroke-[2.4]" />
-                <span>CHỤP & CHẤM NGAY</span>
-              </button>
-            </div>
-
-            <div className="flex items-center justify-center gap-1.5 flex-wrap">
-              <button
-                type="button"
-                onClick={() => handleRunSimulatedSheet(0.88)}
-                className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow-xs cursor-pointer"
-              >
-                ⚡ Chấm thử phiếu mẫu ({simExamCode})
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRunSimulatedSheet(0.85, { skipExamCode: true })}
-                className="px-2.5 py-1.5 rounded-xl bg-slate-200 text-slate-700 text-xs font-semibold cursor-pointer"
-              >
-                Test lỗi quên Mã đề
-              </button>
-              {gradedRecords.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBottomTab('sessions');
-                    setSessionView('graded');
-                  }}
-                  className="px-2.5 py-1.5 rounded-xl bg-blue-100 text-blue-700 text-xs font-bold cursor-pointer"
-                >
-                  Đã chấm ({gradedRecords.length})
-                </button>
-              )}
-            </div>
-
-            <div className="flex justify-center">
+          {/* Thanh đáy tối giản khi đang mở camera: Chỉ có nút Đóng lại & thông tin số bài đã chấm */}
+          {!instantScoreBanner && (
+            <div className="bg-slate-900 border-t border-slate-800 px-4 py-2.5 safe-area-bottom-nav shrink-0 flex items-center justify-between">
+              <div className="text-xs font-bold text-slate-300">
+                Đã chấm: <strong className="text-emerald-400">{gradedRecords.length}</strong> bài •{' '}
+                <span className="text-slate-400">
+                  {gradingMode === 'continuous' ? 'Chế độ: Chấm liên tục' : 'Chế độ: Từng bài'}
+                </span>
+              </div>
               <button
                 type="button"
                 onClick={exitScannerScreen}
-                className="text-[#f59e0b] hover:text-amber-600 font-semibold text-lg py-1.5 px-8 rounded-xl flex items-center gap-1.5 touch-target-44 cursor-pointer"
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-sm flex items-center gap-1.5 cursor-pointer shadow-sm"
               >
-                <X className="w-6 h-6 stroke-[2.2]" />
-                <span>Huỷ / Quay lại</span>
+                <X className="w-4 h-4 stroke-[2.5]" />
+                <span>Đóng lại</span>
               </button>
             </div>
-          </div>
+          )}
         </div>
       )}
 
@@ -2521,144 +2574,18 @@ export default function App() {
         {/* ================================================================= */}
         {bottomTab === 'sessions' && (
           <>
-            {/* 1A. MÀN HÌNH MENU CHÀO MỪNG EDU CHẤM ĐỀ (MÀU XANH - TÍM 3D) */}
-            {sessionView === 'welcome' && (
-              <div className="flex-1 flex flex-col justify-between p-5 bg-gradient-to-br from-[#0c1445] via-[#161a52] to-[#2b0e5e] min-h-[85vh] rounded-b-3xl border-b border-indigo-500/30 shadow-2xl">
-                <div className="pt-4 text-center space-y-3">
-                  {/* LOGO ĐẶC TRƯNG NHẤP NHÁY */}
-                  <div className="flex items-center justify-center">
-                    <div className="relative group">
-                      <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-cyan-500 via-sky-400 to-fuchsia-500 flex items-center justify-center text-white shadow-lg glow-pulse-logo border-2 border-white/70">
-                        <GraduationCap className="w-9 h-9 drop-shadow" />
-                      </div>
-                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-400 rounded-full border-2 border-slate-900 animate-ping" />
-                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-400 rounded-full border-2 border-slate-900" />
-                    </div>
-                  </div>
-
-                  <div>
-                    <h1 className="text-3xl font-black bg-gradient-to-r from-cyan-300 via-sky-200 to-fuchsia-300 bg-clip-text text-transparent tracking-tight">
-                      Edu Chấm Đề
-                    </h1>
-                    <p className="text-sm font-semibold text-cyan-200/90 pt-1">
-                      Chấm đề cấu trúc 3 phần (GDPT 2018)
-                    </p>
-                  </div>
-                  <div className="h-[1px] bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent w-full my-2" />
-
-                  {/* 5 NÚT CHỨC NĂNG 3D MÀU SẮC NỔI BẬT KHÁC NHAU */}
-                  <div className="space-y-3 text-left pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setSessionView('list')}
-                      className="w-full btn-3d btn-3d-cyan rounded-2xl px-4 py-3.5 flex items-center justify-between text-white cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3.5">
-                        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shadow-inner">
-                          <Folder className="w-5 h-5 text-white" />
-                        </div>
-                        <span className="text-base font-extrabold tracking-wide">
-                          Danh sách chấm
-                        </span>
-                      </div>
-                      <ChevronRight className="w-6 h-6 text-cyan-100" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowSheetSelectorBottomSheet(true)}
-                      className="w-full btn-3d btn-3d-violet rounded-2xl px-4 py-3.5 flex items-center justify-between text-white cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3.5">
-                        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shadow-inner">
-                          <FileText className="w-5 h-5 text-white" />
-                        </div>
-                        <span className="text-base font-extrabold tracking-wide">
-                          Tải phiếu trả lời (14 mẫu chuẩn)
-                        </span>
-                      </div>
-                      <ChevronRight className="w-6 h-6 text-purple-100" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setBottomTab('settings')}
-                      className="w-full btn-3d btn-3d-slate rounded-2xl px-4 py-3.5 flex items-center justify-between text-white cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3.5">
-                        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shadow-inner">
-                          <Settings className="w-5 h-5 text-white" />
-                        </div>
-                        <span className="text-base font-extrabold tracking-wide">
-                          Cài đặt hệ thống
-                        </span>
-                      </div>
-                      <ChevronRight className="w-6 h-6 text-slate-300" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setShowAccountModal(true)}
-                      className="w-full btn-3d btn-3d-gold rounded-2xl px-4 py-3.5 flex items-center justify-between text-slate-950 cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3.5">
-                        <div className="w-10 h-10 rounded-xl bg-black/10 flex items-center justify-center shadow-inner">
-                          <User className="w-5 h-5 text-slate-950" />
-                        </div>
-                        <span className="text-base font-black tracking-wide">
-                          Bản quyền & Tác giả
-                        </span>
-                      </div>
-                      <ChevronRight className="w-6 h-6 text-amber-900" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setBottomTab('classes')}
-                      className="w-full btn-3d btn-3d-fuchsia rounded-2xl px-4 py-3.5 flex items-center justify-between text-white cursor-pointer"
-                    >
-                      <div className="flex items-center gap-3.5">
-                        <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center shadow-inner">
-                          <Users className="w-5 h-5 text-white" />
-                        </div>
-                        <span className="text-base font-extrabold tracking-wide">
-                          Lớp học & Danh sách SBD
-                        </span>
-                      </div>
-                      <ChevronRight className="w-6 h-6 text-pink-100" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="text-center pt-6 pb-2 space-y-2">
-                  <div className="inline-flex items-center gap-2 bg-gradient-to-r from-amber-500/20 via-yellow-400/30 to-amber-500/20 border-2 border-amber-400/80 text-amber-300 font-extrabold px-4 py-1.5 rounded-full text-xs shadow-md glow-pulse-logo">
-                    <Sparkles className="w-4 h-4 text-amber-300" />
-                    <span>BẢN QUYỀN CHÍNH THỨC</span>
-                  </div>
-                  <div className="h-[1px] bg-white/20 w-4/5 mx-auto" />
-                  <div className="text-xs text-cyan-200 font-bold">
-                    Tác giả: Thầy Hồ Tấn Khải — Trường THPT Mang Thít, Tỉnh Vĩnh Long
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 1B. MÀN HÌNH DANH SÁCH BÀI THI (HOME SCREEN - ẢNH 2) */}
-            {sessionView === 'list' && (
+            {/* 1B. MÀN HÌNH DANH SÁCH ĐỢT CHẤM (TỰ ĐỘNG LƯU PHIÊN CHẤM ĐỂ CHẤM TIẾP) */}
+            {(sessionView === 'list' || sessionView === 'welcome') && (
               <div className="flex-1 flex flex-col">
                 <header className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-blue-200/70 px-4 py-3 flex items-center justify-between safe-area-header shadow-xs">
-                  <button
-                    type="button"
-                    onClick={() => setSessionView('welcome')}
-                    className="text-[#007aff] text-sm font-semibold flex items-center gap-0.5 touch-target-44 cursor-pointer"
-                  >
-                    <ChevronLeft className="w-5 h-5 -ml-1" />
-                    <span>Menu</span>
-                  </button>
-
-                  <h1 className="text-base sm:text-lg font-bold text-slate-900">
-                    Danh sách chấm
-                  </h1>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-[#007aff] text-white flex items-center justify-center shadow-xs">
+                      <CheckCircle2 className="w-5 h-5" />
+                    </div>
+                    <h1 className="text-base sm:text-lg font-extrabold text-slate-900">
+                      Các phiên chấm đã lưu
+                    </h1>
+                  </div>
 
                   <div className="flex items-center gap-1.5">
                     <button
@@ -2795,14 +2722,28 @@ export default function App() {
                           </span>
                         </div>
 
-                        {/* Dòng 4: Chân card - Ngày tạo & nút thao tác nhanh 3D */}
-                        <div className="pt-1.5 flex items-center justify-between text-xs text-slate-500 border-t border-slate-100">
-                          <span className="text-[11px] font-medium">
-                            {session.createdAt} {session.scanSbd ? '• Có quét SBD' : ''}
-                          </span>
-                          <span className="text-[#007aff] font-black flex items-center gap-0.5 text-xs">
-                            Chấm & Chi tiết →
-                          </span>
+                        {/* Dòng 4: Chân card - Số bài đã lưu & nút Chấm tiếp phiên chấm */}
+                        <div className="pt-2 flex items-center justify-between gap-2 text-xs text-slate-600 border-t border-slate-100">
+                          <div className="flex items-center gap-1.5">
+                            <span className="bg-emerald-100 text-emerald-800 font-extrabold px-2.5 py-1 rounded-lg border border-emerald-200">
+                              Đã chấm: {(session.gradedRecords || []).length} bài
+                            </span>
+                            <span className="text-[11px] font-medium text-slate-400">
+                              {session.createdAt}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveSessionId(session.id);
+                              enterScannerScreen();
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-[#007aff] hover:bg-blue-600 text-white font-black flex items-center gap-1 text-xs shadow-xs cursor-pointer"
+                          >
+                            <Camera className="w-3.5 h-3.5" />
+                            <span>Chấm tiếp →</span>
+                          </button>
                         </div>
                       </div>
                     );
@@ -3633,6 +3574,20 @@ export default function App() {
                             </div>
                           </div>
                         )}
+                        {/* Nút LƯU ĐÁP ÁN & CẤU HÌNH */}
+                        <div className="pt-2 pb-4 sticky bottom-2 z-10">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleSaveGradingConfiguration();
+                              setSessionView('hub');
+                            }}
+                            className="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-base shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                          >
+                            <Save className="w-5 h-5" />
+                            <span>LƯU LẠI ĐÁP ÁN & CẤU HÌNH</span>
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -4111,73 +4066,79 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Ngôn ngữ */}
-              <div className="space-y-2">
-                <div className="font-medium text-base text-slate-900">• Ngôn ngữ</div>
-                <div className="bg-white rounded-2xl px-4 py-3.5 flex items-center justify-between">
-                  <span className="text-base text-slate-900">Tiếng Việt - Vietnamese</span>
-                  <span className="w-6 h-6 rounded-full bg-teal-600 text-white flex items-center justify-center text-xs">
-                    ✓
+              {/* Cài đặt độ nhạy tô chì OMR */}
+              <div className="space-y-2 bg-white rounded-2xl p-4 border border-slate-200 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-sm text-slate-900">
+                    • Độ nhạy nhận diện ô tô chì (OMR)
+                  </span>
+                  <span className="text-xs font-mono font-bold text-[#4263eb]">
+                    {(omrThreshold * 100).toFixed(0)}%
                   </span>
                 </div>
+                <input
+                  type="range"
+                  min={0.14}
+                  max={0.35}
+                  step={0.01}
+                  value={omrThreshold}
+                  onChange={(e) => setOmrThreshold(Number(e.target.value))}
+                  className="w-full accent-[#4263eb] h-2 bg-slate-200 rounded-lg cursor-pointer"
+                />
+                <p className="text-[11px] text-slate-500">
+                  Mặc định 20%: Tự động nhận cả bút chì nhạt (2B/HB) và bút bi dưới mọi điều kiện ánh sáng.
+                </p>
               </div>
 
-              {/* Các nút chức năng hệ thống dạng 3D */}
-              <div className="space-y-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAccountModal(true)}
-                  className="w-full btn-3d btn-3d-gold rounded-2xl px-4 py-3.5 flex items-center justify-between text-slate-950 cursor-pointer"
-                >
-                  <div className="flex items-center gap-3">
-                    <Award className="w-5 h-5 text-amber-950" />
-                    <div className="text-left">
-                      <div className="text-sm font-black text-slate-950">
-                        Bản quyền tác giả: Thầy Hồ Tấn Khải
-                      </div>
-                      <div className="text-[11px] text-amber-950 font-bold">
-                        Trường THPT Mang Thít, Tỉnh Vĩnh Long
-                      </div>
+              {/* Trạng thái nhớ quyền truy cập Camera */}
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <Camera className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <div>
+                    <div className="text-xs font-extrabold text-emerald-900">
+                      Ghi nhớ quyền truy cập Camera tự động
+                    </div>
+                    <div className="text-[11px] text-emerald-700">
+                      Đã kích hoạt — Lần sau mở máy chấm ngay không hỏi lại quyền
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-amber-900" />
-                </button>
+                </div>
+                <span className="text-xs font-black text-emerald-700 bg-white px-2.5 py-1 rounded-lg border border-emerald-300">
+                  ĐÃ NHỚ
+                </span>
+              </div>
 
+              {/* Nút LƯU LẠI CẤU HÌNH CHẤM */}
+              <div className="pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowGuideModal(true)}
-                  className="w-full btn-3d btn-3d-cyan rounded-2xl px-4 py-3.5 flex items-center justify-between text-white cursor-pointer"
+                  onClick={() => {
+                    handleSaveGradingConfiguration();
+                    setBottomTab('sessions');
+                  }}
+                  className="w-full py-4 rounded-2xl bg-[#007aff] hover:bg-blue-600 text-white font-black text-base shadow-lg flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition"
                 >
-                  <div className="flex items-center gap-3">
-                    <HelpCircle className="w-5 h-5 text-white" />
-                    <span className="text-sm font-extrabold text-white">
-                      Hướng dẫn sử dụng & Tạo phím tắt màn hình
-                    </span>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-cyan-100" />
+                  <Save className="w-5 h-5" />
+                  <span>LƯU LẠI CẤU HÌNH CHẤM</span>
                 </button>
+              </div>
 
+              {/* Xóa lịch sử bài chấm của phiên hiện tại nếu cần chấm lại từ đầu */}
+              <div className="pt-2">
                 <button
                   type="button"
                   onClick={() => {
                     setGradedRecords([]);
                     setStatusBanner({
                       type: 'info',
-                      message: 'Đã xóa bộ nhớ tạm lịch sử quét.',
+                      message: 'Đã làm mới danh sách bài chấm của phiên hiện tại.',
                     });
                   }}
-                  className="w-full btn-3d btn-3d-rose rounded-2xl px-4 py-3.5 flex items-center justify-between text-white cursor-pointer"
+                  className="w-full py-3 rounded-2xl bg-white border border-rose-200 text-rose-600 font-bold text-xs flex items-center justify-center gap-2 cursor-pointer hover:bg-rose-50"
                 >
-                  <div className="flex items-center gap-3">
-                    <Trash2 className="w-5 h-5 text-white" />
-                    <span className="text-sm font-extrabold text-white">Xóa bộ nhớ tạm</span>
-                  </div>
-                  <ChevronRight className="w-5 h-5 text-rose-100" />
+                  <Trash2 className="w-4 h-4" />
+                  <span>Xóa các bài đã chấm trong phiên hiện tại</span>
                 </button>
-              </div>
-
-              <div className="text-center text-xs text-[#007aff] pt-4">
-                Phiên bản {APP_VERSION}
               </div>
             </div>
           </div>

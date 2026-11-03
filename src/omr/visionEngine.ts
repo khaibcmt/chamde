@@ -1370,8 +1370,13 @@ export function gradeWarpedSheet(
     examCode,
     totalScore,
     p1: p1Score,
+    p1CorrectCount,
+    p1TotalCount: activeP1Count,
     p2: p2Score,
+    p2TotalCount: activeP2Count,
     p3: p3Score,
+    p3CorrectCount,
+    p3TotalCount: activeP3Count,
   });
 
   return {
@@ -1405,9 +1410,7 @@ export function gradeWarpedSheet(
 
 /**
  * Vẽ khung điểm và chú thích đúng sai lên ảnh bài làm làm minh chứng
- * @param paperCanvas Canvas ảnh bài làm đã được nắn thẳng
- * @param result Dữ liệu điểm {studentId, examCode, totalScore, p1, p2, p3, studentName}
- * @returns DataURL ảnh bài làm hoàn chỉnh
+ * Hiển thị đầy đủ Điểm Phần I, Điểm Phần II, Điểm Phần III và ĐIỂM TỔNG trực tiếp trên ảnh phiếu
  */
 export function generateEvidenceImage(
   paperCanvas: HTMLCanvasElement,
@@ -1416,8 +1419,13 @@ export function generateEvidenceImage(
     examCode?: string;
     totalScore: number;
     p1?: number;
+    p1CorrectCount?: number;
+    p1TotalCount?: number;
     p2?: number;
+    p2TotalCount?: number;
     p3?: number;
+    p3CorrectCount?: number;
+    p3TotalCount?: number;
     studentName?: string;
     className?: string;
   }
@@ -1428,21 +1436,21 @@ export function generateEvidenceImage(
   const w = paperCanvas.width;
   const h = paperCanvas.height;
 
-  // Khung con dấu điểm đỏ ở góc trên bài làm (tương thích mọi khổ giấy)
-  const boxW = Math.min(330, Math.round(w * 0.35));
-  const boxH = Math.min(136, Math.round(h * 0.28));
-  const boxX = w > 600 ? w - boxW - 20 : 20;
-  const boxY = 16;
+  // Khung con dấu điểm đỏ ở góc trên bài làm (hiển thị rõ Điểm các phần & Điểm tổng)
+  const boxW = Math.min(365, Math.round(w * 0.38));
+  const boxH = Math.min(144, Math.round(h * 0.29));
+  const boxX = w > 600 ? w - boxW - 18 : 16;
+  const boxY = 14;
 
   ctx.save();
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.96)';
-  ctx.strokeStyle = '#dc2626'; // Đỏ tươi son dấu
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.97)';
+  ctx.strokeStyle = '#dc2626';
   ctx.lineWidth = 3.5;
   ctx.fillRect(boxX, boxY, boxW, boxH);
   ctx.strokeRect(boxX, boxY, boxW, boxH);
 
-  // Đường kẻ chia đôi con dấu: Trái là điểm từng phần, Phải là TỔNG ĐIỂM
-  const midX = boxX + Math.round(boxW * 0.54);
+  // Đường kẻ chia đôi con dấu: Trái là điểm từng phần, Phải là ĐIỂM TỔNG
+  const midX = boxX + Math.round(boxW * 0.58);
   ctx.strokeStyle = '#fca5a5';
   ctx.lineWidth = 1.5;
   ctx.beginPath();
@@ -1450,38 +1458,63 @@ export function generateEvidenceImage(
   ctx.lineTo(midX, boxY + boxH - 8);
   ctx.stroke();
 
-  // Cột 1: Thông tin học sinh & Điểm các phần
-  ctx.fillStyle = '#1e293b';
+  // Cột 1: Thông tin SBD, Mã đề & Điểm chi tiết Phần I, Phần II, Phần III
+  ctx.fillStyle = '#0f172a';
   ctx.font = 'bold 13px Arial, sans-serif';
   ctx.fillText(
-    `SBD: ${result.studentId || '---'} | Mã: ${result.examCode || '---'}`,
-    boxX + 12,
-    boxY + 26
+    `SBD: ${result.studentId || '---'} | Mã đề: ${result.examCode || '---'}`,
+    boxX + 10,
+    boxY + 24
   );
 
-  ctx.fillStyle = '#334155';
-  ctx.font = 'bold 12px Arial, sans-serif';
-  ctx.fillText(`Phần I: ${Number(result.p1 || 0).toFixed(2)} đ`, boxX + 12, boxY + 50);
-  ctx.fillText(`Phần II: ${Number(result.p2 || 0).toFixed(2)} đ`, boxX + 12, boxY + 74);
-  ctx.fillText(`Phần III: ${Number(result.p3 || 0).toFixed(2)} đ`, boxX + 12, boxY + 98);
+  const p1CountText =
+    result.p1TotalCount !== undefined
+      ? ` (${result.p1CorrectCount ?? 0}/${result.p1TotalCount})`
+      : '';
+  const p3CountText =
+    result.p3TotalCount !== undefined
+      ? ` (${result.p3CorrectCount ?? 0}/${result.p3TotalCount})`
+      : '';
+
+  ctx.fillStyle = '#1d4ed8';
+  ctx.font = 'bold 12.5px Arial, sans-serif';
+  ctx.fillText(
+    `• Phần I: ${Number(result.p1 || 0).toFixed(2)} đ${p1CountText}`,
+    boxX + 10,
+    boxY + 50
+  );
+
+  ctx.fillStyle = '#047857';
+  ctx.fillText(
+    `• Phần II: ${Number(result.p2 || 0).toFixed(2)} đ (${result.p2TotalCount ?? 4} câu Đ/S)`,
+    boxX + 10,
+    boxY + 75
+  );
+
+  ctx.fillStyle = '#6d28d9';
+  ctx.fillText(
+    `• Phần III: ${Number(result.p3 || 0).toFixed(2)} đ${p3CountText}`,
+    boxX + 10,
+    boxY + 100
+  );
 
   if (result.studentName) {
-    ctx.font = 'bold 11px Arial, sans-serif';
-    ctx.fillStyle = '#2563eb';
-    ctx.fillText(`${result.studentName}`, boxX + 12, boxY + 120);
+    ctx.font = 'bold 11.5px Arial, sans-serif';
+    ctx.fillStyle = '#334155';
+    ctx.fillText(`${result.studentName}`, boxX + 10, boxY + 124);
   }
 
-  // Cột 2: Con dấu TỔNG ĐIỂM cực to màu đỏ son
+  // Cột 2: Con dấu ĐIỂM TỔNG cực to màu đỏ son
   ctx.fillStyle = '#dc2626';
   ctx.font = '900 12px Arial, sans-serif';
-  ctx.fillText('TỔNG ĐIỂM:', midX + 12, boxY + 28);
+  ctx.fillText('ĐIỂM TỔNG:', midX + 10, boxY + 28);
 
-  ctx.font = '900 42px Arial, sans-serif';
-  ctx.fillText(Number(result.totalScore).toFixed(2), midX + 12, boxY + 76);
+  ctx.font = '900 40px Arial, sans-serif';
+  ctx.fillText(Number(result.totalScore).toFixed(2), midX + 10, boxY + 78);
 
   ctx.font = 'bold 11px Arial, sans-serif';
   ctx.fillStyle = '#b91c1c';
-  ctx.fillText('THANG ĐIỂM 10', midX + 12, boxY + 104);
+  ctx.fillText('THANG ĐIỂM 10', midX + 10, boxY + 106);
 
   ctx.restore();
 
